@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-from app.schemas.common import BaseResponse
+from .common import BaseResponse
 
 
 class ConstructionCostsAmenitiesSchema(BaseResponse):

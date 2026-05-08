@@ -1,7 +1,7 @@
-from app.schemas.construction import ConstructionCostsAmenitiesSchema, ConstructionCostsRemodelingSchema
-from app.schemas.opex import OpexByBedroomsSchema, OpexBySizeSchema
-from app.services.construction_service import ConstructionAmenitiesService, ConstructionRemodelingService
-from app.services.opex_service import OpexByBedroomsService, OpexBySizeService
+from app.markets.schemas.construction import ConstructionCostsAmenitiesSchema, ConstructionCostsRemodelingSchema
+from app.markets.schemas.opex import OpexByBedroomsSchema, OpexBySizeSchema
+from app.markets.services.construction_service import ConstructionAmenitiesService, ConstructionRemodelingService
+from app.markets.services.opex_service import OpexByBedroomsService, OpexBySizeService
 
 
 class AutomatedDealUnderwritingService:

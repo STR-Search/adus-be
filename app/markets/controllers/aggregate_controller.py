@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 
 from app.core.logger import logger
-from app.services.aggregate_service import AutomatedDealUnderwritingService
+from app.markets.services.aggregate_service import AutomatedDealUnderwritingService
 
 
 class AutomatedDealUnderwritingController:

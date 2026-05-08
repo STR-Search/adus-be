@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
-from app.controllers.external_api_controller import ExternalApiController
-from app.services.external_api_service import ExternalApiService
+from app.external_api.controllers.external_api_controller import ExternalApiController
+from app.external_api.services.external_api_service import ExternalApiService
 
 router = APIRouter(prefix="/external-api", tags=["external-api"])
 
