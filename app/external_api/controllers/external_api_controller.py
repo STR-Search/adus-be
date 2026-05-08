@@ -1,8 +1,8 @@
 from fastapi import HTTPException
 
 from app.core.logger import logger
-from app.schemas.external_api import MortgageRateResponse
-from app.services.external_api_service import ExternalApiService
+from app.external_api.schemas.external_api import MortgageRateResponse
+from app.external_api.services.external_api_service import ExternalApiService
 
 
 class ExternalApiController:

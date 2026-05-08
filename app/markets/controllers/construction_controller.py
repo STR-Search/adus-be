@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 
 from app.core.logger import logger
-from app.schemas.construction import (
+from app.markets.schemas.construction import (
     ConstructionCostsAmenitiesCreateSchema,
     ConstructionCostsAmenitiesSchema,
     ConstructionCostsAmenitiesUpdateSchema,
@@ -9,7 +9,7 @@ from app.schemas.construction import (
     ConstructionCostsRemodelingSchema,
     ConstructionCostsRemodelingUpdateSchema,
 )
-from app.services.construction_service import (
+from app.markets.services.construction_service import (
     ConstructionAmenitiesService,
     ConstructionRemodelingService,
 )

@@ -1,12 +1,12 @@
 from fastapi import HTTPException
 
 from app.core.logger import logger
-from app.schemas.market import (
+from app.markets.schemas.market import (
     MarketCreateSchema,
     MarketKeysMasterSchema,
     MarketUpdateSchema,
 )
-from app.services.market_service import MarketService
+from app.markets.services.market_service import MarketService
 
 
 class MarketController:

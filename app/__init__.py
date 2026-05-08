@@ -4,8 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_config
+from app.external_api.router import router as external_api_router
+from app.markets.router import router as markets_router
 from app.middleware.auth import AuthMiddleware
-from app.routers import aggregate, construction, external_api, health, markets, opex
 
 
 def create_app() -> FastAPI:
@@ -22,11 +23,7 @@ def create_app() -> FastAPI:
     )
     application.add_middleware(AuthMiddleware)
 
-    application.include_router(health.router)
-    application.include_router(markets.router)
-    application.include_router(opex.router)
-    application.include_router(construction.router)
-    application.include_router(aggregate.router)
-    application.include_router(external_api.router)
+    application.include_router(markets_router)
+    application.include_router(external_api_router)
 
     return application

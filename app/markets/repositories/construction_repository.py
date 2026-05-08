@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logger import logger
-from app.models.construction import ConstructionCostsAmenities, ConstructionCostsRemodeling
+from app.markets.models.construction import ConstructionCostsAmenities, ConstructionCostsRemodeling
 
 
 class ConstructionAmenitiesRepository:

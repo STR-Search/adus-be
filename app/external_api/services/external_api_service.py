@@ -3,7 +3,7 @@ import asyncio
 import httpx
 
 from app.core.config import get_config
-from app.schemas.external_api import MortgageRateResponse
+from app.external_api.schemas.external_api import MortgageRateResponse
 
 _FRED_URL = (
     "https://api.stlouisfed.org/fred/series/observations"

@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 
 from app.core.logger import logger
-from app.schemas.opex import (
+from app.markets.schemas.opex import (
     OpexByBedroomsCreateSchema,
     OpexByBedroomsSchema,
     OpexByBedroomsUpdateSchema,
@@ -9,7 +9,7 @@ from app.schemas.opex import (
     OpexBySizeSchema,
     OpexBySizeUpdateSchema,
 )
-from app.services.opex_service import OpexByBedroomsService, OpexBySizeService
+from app.markets.services.opex_service import OpexByBedroomsService, OpexBySizeService
 
 
 class OpexByBedroomsController:

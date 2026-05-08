@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, model_validator
 
-from app.schemas.common import BaseResponse
+from .common import BaseResponse
 
 
 class OpexByBedroomsSchema(BaseResponse):

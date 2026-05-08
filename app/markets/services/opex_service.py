@@ -1,7 +1,7 @@
-from app.models.opex import OpexByBedrooms, OpexBySize
-from app.repositories.market_repository import MarketRepository
-from app.repositories.opex_repository import OpexByBedroomsRepository, OpexBySizeRepository
-from app.schemas.opex import (
+from app.markets.models.opex import OpexByBedrooms, OpexBySize
+from app.markets.repositories.market_repository import MarketRepository
+from app.markets.repositories.opex_repository import OpexByBedroomsRepository, OpexBySizeRepository
+from app.markets.schemas.opex import (
     OpexByBedroomsCreateSchema,
     OpexByBedroomsSchema,
     OpexByBedroomsUpdateSchema,

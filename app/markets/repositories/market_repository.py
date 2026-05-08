@@ -4,7 +4,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logger import logger
-from app.models.market import MarketKeysMaster
+from app.markets.models.market import MarketKeysMaster
 
 
 class MarketRepository:

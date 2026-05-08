@@ -1,5 +1,5 @@
-from app.repositories.market_repository import MarketRepository
-from app.schemas.market import (
+from app.markets.repositories.market_repository import MarketRepository
+from app.markets.schemas.market import (
     MarketCreateSchema,
     MarketKeysMasterSchema,
     MarketUpdateSchema,

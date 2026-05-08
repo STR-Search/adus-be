@@ -8,7 +8,7 @@ from alembic import context
 
 from app.core.config import get_config
 from app.core.database import Base
-import app.models  # noqa: F401
+import app.markets.models  # noqa: F401
 
 TARGET_SCHEMA = "markets"
 

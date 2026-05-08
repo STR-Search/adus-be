@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logger import logger
-from app.models.opex import OpexByBedrooms, OpexBySize
+from app.markets.models.opex import OpexByBedrooms, OpexBySize
 
 
 class OpexByBedroomsRepository:
