@@ -104,6 +104,8 @@ class UnderwritingCreate(UnderwritingBase):
 class UnderwritingRead(UnderwritingBase):
     id: int
     display_id: str | None = None  # e.g. "UW-001" — generated at API layer
+    optimization_total: Decimal | None = None
+    operating_expense_total: Decimal | None = None
 
     model_config = {"from_attributes": True}
 

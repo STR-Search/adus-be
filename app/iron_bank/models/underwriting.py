@@ -85,13 +85,13 @@ class Underwriting(Base):
 
     detail = relationship("UnderwritingDetail", back_populates="underwriting", uselist=False)
     taxes = relationship("UnderwritingTax", back_populates="underwriting", uselist=False)
-    optimization_items = relationship("OptimizationItem", back_populates="underwriting")
-    operating_expenses = relationship("UWOperatingExpense", back_populates="underwriting")
-    comp_set = relationship("CompSet", back_populates="underwriting")
+    optimization_items = relationship("UnderwritingOptimizationItem", back_populates="underwriting")
+    operating_expenses = relationship("UnderwritingOperatingExpense", back_populates="underwriting")
+    comp_set = relationship("UnderwritingCompSet", back_populates="underwriting")
 
 
 class UnderwritingDetail(Base):
-    __tablename__ = "underwriting_details"
+    __tablename__ = "uw_details"
     __table_args__ = {"schema": "iron_bank"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -114,7 +114,7 @@ class UnderwritingDetail(Base):
 
 
 class UnderwritingTax(Base):
-    __tablename__ = "underwriting_taxes"
+    __tablename__ = "uw_taxes"
     __table_args__ = {"schema": "iron_bank"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)

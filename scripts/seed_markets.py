@@ -7,7 +7,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
-from app.models.market import MarketKeysMaster
+from app.markets.models import MarketKeysMaster
 
 DATA_FILE = Path(__file__).resolve().parent / "data" / "f-markets.csv"
 
