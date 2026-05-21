@@ -9,8 +9,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
-from app.models.market import MarketKeysMaster
-from app.models.opex import OpexByBedrooms
+from app.markets.models import MarketKeysMaster
+from app.markets.models import OpexByBedrooms
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 CSV_FILE = DATA_DIR / "f-opex_by_bedrooms.csv"

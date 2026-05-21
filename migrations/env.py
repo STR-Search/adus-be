@@ -8,9 +8,10 @@ from alembic import context
 
 from app.core.config import get_config
 from app.core.database import Base
-import app.markets.models  # noqa: F401
+import app.markets.models   # noqa: F401
+import app.iron_bank.models # noqa: F401
 
-TARGET_SCHEMA = "markets"
+TARGET_SCHEMAS = ["markets", "iron_bank"]
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_config().async_database_url)
@@ -23,13 +24,13 @@ target_metadata = Base.metadata
 
 def include_name(name, type_, parent_names):
     if type_ == "schema":
-        return name == TARGET_SCHEMA
+        return name in TARGET_SCHEMAS
     return True
 
 
 def include_object(object, name, type_, reflected, compare_to):
     if type_ == "table":
-        return object.schema == TARGET_SCHEMA
+        return object.schema in TARGET_SCHEMAS
     return True
 
 
@@ -43,21 +44,22 @@ def run_migrations_offline() -> None:
         include_schemas=True,
         include_name=include_name,
         include_object=include_object,
-        version_table_schema=TARGET_SCHEMA,
+        version_table_schema="markets",
     )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def do_run_migrations(connection):
-    connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {TARGET_SCHEMA}"))
+    for schema in TARGET_SCHEMAS:
+        connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
         include_schemas=True,
         include_name=include_name,
         include_object=include_object,
-        version_table_schema=TARGET_SCHEMA,
+        version_table_schema="markets",
     )
     with context.begin_transaction():
         context.run_migrations()

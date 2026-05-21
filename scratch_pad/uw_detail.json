@@ -1,0 +1,171 @@
+  {
+    "id": 1,
+    "purchase_details": {
+      "purchase_price": 485000,
+      "down_payment_pct": 10,
+      "down_payment_amt": 48500,
+      "loan_amount": 436500,
+      "interest_rate": 6.75,
+      "mortgage_years": 30,
+      "closing_costs_pct": 3,
+      "closing_costs_amt": 14550
+    },
+    "optimization_list": [
+      {
+        "category": "Furniture / Decor / Essentials",
+        "amount": 12000
+      },
+      {
+        "category": "Hot Tub Refurbishment",
+        "amount": 3500
+      },
+      {
+        "category": "Outdoor Lighting & Fire Pit",
+        "amount": 2200
+      }
+    ],
+    "operating_expenses": [
+      {
+        "expense": "Internet",
+        "monthly": 100
+      },
+      {
+        "expense": "Utilities",
+        "monthly": 520
+      },
+      {
+        "expense": "Pest Control",
+        "monthly": 50
+      },
+      {
+        "expense": "Pool/Hot Tub Maintenance",
+        "monthly": 175
+      },
+      {
+        "expense": "Outdoor/Landscaping",
+        "monthly": 150
+      },
+      {
+        "expense": "Software",
+        "monthly": 50
+      },
+      {
+        "expense": "Household Supplies",
+        "monthly": 180
+      }
+    ],
+    "taxes": {
+      "land_assumptions_pct": 20,
+      "improvement_basis": 388000,
+      "estimated_short_life_assets": 128040,
+      "bonus_amount_pct": 100,
+      "tax_rate_pct": 37,
+      "y1_loss_from_depreciation": 128040,
+      "tax_savings": 47375
+    },
+    "y1_coc_incl_tax_savings": {
+      "low_pct": 78.4,
+      "mid_pct": 82.1,
+      "high_pct": 85.6,
+      "first_year_total_return_mid": 87200,
+      "first_year_total_return_pct_mid": 82.1
+    },
+    "forecasted_revenue": {
+      "co_hosting_fee_pct": 0,
+      "annual_re_appreciation_pct": 4,
+      "scenarios": {
+        "low": {
+          "forecasted_revenue": 72000,
+          "operating_expenses_annual": 43680,
+          "co_hosting_fee": 0,
+          "net_operating_income": 28320,
+          "debt_service_annual": 33960,
+          "annual_free_cash_flow": -5640,
+          "principal_pay_down": 4620,
+          "annual_re_appreciation": 19400,
+          "annual_total_re_return_pct": 37.1
+        },
+        "mid": {
+          "forecasted_revenue": 98000,
+          "operating_expenses_annual": 45600,
+          "co_hosting_fee": 0,
+          "net_operating_income": 52400,
+          "debt_service_annual": 33960,
+          "annual_free_cash_flow": 18440,
+          "principal_pay_down": 4620,
+          "annual_re_appreciation": 19400,
+          "annual_total_re_return_pct": 87.1
+        },
+        "high": {
+          "forecasted_revenue": 127000,
+          "operating_expenses_annual": 47520,
+          "co_hosting_fee": 0,
+          "net_operating_income": 79480,
+          "debt_service_annual": 33960,
+          "annual_free_cash_flow": 45520,
+          "principal_pay_down": 4620,
+          "annual_re_appreciation": 19400,
+          "annual_total_re_return_pct": 143.4
+        }
+      }
+    },
+    "property_details": {
+      "bed_bath_projected": "4/3",
+      "lot_size_sqft": 18500,
+      "property_size_sqft": 2400
+    },
+    "why_this_property": [
+      "Existing hot tub and cabin aesthetic — no major setup required",
+      "Secluded setting commands premium nightly rates in Gatlinburg market",
+      "Estate sale creates motivated seller and below-market entry point",
+      "Year-round demand driven by Great Smoky Mountains National Park proximity"
+    ],
+    "cleaning_cost": {
+      "cost_per_clean": 220,
+      "turns_per_month": 7,
+      "monthly_cleaning_cost": 1540
+    },
+    "setup": {
+      "renovation_amenities_furniture_estimated": 17700
+    },
+    "common_extras": {
+      "blinds": 1200,
+      "appliances": 3500,
+      "landscaping": 2000,
+      "washer_dryer": 1800,
+      "baseboards_molding": 1200,
+      "total": 9700
+    },
+    "comp_set": [
+      {
+        "listing_url": "https://www.airbnb.com/rooms/1140067927241599056",
+        "revenue": 112400,
+        "bedrooms": 4,
+        "sleeps": 10
+      },
+      {
+        "listing_url": "https://www.airbnb.com/rooms/843508020823884501",
+        "revenue": 98700,
+        "bedrooms": 4,
+        "sleeps": 8
+      },
+      {
+        "listing_url": "https://www.airbnb.com/rooms/1385147324053316626",
+        "revenue": 87300,
+        "bedrooms": 3,
+        "sleeps": 8
+      },
+      {
+        "listing_url": "https://www.airbnb.com/rooms/1263921128519313481",
+        "revenue": 103200,
+        "bedrooms": 4,
+        "sleeps": 10
+      },
+      {
+        "listing_url": "https://www.airbnb.com/rooms/41934636",
+        "revenue": 91500,
+        "bedrooms": 4,
+        "sleeps": 10
+      }
+    ]
+  }

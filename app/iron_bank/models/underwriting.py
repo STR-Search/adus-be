@@ -1,0 +1,135 @@
+from sqlalchemy import (
+    Column, Integer, String, Boolean, Numeric,
+    Date, DateTime, Text, ARRAY, ForeignKey
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
+from app.core.database import Base
+
+
+class Underwriting(Base):
+    __tablename__ = "underwritings"
+    __table_args__ = {"schema": "iron_bank"}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    market_id = Column(
+        Integer,
+        ForeignKey("markets.market_keys_master.id", ondelete="SET NULL"),
+        nullable=True
+    )
+
+    analyst_id = Column(Integer, nullable=True)
+    approver_id = Column(Integer, nullable=True)
+
+    deal_status = Column(String(50), nullable=True)
+    date_added = Column(Date, nullable=True)
+    approved_time = Column(DateTime(timezone=True), nullable=True)
+    property_pending = Column(Boolean, default=False)
+
+    property_address = Column(String(255), nullable=True)
+    city = Column(String(100), nullable=True)
+    state = Column(String(2), nullable=True)
+    days_on_market = Column(Integer, nullable=True)
+    sleep_capacity = Column(Integer, nullable=True)
+
+    purchase_price = Column(Numeric(12, 2), nullable=True)
+    cash_needed = Column(Numeric(12, 2), nullable=True)
+    all_in_cost = Column(Numeric(12, 2), nullable=True)
+    prr = Column(Numeric(6, 4), nullable=True)
+    budget_to_pp = Column(Numeric(6, 4), nullable=True)
+    low_gross_revenue = Column(Numeric(12, 2), nullable=True)
+    mid_gross_revenue = Column(Numeric(12, 2), nullable=True)
+    high_gross_revenue = Column(Numeric(12, 2), nullable=True)
+    l_cash_on_cash = Column(Numeric(6, 4), nullable=True)
+    m_cash_on_cash = Column(Numeric(6, 4), nullable=True)
+    h_cash_on_cash = Column(Numeric(6, 4), nullable=True)
+
+    turnkey = Column(Boolean, default=False)
+    furnished = Column(Boolean, default=False)
+    luxury = Column(Boolean, default=False)
+    wow_factor = Column(Boolean, default=False)
+    tax_efficient = Column(Boolean, default=False)
+    new_build = Column(Boolean, default=False)
+    new_construction = Column(Boolean, default=False)
+    existing_airbnb = Column(Boolean, default=False)
+    existing_airbnb_sold_furnished = Column(Boolean, default=False)
+    arv = Column(Boolean, default=False)
+    high_cash_on_cash = Column(Boolean, default=False)
+    low_cash_on_cash = Column(Boolean, default=False)
+    add_inground_pool = Column(Boolean, default=False)
+    renovation_level = Column(Boolean, default=False)
+    complex_deal = Column(Boolean, default=False)
+    funky = Column(Boolean, default=False)
+    remote = Column(Boolean, default=False)
+    secluded = Column(Boolean, default=False)
+    friendly_1031 = Column(Boolean, default=False)
+    can_support_cohost = Column(Boolean, default=False)
+
+    market_type = Column(String(50), nullable=True)
+    execution_type = Column(String(50), nullable=True)
+    primary_strategy = Column(String(50), nullable=True)
+    seasonality = Column(String(50), nullable=True)
+    regulatory_clarity = Column(String(50), nullable=True)
+    offer_competitiveness = Column(String(50), nullable=True)
+    core_value_driver = Column(String(50), nullable=True)
+    view_quality = Column(String(50), nullable=True)
+    pool_type = Column(String(50), nullable=True)
+    primary_guest_avatar = Column(String(50), nullable=True)
+
+    listing_url = Column(Text, nullable=True)
+    loom_vid = Column(Text, nullable=True)
+    video_walkthrough = Column(Text, nullable=True)
+    survey = Column(Text, nullable=True)
+    note = Column(Text, nullable=True)
+
+    detail = relationship("UnderwritingDetail", back_populates="underwriting", uselist=False)
+    taxes = relationship("UnderwritingTax", back_populates="underwriting", uselist=False)
+    optimization_items = relationship("UnderwritingOptimizationItem", back_populates="underwriting")
+    operating_expenses = relationship("UnderwritingOperatingExpense", back_populates="underwriting")
+    comp_set = relationship("UnderwritingCompSet", back_populates="underwriting")
+
+
+class UnderwritingDetail(Base):
+    __tablename__ = "uw_details"
+    __table_args__ = {"schema": "iron_bank"}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    underwriting_id = Column(
+        Integer,
+        ForeignKey("iron_bank.underwritings.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    purchase_details = Column(JSONB, nullable=True)
+    y1_coc_incl_tax_savings = Column(JSONB, nullable=True)
+    forecasted_revenue = Column(JSONB, nullable=True)
+    property_details = Column(JSONB, nullable=True)
+    setup = Column(JSONB, nullable=True)
+    common_extras = Column(JSONB, nullable=True)
+    cleaning_cost = Column(JSONB, nullable=True)
+    why_this_property = Column(ARRAY(Text), nullable=True)
+
+    underwriting = relationship("Underwriting", back_populates="detail")
+
+
+class UnderwritingTax(Base):
+    __tablename__ = "uw_taxes"
+    __table_args__ = {"schema": "iron_bank"}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    underwriting_id = Column(
+        Integer,
+        ForeignKey("iron_bank.underwritings.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    land_assumptions_pct = Column(Numeric(6, 4), nullable=True)
+    improvement_basis = Column(Numeric(12, 2), nullable=True)
+    estimated_short_life_assets = Column(Numeric(12, 2), nullable=True)
+    bonus_amount_pct = Column(Numeric(6, 4), nullable=True)
+    tax_rate_pct = Column(Numeric(6, 4), nullable=True)
+    y1_loss_from_depreciation = Column(Numeric(12, 2), nullable=True)
+    tax_savings = Column(Numeric(12, 2), nullable=True)
+
+    underwriting = relationship("Underwriting", back_populates="taxes")
