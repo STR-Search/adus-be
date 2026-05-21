@@ -7,13 +7,14 @@ from app.core.config import get_config
 from app.external_api.router import router as external_api_router
 from app.iron_bank.router import router as iron_bank_router
 from app.markets.router import router as markets_router
+from app.zillow.router import router as zillow_router
 from app.middleware.auth import AuthMiddleware
 
 
 def create_app() -> FastAPI:
     config = get_config()
 
-    application = FastAPI(title="Enigma BE", version="0.1.0")
+    application = FastAPI(title="ADUS BE", version="0.1.0")
 
     application.add_middleware(
         CORSMiddleware,
@@ -27,5 +28,6 @@ def create_app() -> FastAPI:
     application.include_router(markets_router)
     application.include_router(iron_bank_router)
     application.include_router(external_api_router)
+    application.include_router(zillow_router)
 
     return application
