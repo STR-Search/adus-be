@@ -95,6 +95,12 @@ class MarketRepository:
         )
         return items, total, pages
 
+    async def get_all_summary(self) -> list[MarketKeysMaster]:
+        result = await self.db.execute(
+            select(MarketKeysMaster).order_by(MarketKeysMaster.id)
+        )
+        return list(result.scalars().all())
+
     async def delete(self, market_id: int) -> bool:
         market = await self.get_by_id(market_id)
         if market is None:
