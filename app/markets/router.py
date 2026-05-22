@@ -98,6 +98,13 @@ async def get_markets_paginated(
     )
 
 
+@router.get("/markets/all", tags=["markets"])
+async def get_all_markets(
+    controller: MarketController = Depends(get_market_controller),
+):
+    return await controller.get_all_summary()
+
+
 @router.get("/markets/slug/{market_slug}", tags=["markets"])
 async def get_market_by_slug(
     market_slug: str,

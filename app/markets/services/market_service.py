@@ -2,6 +2,7 @@ from app.markets.repositories.market_repository import MarketRepository
 from app.markets.schemas.market import (
     MarketCreateSchema,
     MarketKeysMasterSchema,
+    MarketSummarySchema,
     MarketUpdateSchema,
 )
 
@@ -31,6 +32,10 @@ class MarketService:
         if market is None:
             return None
         return MarketKeysMasterSchema.model_validate(market)
+
+    async def get_all_summary(self) -> list[MarketSummarySchema]:
+        items = await self.repository.get_all_summary()
+        return [MarketSummarySchema.model_validate(item) for item in items]
 
     async def delete(self, market_id: int) -> bool:
         return await self.repository.delete(market_id)

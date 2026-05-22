@@ -4,6 +4,7 @@ from app.core.logger import logger
 from app.markets.schemas.market import (
     MarketCreateSchema,
     MarketKeysMasterSchema,
+    MarketSummarySchema,
     MarketUpdateSchema,
 )
 from app.markets.services.market_service import MarketService
@@ -55,6 +56,13 @@ class MarketController:
         except Exception as e:
             logger.error("market.update.error", market_id=market_id, error=str(e))
             raise HTTPException(status_code=500, detail="Failed to update market")
+
+    async def get_all_summary(self) -> list[MarketSummarySchema]:
+        try:
+            return await self.service.get_all_summary()
+        except Exception as e:
+            logger.error("market.get_all_summary.error", error=str(e))
+            raise HTTPException(status_code=500, detail="Failed to fetch markets")
 
     async def delete(self, market_id: int) -> dict:
         try:
