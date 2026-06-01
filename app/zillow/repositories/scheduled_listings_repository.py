@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy import Row, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.core.logger import logger
 from app.zillow.models.scheduled_listings import ScheduledListing
@@ -115,6 +116,14 @@ class ScheduledListingsRepository:
             "states": [r.address_state for r in states_result.all()],
             "beds": [r.beds for r in beds_result.all()],
         }
+
+    async def get_by_detail_url(self, detail_url: str) -> ScheduledListing | None:
+        result = await self.db.execute(
+            select(ScheduledListing)
+            .options(joinedload(ScheduledListing.preset))
+            .where(ScheduledListing.detail_url == detail_url)
+        )
+        return result.scalar_one_or_none()
 
     async def get_zillow_listings_paginated(
         self,

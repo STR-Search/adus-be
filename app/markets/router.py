@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.markets.controllers.aggregate_controller import AutomatedDealUnderwritingController
 from app.markets.controllers.construction_controller import (
     ConstructionAmenitiesController,
     ConstructionRemodelingController,
@@ -28,7 +27,6 @@ from app.markets.schemas.opex import (
     OpexBySizeCreateSchema,
     OpexBySizeUpdateSchema,
 )
-from app.markets.services.aggregate_service import AutomatedDealUnderwritingService
 from app.markets.services.construction_service import ConstructionAmenitiesService, ConstructionRemodelingService
 from app.markets.services.market_service import MarketService
 from app.markets.services.opex_service import OpexByBedroomsService, OpexBySizeService
@@ -58,17 +56,6 @@ def get_bedrooms_controller(db: AsyncSession = Depends(get_db)) -> OpexByBedroom
 def get_size_controller(db: AsyncSession = Depends(get_db)) -> OpexBySizeController:
     market_repo = MarketRepository(db)
     return OpexBySizeController(OpexBySizeService(OpexBySizeRepository(db), market_repo))
-
-
-def get_underwriting_controller(db: AsyncSession = Depends(get_db)) -> AutomatedDealUnderwritingController:
-    market_repo = MarketRepository(db)
-    service = AutomatedDealUnderwritingService(
-        opex_by_bedrooms_service=OpexByBedroomsService(OpexByBedroomsRepository(db), market_repo),
-        opex_by_size_service=OpexBySizeService(OpexBySizeRepository(db), market_repo),
-        construction_amenities_service=ConstructionAmenitiesService(ConstructionAmenitiesRepository(db)),
-        construction_remodeling_service=ConstructionRemodelingService(ConstructionRemodelingRepository(db)),
-    )
-    return AutomatedDealUnderwritingController(service)
 
 
 # --- Health ---
@@ -340,19 +327,3 @@ async def delete_size(
     return await controller.delete(record_id)
 
 
-# --- Underwriting ---
-
-@router.get("/underwriting/", tags=["underwriting"])
-async def get_underwriting_data(
-    bedrooms: int = Query(...),
-    sqft: int = Query(...),
-    market_id: int | None = Query(None),
-    market_slug: str | None = Query(None),
-    controller: AutomatedDealUnderwritingController = Depends(get_underwriting_controller),
-):
-    return await controller.get_underwriting_data(
-        bedrooms=bedrooms,
-        sqft=sqft,
-        market_id=market_id,
-        market_slug=market_slug,
-    )
