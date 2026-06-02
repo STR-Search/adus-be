@@ -1,6 +1,11 @@
-from app.markets.services.construction_service import ConstructionAmenitiesService, ConstructionRemodelingService
+from app.markets.services.construction_service import (
+    ConstructionAmenitiesService,
+    ConstructionRemodelingService,
+)
 from app.markets.services.opex_service import OpexByBedroomsService, OpexBySizeService
-from app.zillow.repositories.scheduled_listings_repository import ScheduledListingsRepository
+from app.zillow.repositories.scheduled_listings_repository import (
+    ScheduledListingsRepository,
+)
 
 
 class PrepareUwDataService:
@@ -37,9 +42,11 @@ class PrepareUwDataService:
         sqft = self._normalize_raw_zillow_area_value(listing.area)
         market_id = listing.preset.market_id if listing.preset else None
 
-        opex_by_bedrooms = await self.opex_by_bedrooms_service.get_by_market_and_bedrooms(
-            bedrooms=bedrooms,
-            market_id=market_id,
+        opex_by_bedrooms = (
+            await self.opex_by_bedrooms_service.get_by_market_and_bedrooms(
+                bedrooms=bedrooms,
+                market_id=market_id,
+            )
         )
         opex_by_size = await self.opex_by_size_service.get_by_market_and_sqft(
             sqft=sqft,

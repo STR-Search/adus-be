@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.zillow.models.scheduled_listing_details import ScheduledListingDetail
     from app.zillow.models.scheduled_listings import ScheduledListing
 
 
@@ -48,4 +49,7 @@ class ScheduledPreset(Base):
 
     listings: Mapped[list[ScheduledListing]] = relationship(
         "ScheduledListing", back_populates="preset"
+    )
+    listing_details: Mapped[list["ScheduledListingDetail"]] = relationship(
+        "ScheduledListingDetail", back_populates="preset"
     )
