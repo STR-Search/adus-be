@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.zillow.controllers.zillow_controller import ZillowController
+import app.zillow.models  # noqa: F401 — ensures all models are registered with SQLAlchemy
 from app.zillow.repositories.scheduled_listings_repository import (
     ScheduledListingsRepository,
 )

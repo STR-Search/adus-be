@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 
+from app.zillow.models.scheduled_listings import ScheduledListing
 from app.zillow.repositories.scheduled_listings_repository import ScheduledListingsRepository
 from app.zillow.schemas.scheduled_listings import (
     ListingSummaryByMarket,
@@ -11,6 +12,9 @@ from app.zillow.schemas.scheduled_listings import (
 class ScheduledListingsService:
     def __init__(self, repository: ScheduledListingsRepository):
         self.repository = repository
+
+    async def get_by_detail_url(self, detail_url: str) -> ScheduledListing | None:
+        return await self.repository.get_by_detail_url(detail_url)
 
     async def get_listings_summary_by_market(
         self, market_id: int

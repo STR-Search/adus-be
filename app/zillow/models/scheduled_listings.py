@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Text, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.zillow.models.scheduled_listing_details import ScheduledListingDetail
     from app.zillow.models.scheduled_presets import ScheduledPreset
 
 
@@ -55,4 +56,7 @@ class ScheduledListing(Base):
 
     preset: Mapped[ScheduledPreset] = relationship(
         "ScheduledPreset", back_populates="listings"
+    )
+    detail: Mapped[Optional["ScheduledListingDetail"]] = relationship(
+        "ScheduledListingDetail", back_populates="listing", uselist=False
     )
