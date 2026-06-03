@@ -11,8 +11,12 @@ from app.markets.repositories.construction_repository import (
 from app.markets.repositories.market_repository import MarketRepository
 from app.markets.repositories.opex_repository import OpexByBedroomsRepository, OpexBySizeRepository
 from app.markets.services.construction_service import ConstructionAmenitiesService, ConstructionRemodelingService
+from app.markets.services.market_service import MarketService
 from app.markets.services.opex_service import OpexByBedroomsService, OpexBySizeService
+from app.zillow.repositories.scheduled_listing_details_repository import ScheduledListingDetailsRepository
 from app.zillow.repositories.scheduled_listings_repository import ScheduledListingsRepository
+from app.zillow.services.scheduled_listing_details_service import ScheduledListingDetailsService
+from app.zillow.services.scheduled_listings_service import ScheduledListingsService
 
 router = APIRouter(prefix="/iron-bank", tags=["iron_bank"])
 
@@ -20,7 +24,9 @@ router = APIRouter(prefix="/iron-bank", tags=["iron_bank"])
 def get_prepare_uw_data_controller(db: AsyncSession = Depends(get_db)) -> PrepareUwDataController:
     market_repo = MarketRepository(db)
     service = PrepareUwDataService(
-        listings_repo=ScheduledListingsRepository(db),
+        listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
+        listing_details_service=ScheduledListingDetailsService(ScheduledListingDetailsRepository(db)),
+        market_service=MarketService(market_repo),
         opex_by_bedrooms_service=OpexByBedroomsService(OpexByBedroomsRepository(db), market_repo),
         opex_by_size_service=OpexBySizeService(OpexBySizeRepository(db), market_repo),
         construction_amenities_service=ConstructionAmenitiesService(ConstructionAmenitiesRepository(db)),
