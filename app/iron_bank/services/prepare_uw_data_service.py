@@ -1,3 +1,5 @@
+from app.external_api.services.external_api_service import ExternalApiService
+from app.iron_bank.defaults import COMMON_EXTRAS_DEFAULTS, UW_CONFIG_DEFAULTS
 from app.markets.schemas.opex import OpexByBedroomsSchema, OpexBySizeSchema
 from app.markets.services.construction_service import (
     ConstructionAmenitiesService,
@@ -21,6 +23,7 @@ class PrepareUwDataService:
         opex_by_size_service: OpexBySizeService,
         construction_amenities_service: ConstructionAmenitiesService,
         construction_remodeling_service: ConstructionRemodelingService,
+        external_api_service: ExternalApiService,
     ):
         self.listings_service = listings_service
         self.listing_details_service = listing_details_service
@@ -29,6 +32,7 @@ class PrepareUwDataService:
         self.opex_by_size_service = opex_by_size_service
         self.construction_amenities_service = construction_amenities_service
         self.construction_remodeling_service = construction_remodeling_service
+        self.external_api_service = external_api_service
 
     _SQFT_CHECKPOINTS = [1000, 1500, 2000, 2750, 3500, 4500]
     _OPEX_METADATA_FIELDS = {"id", "market_id", "market_slug", "bedrooms", "sqft"}
@@ -105,6 +109,11 @@ class PrepareUwDataService:
         opex_by_size = await self.opex_by_size_service.get_by_market_and_sqft(sqft=sqft, market_id=market_id)
         amenities = await self.construction_amenities_service.get_all()
         remodeling = await self.construction_remodeling_service.get_all()
+        fred = await self.external_api_service.get_30y_fixed_rate()
+
+        config = UW_CONFIG_DEFAULTS.model_dump()
+        if fred is not None:
+            config["fred"] = {"value": fred.value / 100, "date": fred.date}
 
         return {
             "market_name": market.market_name if market else None,
@@ -114,4 +123,6 @@ class PrepareUwDataService:
             "opex": self._transform_opex_costs(opex_by_bedrooms, opex_by_size),
             "construction_amenities": amenities,
             "construction_remodeling": remodeling,
+            "config": config,
+            "common_extras": COMMON_EXTRAS_DEFAULTS.model_dump(),
         }

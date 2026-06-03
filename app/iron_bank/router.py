@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.external_api.services.external_api_service import ExternalApiService
 from app.iron_bank.controllers.prepare_uw_data_controller import PrepareUwDataController
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 from app.markets.repositories.construction_repository import (
@@ -31,6 +32,7 @@ def get_prepare_uw_data_controller(db: AsyncSession = Depends(get_db)) -> Prepar
         opex_by_size_service=OpexBySizeService(OpexBySizeRepository(db), market_repo),
         construction_amenities_service=ConstructionAmenitiesService(ConstructionAmenitiesRepository(db)),
         construction_remodeling_service=ConstructionRemodelingService(ConstructionRemodelingRepository(db)),
+        external_api_service=ExternalApiService(),
     )
     return PrepareUwDataController(service)
 
