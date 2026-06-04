@@ -14,7 +14,12 @@ from app.middleware.auth import AuthMiddleware
 def create_app() -> FastAPI:
     config = get_config()
 
-    application = FastAPI(title="ADUS BE", version="0.1.0")
+    application = FastAPI(
+        title="ADUS BE",
+        version="0.1.0",
+        docs_url=None if config.is_production else "/docs",
+        redoc_url=None if config.is_production else "/redoc",
+    )
 
     application.add_middleware(
         CORSMiddleware,
