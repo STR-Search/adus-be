@@ -12,16 +12,60 @@
     },
     "optimization_list": [
       {
+        "category": "Flooring",
+        "total_price": 27000,
+        "metric": "sqft",
+        "base_price": 15,
+        "spec": "@$15/sqft × 1,800 sqft",
+        "tier": "Mid"
+      },
+      {
+        "category": "Interior Painting",
+        "total_price": 12000,
+        "metric": "sqft",
+        "base_price": 5,
+        "spec": "@$5/sqft × 2,400 sqft",
+        "tier": "Mid"
+      },
+      {
+        "category": "Exterior Painting",
+        "total_price": 13200,
+        "metric": "sqft",
+        "base_price": 6,
+        "spec": "@$6/sqft × 2,200 sqft",
+        "tier": "Mid"
+      },
+      {
+        "category": "Accent Wall Paint",
+        "total_price": 1800,
+        "metric": "number of",
+        "base_price": 600,
+        "spec": "@$600 × 3 walls",
+        "tier": "Mid"
+      },
+      {
         "category": "Furniture / Decor / Essentials",
-        "amount": 12000
+        "total_price": 12000,
+        "metric": "flat",
+        "base_price": 12000,
+        "spec": "Full furnishing package — living, dining, all bedrooms",
+        "tier": "Mid"
       },
       {
         "category": "Hot Tub Refurbishment",
-        "amount": 3500
+        "total_price": 3500,
+        "metric": "flat",
+        "base_price": 3500,
+        "spec": "Jets, cover, and chemical system replacement",
+        "tier": "Mid"
       },
       {
         "category": "Outdoor Lighting & Fire Pit",
-        "amount": 2200
+        "total_price": 2200,
+        "metric": "flat",
+        "base_price": 2200,
+        "spec": "String lights + gas fire pit install",
+        "tier": "Mid"
       }
     ],
     "operating_expenses": [
@@ -109,17 +153,19 @@
         }
       }
     },
-    "property_details": {
-      "bed_bath_projected": "4/3",
-      "lot_size_sqft": 18500,
-      "property_size_sqft": 2400
+    "analyst_notes": {
+      "property_details": {
+        "bed_bath_projected": "4/3",
+        "lot_size_sqft": 18500,
+        "property_size_sqft": 2400
+      },
+      "why_this_property": [
+        "Existing hot tub and cabin aesthetic — no major setup required",
+        "Secluded setting commands premium nightly rates in Gatlinburg market",
+        "Estate sale creates motivated seller and below-market entry point",
+        "Year-round demand driven by Great Smoky Mountains National Park proximity"
+      ]
     },
-    "why_this_property": [
-      "Existing hot tub and cabin aesthetic — no major setup required",
-      "Secluded setting commands premium nightly rates in Gatlinburg market",
-      "Estate sale creates motivated seller and below-market entry point",
-      "Year-round demand driven by Great Smoky Mountains National Park proximity"
-    ],
     "cleaning_cost": {
       "cost_per_clean": 220,
       "turns_per_month": 7,

@@ -1,8 +1,8 @@
-"""init iron_bank tables
+"""init_iron_bank_tables
 
-Revision ID: 49ebd75306a1
+Revision ID: 9f791c318ad1
 Revises: b2673e068337
-Create Date: 2026-05-19 00:20:20.883033
+Create Date: 2026-06-05 00:30:35.128082
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '49ebd75306a1'
+revision: str = '9f791c318ad1'
 down_revision: Union[str, Sequence[str], None] = 'b2673e068337'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -27,17 +27,18 @@ def upgrade() -> None:
     sa.Column('analyst_id', sa.Integer(), nullable=True),
     sa.Column('approver_id', sa.Integer(), nullable=True),
     sa.Column('deal_status', sa.String(length=50), nullable=True),
-    sa.Column('date_added', sa.Date(), nullable=True),
-    sa.Column('approved_time', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('deal_added', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('deal_submitted', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('deal_approved', sa.DateTime(timezone=True), nullable=True),
     sa.Column('property_pending', sa.Boolean(), nullable=True),
     sa.Column('property_address', sa.String(length=255), nullable=True),
+    sa.Column('street', sa.String(length=255), nullable=True),
     sa.Column('city', sa.String(length=100), nullable=True),
-    sa.Column('state', sa.String(length=2), nullable=True),
+    sa.Column('state', sa.String(length=50), nullable=True),
     sa.Column('days_on_market', sa.Integer(), nullable=True),
     sa.Column('sleep_capacity', sa.Integer(), nullable=True),
     sa.Column('purchase_price', sa.Numeric(precision=12, scale=2), nullable=True),
-    sa.Column('cash_needed', sa.Numeric(precision=12, scale=2), nullable=True),
-    sa.Column('all_in_cost', sa.Numeric(precision=12, scale=2), nullable=True),
+    sa.Column('total_oop', sa.Numeric(precision=12, scale=2), nullable=True),
     sa.Column('prr', sa.Numeric(precision=6, scale=4), nullable=True),
     sa.Column('budget_to_pp', sa.Numeric(precision=6, scale=4), nullable=True),
     sa.Column('low_gross_revenue', sa.Numeric(precision=12, scale=2), nullable=True),
@@ -49,30 +50,25 @@ def upgrade() -> None:
     sa.Column('turnkey', sa.Boolean(), nullable=True),
     sa.Column('furnished', sa.Boolean(), nullable=True),
     sa.Column('luxury', sa.Boolean(), nullable=True),
-    sa.Column('wow_factor', sa.Boolean(), nullable=True),
     sa.Column('tax_efficient', sa.Boolean(), nullable=True),
-    sa.Column('new_build', sa.Boolean(), nullable=True),
     sa.Column('new_construction', sa.Boolean(), nullable=True),
     sa.Column('existing_airbnb', sa.Boolean(), nullable=True),
-    sa.Column('existing_airbnb_sold_furnished', sa.Boolean(), nullable=True),
     sa.Column('arv', sa.Boolean(), nullable=True),
     sa.Column('high_cash_on_cash', sa.Boolean(), nullable=True),
     sa.Column('low_cash_on_cash', sa.Boolean(), nullable=True),
     sa.Column('add_inground_pool', sa.Boolean(), nullable=True),
     sa.Column('renovation_level', sa.Boolean(), nullable=True),
     sa.Column('complex_deal', sa.Boolean(), nullable=True),
-    sa.Column('funky', sa.Boolean(), nullable=True),
+    sa.Column('waterfront', sa.Boolean(), nullable=True),
     sa.Column('remote', sa.Boolean(), nullable=True),
-    sa.Column('secluded', sa.Boolean(), nullable=True),
-    sa.Column('friendly_1031', sa.Boolean(), nullable=True),
     sa.Column('can_support_cohost', sa.Boolean(), nullable=True),
     sa.Column('market_type', sa.String(length=50), nullable=True),
     sa.Column('execution_type', sa.String(length=50), nullable=True),
-    sa.Column('primary_strategy', sa.String(length=50), nullable=True),
     sa.Column('seasonality', sa.String(length=50), nullable=True),
     sa.Column('regulatory_clarity', sa.String(length=50), nullable=True),
     sa.Column('offer_competitiveness', sa.String(length=50), nullable=True),
     sa.Column('core_value_driver', sa.String(length=50), nullable=True),
+    sa.Column('cash_flow_quality', sa.String(length=50), nullable=True),
     sa.Column('view_quality', sa.String(length=50), nullable=True),
     sa.Column('pool_type', sa.String(length=50), nullable=True),
     sa.Column('primary_guest_avatar', sa.String(length=50), nullable=True),
@@ -81,6 +77,8 @@ def upgrade() -> None:
     sa.Column('video_walkthrough', sa.Text(), nullable=True),
     sa.Column('survey', sa.Text(), nullable=True),
     sa.Column('note', sa.Text(), nullable=True),
+    sa.Column('deal_benefits', sa.Text(), nullable=True),
+    sa.Column('property_uniqueness', sa.Text(), nullable=True),
     sa.ForeignKeyConstraint(['market_id'], ['markets.market_keys_master.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id'),
     schema='iron_bank'
@@ -124,7 +122,11 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('underwriting_id', sa.Integer(), nullable=False),
     sa.Column('category', sa.String(length=255), nullable=True),
-    sa.Column('amount', sa.Numeric(precision=12, scale=2), nullable=True),
+    sa.Column('total_price', sa.Numeric(precision=12, scale=2), nullable=True),
+    sa.Column('metric', sa.Text(), nullable=True),
+    sa.Column('base_price', sa.Numeric(precision=12, scale=2), nullable=True),
+    sa.Column('spec', sa.Text(), nullable=True),
+    sa.Column('tier', sa.Text(), nullable=True),
     sa.ForeignKeyConstraint(['underwriting_id'], ['iron_bank.underwritings.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
     schema='iron_bank'
