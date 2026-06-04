@@ -15,7 +15,11 @@ class UnderwritingOptimizationItem(Base):
     )
 
     category = Column(String(255), nullable=True)
-    amount = Column(Numeric(12, 2), nullable=True)
+    total_price = Column(Numeric(12, 2), nullable=True)
+    metric = Column(Text, nullable=True)
+    base_price = Column(Numeric(12, 2), nullable=True)
+    spec = Column(Text, nullable=True)
+    tier = Column(Text, nullable=True)
 
     underwriting = relationship("Underwriting", back_populates="optimization_items")
 
@@ -59,7 +63,7 @@ class UnderwritingCompSet(Base):
 from app.iron_bank.models.underwriting import Underwriting  # noqa: E402
 
 Underwriting.optimization_total = column_property(
-    select(func.sum(UnderwritingOptimizationItem.amount))
+    select(func.sum(UnderwritingOptimizationItem.total_price))
     .where(UnderwritingOptimizationItem.underwriting_id == Underwriting.id)
     .correlate_except(UnderwritingOptimizationItem)
     .scalar_subquery()
