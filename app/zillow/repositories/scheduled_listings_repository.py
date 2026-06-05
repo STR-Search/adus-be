@@ -135,7 +135,9 @@ class ScheduledListingsRepository:
         beds: int | None = None,
     ) -> tuple[list[Row[Any]], int, int]:
         query = select(
+            ScheduledListing.zpid,
             ScheduledListing.detail_url,
+            ScheduledListing.address,
             ScheduledListing.address_city,
             ScheduledListing.address_state,
             ScheduledListing.beds,

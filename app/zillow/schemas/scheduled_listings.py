@@ -10,7 +10,9 @@ class ListingSummaryByMarket(BaseModel):
 
 
 class ScheduledListingResult(BaseModel):
+    zpid: str
     detail_url: str
+    address: str | None
     address_city: str
     address_state: str
     beds: int
