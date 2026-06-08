@@ -27,11 +27,3 @@ class UwConfigSchema(BaseModel):
     land_assumptions: float
     tax_rate: float
     co_hosting: CoHostingSchema
-
-
-class CommonExtrasSchema(BaseModel):
-    blinds: float
-    appliances: float
-    landscaping: float
-    washer_dryer: float
-    baseboards_molding: float

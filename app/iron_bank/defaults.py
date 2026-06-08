@@ -1,4 +1,4 @@
-from app.iron_bank.schemas.uw_config import CommonExtrasSchema, UwConfigSchema
+from app.iron_bank.schemas.uw_config import UwConfigSchema
 
 UW_CONFIG_DEFAULTS = UwConfigSchema(
     interest_rate=0.07,
@@ -13,12 +13,4 @@ UW_CONFIG_DEFAULTS = UwConfigSchema(
         "company": {"fee": 0.2, "fee_type": "percent"},
         "va": {"fee": 12000, "fee_type": "flat"},
     },
-)
-
-COMMON_EXTRAS_DEFAULTS = CommonExtrasSchema(
-    blinds=1500,
-    appliances=5000,
-    landscaping=5000,
-    washer_dryer=2000,
-    baseboards_molding=2500,
 )

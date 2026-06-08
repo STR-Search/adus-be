@@ -1,5 +1,5 @@
 from app.external_api.services.external_api_service import ExternalApiService
-from app.iron_bank.defaults import COMMON_EXTRAS_DEFAULTS, UW_CONFIG_DEFAULTS
+from app.iron_bank.defaults import UW_CONFIG_DEFAULTS
 from app.markets.schemas.opex import OpexByBedroomsSchema, OpexBySizeSchema
 from app.markets.services.construction_service import (
     ConstructionAmenitiesService,
@@ -94,10 +94,10 @@ class PrepareUwDataService:
             "absolute": absolute,
         }
 
-    async def get_uw_data_for_listing(self, zillow_url: str) -> dict:
-        listing = await self.listings_service.get_by_detail_url(zillow_url)
+    async def get_uw_data_for_listing(self, zpid: str) -> dict:
+        listing = await self.listings_service.get_by_zpid(zpid)
         if listing is None:
-            raise ValueError("No listing found for the provided Zillow URL")
+            raise ValueError("No listing found for the provided zpid")
 
         bedrooms = listing.beds
         sqft = self._normalize_raw_zillow_area_value(listing.area)
@@ -124,5 +124,4 @@ class PrepareUwDataService:
             "construction_amenities": amenities,
             "construction_remodeling": remodeling,
             "config": config,
-            "common_extras": COMMON_EXTRAS_DEFAULTS.model_dump(),
         }

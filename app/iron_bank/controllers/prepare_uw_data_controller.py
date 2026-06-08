@@ -8,15 +8,15 @@ class PrepareUwDataController:
     def __init__(self, service: PrepareUwDataService):
         self.service = service
 
-    async def get_prepare_uw_data(self, zillow_url: str) -> dict:
+    async def get_prepare_uw_data(self, zpid: str) -> dict:
         try:
-            return await self.service.get_uw_data_for_listing(zillow_url)
+            return await self.service.get_uw_data_for_listing(zpid)
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
         except Exception as e:
             logger.error(
                 "iron_bank.prepare_uw_data.error",
-                zillow_url=zillow_url,
+                zpid=zpid,
                 error=str(e),
             )
             raise HTTPException(status_code=500, detail="Failed to fetch underwriting data")

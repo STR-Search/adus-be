@@ -39,7 +39,7 @@ def get_prepare_uw_data_controller(db: AsyncSession = Depends(get_db)) -> Prepar
 
 @router.get("/prepare-uw-data", tags=["iron_bank"])
 async def get_prepare_uw_data(
-    zillow_url: str = Query(...),
+    zpid: str = Query(...),
     controller: PrepareUwDataController = Depends(get_prepare_uw_data_controller),
 ):
-    return await controller.get_prepare_uw_data(zillow_url=zillow_url)
+    return await controller.get_prepare_uw_data(zpid=zpid)

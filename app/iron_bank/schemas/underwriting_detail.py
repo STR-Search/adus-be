@@ -9,12 +9,13 @@ class UnderwritingDetailBase(BaseModel):
     forecasted_revenue: dict[str, Any] | None = None
     property_details: dict[str, Any] | None = None
     setup: dict[str, Any] | None = None
-    common_extras: dict[str, Any] | None = None
     cleaning_cost: dict[str, Any] | None = None
     why_this_property: list[str] | None = None
 
+
 class UnderwritingDetailCreate(UnderwritingDetailBase):
     pass
+
 
 class UnderwritingDetailRead(UnderwritingDetailBase):
     id: int
