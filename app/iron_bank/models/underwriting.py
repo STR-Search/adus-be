@@ -119,7 +119,6 @@ class UnderwritingDetail(Base):
     forecasted_revenue = Column(JSONB, nullable=True)
     property_details = Column(JSONB, nullable=True)
     setup = Column(JSONB, nullable=True)
-    common_extras = Column(JSONB, nullable=True)
     cleaning_cost = Column(JSONB, nullable=True)
     why_this_property = Column(ARRAY(Text), nullable=True)
 

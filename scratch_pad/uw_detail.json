@@ -1,5 +1,4 @@
   {
-    "id": 1,
     "purchase_details": {
       "purchase_price": 485000,
       "down_payment_pct": 10,
@@ -173,14 +172,6 @@
     },
     "setup": {
       "renovation_amenities_furniture_estimated": 17700
-    },
-    "common_extras": {
-      "blinds": 1200,
-      "appliances": 3500,
-      "landscaping": 2000,
-      "washer_dryer": 1800,
-      "baseboards_molding": 1200,
-      "total": 9700
     },
     "comp_set": [
       {

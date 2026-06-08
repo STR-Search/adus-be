@@ -117,6 +117,14 @@ class ScheduledListingsRepository:
             "beds": [r.beds for r in beds_result.all()],
         }
 
+    async def get_by_zpid(self, zpid: str) -> ScheduledListing | None:
+        result = await self.db.execute(
+            select(ScheduledListing)
+            .options(joinedload(ScheduledListing.preset))
+            .where(ScheduledListing.zpid == zpid)
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_detail_url(self, detail_url: str) -> ScheduledListing | None:
         result = await self.db.execute(
             select(ScheduledListing)
@@ -135,7 +143,9 @@ class ScheduledListingsRepository:
         beds: int | None = None,
     ) -> tuple[list[Row[Any]], int, int]:
         query = select(
+            ScheduledListing.zpid,
             ScheduledListing.detail_url,
+            ScheduledListing.address,
             ScheduledListing.address_city,
             ScheduledListing.address_state,
             ScheduledListing.beds,
