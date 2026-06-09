@@ -1,10 +1,33 @@
 {
-    "purchase_details": {
-        "purchase_price": 485000,
-        "down_payment_pct": 10,
-        "interest_rate": 6.75,
-        "mortgage_years": 30,
-        "closing_costs_pct": 3
+    "uw_details": {
+        "purchase_details": {
+            "purchase_price": 485000,
+            "down_payment_pct": 10,
+            "interest_rate": 6.75,
+            "mortgage_years": 30,
+            "closing_costs_pct": 3
+        },
+        "forecasted_revenue": {
+            "co_hosting_fee_pct": 0,
+            "annual_re_appreciation_pct": 4,
+            "scenarios": {
+                "low": {
+                    "forecasted_revenue": 72000
+                },
+                "mid": {
+                    "forecasted_revenue": 98000
+                },
+                "high": {
+                    "forecasted_revenue": 127000
+                }
+            }
+        },
+        "analyst_notes": "asdkasdaksdalsdlala",
+        "cleaning_cost": {
+            "cost_per_clean": 220,
+            "turns_per_month": 7,
+            "monthly_cleaning_cost": 1540
+        }
     },
     "optimization_list": [
         {
@@ -98,30 +121,6 @@
         "land_assumptions_pct": 20,
         "bonus_amount_pct": 100,
         "tax_rate_pct": 37
-    },
-    "forecasted_revenue": {
-        "co_hosting_fee_pct": 0,
-        "annual_re_appreciation_pct": 4,
-        "scenarios": {
-            "low": {
-                "forecasted_revenue": 72000,
-                "co_hosting_fee": 0
-            },
-            "mid": {
-                "forecasted_revenue": 98000,
-                "co_hosting_fee": 0
-            },
-            "high": {
-                "forecasted_revenue": 127000,
-                "co_hosting_fee": 0
-            }
-        }
-    },
-    "analyst_notes":"asdkasdaksdalsdlala",
-    "cleaning_cost": {
-        "cost_per_clean": 220,
-        "turns_per_month": 7,
-        "monthly_cleaning_cost": 1540
     },
     "comp_set": [
         {
