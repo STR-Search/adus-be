@@ -86,10 +86,6 @@ class PrepareUwDataService:
                     "low": bedrooms_data.get("pool_hot_tub_low"),
                     "high": bedrooms_data.get("pool_hot_tub_high"),
                 },
-                "furnishings": {
-                    "low": bedrooms_data.get("furnishings_low"),
-                    "high": bedrooms_data.get("furnishings_high"),
-                },
             },
             "absolute": absolute,
         }
@@ -107,7 +103,15 @@ class PrepareUwDataService:
         listing_details = await self.listing_details_service.get_by_zpid(listing.zpid)
         opex_by_bedrooms = await self.opex_by_bedrooms_service.get_by_market_and_bedrooms(bedrooms=bedrooms, market_id=market_id)
         opex_by_size = await self.opex_by_size_service.get_by_market_and_sqft(sqft=sqft, market_id=market_id)
-        amenities = await self.construction_amenities_service.get_all()
+        amenities = [{
+            "amenity_name": "Furnishings",
+            "id": 0,
+            "location": None,
+            "notes": None,
+            "price_tier_1": opex_by_bedrooms.furnishings_low if opex_by_bedrooms else None,
+            "price_tier_2": None,
+            "price_tier_3": opex_by_bedrooms.furnishings_high if opex_by_bedrooms else None,
+        }] + [a.model_dump() for a in await self.construction_amenities_service.get_all()]
         remodeling = await self.construction_remodeling_service.get_all()
         fred = await self.external_api_service.get_30y_fixed_rate()
 
