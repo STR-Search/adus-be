@@ -20,6 +20,12 @@ class Underwriting(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
+    zpid = Column(
+        Text,
+        ForeignKey("zillow.scheduled_listings.zpid", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     market_id = Column(
         Integer,
         ForeignKey("markets.market_keys_master.id", ondelete="SET NULL"),
@@ -87,6 +93,8 @@ class Underwriting(Base):
     note = Column(Text, nullable=True)
     deal_benefits = Column(Text, nullable=True)
     property_uniqueness = Column(Text, nullable=True)
+
+    listing = relationship("ScheduledListing", back_populates="underwritings")
 
     detail = relationship(
         "UnderwritingDetail", back_populates="underwriting", uselist=False

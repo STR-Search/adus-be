@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.iron_bank.models.underwriting import Underwriting
     from app.zillow.models.scheduled_listing_details import ScheduledListingDetail
     from app.zillow.models.scheduled_presets import ScheduledPreset
 
@@ -59,4 +60,7 @@ class ScheduledListing(Base):
     )
     detail: Mapped[Optional["ScheduledListingDetail"]] = relationship(
         "ScheduledListingDetail", back_populates="listing", uselist=False
+    )
+    underwritings: Mapped[list["Underwriting"]] = relationship(
+        "Underwriting", back_populates="listing"
     )
