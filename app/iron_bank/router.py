@@ -18,6 +18,7 @@ from app.zillow.repositories.scheduled_listing_details_repository import Schedul
 from app.zillow.repositories.scheduled_listings_repository import ScheduledListingsRepository
 from app.zillow.services.scheduled_listing_details_service import ScheduledListingDetailsService
 from app.zillow.services.scheduled_listings_service import ScheduledListingsService
+import app.iron_bank.models  # noqa: F401 — ensures all models are registered with SQLAlchemy
 
 router = APIRouter(prefix="/iron-bank", tags=["iron_bank"])
 
