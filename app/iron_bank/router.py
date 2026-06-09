@@ -3,10 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.external_api.services.external_api_service import ExternalApiService
+from app.iron_bank.controllers.get_underwriting_controller import GetUnderwritingController
 from app.iron_bank.controllers.prepare_uw_data_controller import PrepareUwDataController
 from app.iron_bank.controllers.save_underwriting_controller import SaveUnderwritingController
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
+from app.iron_bank.schemas.get_underwriting import GetUnderwritingResult
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload, SaveUnderwritingResult
+from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
 from app.markets.repositories.construction_repository import (
@@ -48,6 +51,12 @@ def get_save_underwriting_controller(db: AsyncSession = Depends(get_db)) -> Save
     )
 
 
+def get_get_underwriting_controller(db: AsyncSession = Depends(get_db)) -> GetUnderwritingController:
+    return GetUnderwritingController(
+        GetUnderwritingService(UnderwritingRepository(db))
+    )
+
+
 @router.get("/prepare-uw-data", tags=["iron_bank"])
 async def get_prepare_uw_data(
     zpid: str = Query(...),
@@ -62,3 +71,15 @@ async def save_underwriting(
     controller: SaveUnderwritingController = Depends(get_save_underwriting_controller),
 ):
     return await controller.save_underwriting(payload)
+
+
+@router.get(
+    "/underwritings/{underwriting_id}",
+    response_model=GetUnderwritingResult,
+    tags=["iron_bank"],
+)
+async def get_underwriting(
+    underwriting_id: int,
+    controller: GetUnderwritingController = Depends(get_get_underwriting_controller),
+):
+    return await controller.get_underwriting(underwriting_id)

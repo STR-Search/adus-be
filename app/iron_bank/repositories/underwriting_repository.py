@@ -1,6 +1,8 @@
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.iron_bank.models import (
     Underwriting,
@@ -15,6 +17,20 @@ from app.iron_bank.models import (
 class UnderwritingRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def get_by_id(self, underwriting_id: int) -> Underwriting | None:
+        result = await self.db.execute(
+            select(Underwriting)
+            .where(Underwriting.id == underwriting_id)
+            .options(
+                selectinload(Underwriting.detail),
+                selectinload(Underwriting.taxes),
+                selectinload(Underwriting.optimization_items),
+                selectinload(Underwriting.operating_expenses),
+                selectinload(Underwriting.comp_set),
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def create(
         self,

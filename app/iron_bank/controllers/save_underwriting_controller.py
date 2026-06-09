@@ -18,6 +18,8 @@ class SaveUnderwritingController:
     ) -> SaveUnderwritingResult:
         try:
             return await self.service.save(payload)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             logger.error(
                 "iron_bank.save_underwriting.error",

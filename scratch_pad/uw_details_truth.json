@@ -2,14 +2,14 @@
     "uw_details": {
         "purchase_details": {
             "purchase_price": 485000,
-            "down_payment_pct": 10,
-            "interest_rate": 6.75,
+            "down_payment_pct": 0.1,
+            "interest_rate": 0.0675,
             "mortgage_years": 30,
-            "closing_costs_pct": 3
+            "closing_costs_pct": 0.03
         },
         "forecasted_revenue": {
             "co_hosting_fee_pct": 0,
-            "annual_re_appreciation_pct": 4,
+            "annual_re_appreciation_pct": 0.04,
             "scenarios": {
                 "low": {
                     "forecasted_revenue": 72000
@@ -118,9 +118,9 @@
         }
     ],
     "taxes": {
-        "land_assumptions_pct": 20,
-        "bonus_amount_pct": 100,
-        "tax_rate_pct": 37
+        "land_assumptions_pct": 0.2,
+        "bonus_amount_pct": 1.0,
+        "tax_rate_pct": 0.37
     },
     "comp_set": [
         {
