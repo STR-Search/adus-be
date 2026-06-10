@@ -1,8 +1,8 @@
 """init_iron_bank_tables
 
-Revision ID: 7ef3ce40be20
+Revision ID: f152195cad66
 Revises: b2673e068337
-Create Date: 2026-06-09 19:09:37.227300
+Create Date: 2026-06-10 19:47:58.273061
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '7ef3ce40be20'
+revision: str = 'f152195cad66'
 down_revision: Union[str, Sequence[str], None] = 'b2673e068337'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -136,6 +136,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('underwriting_id', sa.Integer(), nullable=False),
     sa.Column('land_assumptions_pct', sa.Numeric(precision=6, scale=4), nullable=True),
+    sa.Column('sla_multiplier_pct', sa.Numeric(precision=6, scale=4), nullable=True),
     sa.Column('improvement_basis', sa.Numeric(precision=12, scale=2), nullable=True),
     sa.Column('estimated_short_life_assets', sa.Numeric(precision=12, scale=2), nullable=True),
     sa.Column('bonus_amount_pct', sa.Numeric(precision=6, scale=4), nullable=True),

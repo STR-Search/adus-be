@@ -56,6 +56,7 @@ class GetUnderwritingService:
             return None
         return {
             "land_assumptions_pct": taxes.land_assumptions_pct,
+            "sla_multiplier_pct": taxes.sla_multiplier_pct,
             "improvement_basis": taxes.improvement_basis,
             "estimated_short_life_assets": taxes.estimated_short_life_assets,
             "bonus_amount_pct": taxes.bonus_amount_pct,

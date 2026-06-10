@@ -31,6 +31,7 @@ def _payload() -> dict:
         },
         "taxes": {
             "land_assumptions_pct": Decimal("0.20"),
+            "sla_multiplier_pct": Decimal("0.36"),
             "bonus_amount_pct": Decimal("1.00"),
             "tax_rate_pct": Decimal("0.37"),
         },
@@ -49,6 +50,7 @@ def _payload() -> dict:
             Decimal("4"),
         ),
         (("taxes", "land_assumptions_pct"), Decimal("20")),
+        (("taxes", "sla_multiplier_pct"), Decimal("36")),
         (("taxes", "bonus_amount_pct"), Decimal("100")),
         (("taxes", "tax_rate_pct"), Decimal("37")),
     ],
@@ -71,3 +73,11 @@ def test_percentage_inputs_accept_zero_to_one_fractional_values():
 
     assert result.uw_details.purchase_details.down_payment_pct == Decimal("0.10")
     assert result.taxes.tax_rate_pct == Decimal("0.37")
+
+
+def test_taxes_require_sla_multiplier_pct():
+    payload = _payload()
+    del payload["taxes"]["sla_multiplier_pct"]
+
+    with pytest.raises(ValidationError):
+        SaveUnderwritingPayload.model_validate(payload)

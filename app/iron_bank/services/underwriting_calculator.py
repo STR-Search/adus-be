@@ -54,10 +54,8 @@ class UnderwritingCalculator:
             purchase_price * (Decimal("1") - taxes.land_assumptions_pct)
             + optimization_total
         )
-        estimated_short_life_assets = improvement_basis * Decimal("0.36")
-        y1_loss_from_depreciation = (
-            estimated_short_life_assets * taxes.bonus_amount_pct
-        )
+        estimated_short_life_assets = improvement_basis * taxes.sla_multiplier_pct
+        y1_loss_from_depreciation = estimated_short_life_assets * taxes.bonus_amount_pct
         tax_savings = taxes.tax_rate_pct * y1_loss_from_depreciation
 
         return {
@@ -105,24 +103,15 @@ class UnderwritingCalculator:
                 total_opex_monthly * self._MONTHS_IN_YEAR * opex_multiplier
             )
             co_hosting_fee = revenue * forecasted_revenue.co_hosting_fee_pct
-            net_operating_income = (
-                revenue - operating_expenses_annual - co_hosting_fee
-            )
+            net_operating_income = revenue - operating_expenses_annual - co_hosting_fee
             annual_free_cash_flow = net_operating_income - debt_service_annual
             annual_total_re_return_pct = (
-                (
-                    annual_free_cash_flow
-                    + principal_pay_down
-                    + annual_re_appreciation
-                )
-                / total_oop
-            )
+                annual_free_cash_flow + principal_pay_down + annual_re_appreciation
+            ) / total_oop
 
             scenarios[scenario_name] = {
                 **scenario.model_dump(),
-                "operating_expenses_annual": self._money(
-                    operating_expenses_annual
-                ),
+                "operating_expenses_annual": self._money(operating_expenses_annual),
                 "co_hosting_fee": self._money(co_hosting_fee),
                 "net_operating_income": self._money(net_operating_income),
                 "debt_service_annual": self._money(debt_service_annual),
@@ -224,10 +213,14 @@ class UnderwritingCalculator:
 
         monthly_rate = rate / self._MONTHS_IN_YEAR
         total_months = years * 12
-        return loan_amount * (
-            ((Decimal("1") + monthly_rate) ** months_elapsed)
-            - ((Decimal("1") + monthly_rate) ** total_months)
-        ) / (Decimal("1") - ((Decimal("1") + monthly_rate) ** total_months))
+        return (
+            loan_amount
+            * (
+                ((Decimal("1") + monthly_rate) ** months_elapsed)
+                - ((Decimal("1") + monthly_rate) ** total_months)
+            )
+            / (Decimal("1") - ((Decimal("1") + monthly_rate) ** total_months))
+        )
 
     def _money(self, value: Decimal) -> Decimal:
         return value.quantize(self._MONEY_QUANT)

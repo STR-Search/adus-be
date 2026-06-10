@@ -57,6 +57,7 @@ def _underwriting():
         ),
         taxes=SimpleNamespace(
             land_assumptions_pct=Decimal("0.2"),
+            sla_multiplier_pct=Decimal("0.36"),
             improvement_basis=Decimal("451200"),
             estimated_short_life_assets=Decimal("162432"),
             bonus_amount_pct=Decimal("1"),
@@ -104,6 +105,7 @@ async def test_get_underwriting_returns_save_shaped_aggregate():
     )
     assert data["uw_details"]["y1_coc_incl_tax_savings"]["mid_pct"] == Decimal("0.820")
     assert data["taxes"]["tax_savings"] == Decimal("60100")
+    assert data["taxes"]["sla_multiplier_pct"] == Decimal("0.36")
     assert data["optimization_list"] == [
         {
             "category": "Flooring",

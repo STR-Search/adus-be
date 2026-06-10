@@ -52,6 +52,7 @@ async def test_save_enriches_forecasted_revenue_before_persistence():
             ],
             "taxes": {
                 "land_assumptions_pct": Decimal("0.20"),
+                "sla_multiplier_pct": Decimal("0.36"),
                 "bonus_amount_pct": Decimal("1"),
                 "tax_rate_pct": Decimal("0.37"),
             },

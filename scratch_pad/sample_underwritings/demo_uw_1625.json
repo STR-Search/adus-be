@@ -1,0 +1,234 @@
+{
+    "market_id": 3,
+    "analyst_id": 2,
+    "approver_id": 1,
+    "deal_status": "Active",
+    "deal_added": "2025-03-10T08:00:00Z",
+    "deal_submitted": "2025-03-13T16:30:00Z",
+    "deal_approved": "2025-03-14T10:22:00Z",
+    "property_pending": false,
+    "listing_url": "https://www.zillow.com/homedetails/123-pine-ridge-rd",
+    "property_address": "123 Pine Ridge Rd",
+    "street": "Pine Ridge Rd",
+    "city": "Gatlinburg",
+    "state": "TN",
+    "days_on_market": 12,
+    "sleep_capacity": 10,
+    "purchase_price": 1315000,
+    "total_oop": 145000,
+    "prr": 0.18,
+    "budget_to_pp": 0.32,
+    "low_gross_revenue": 72000,
+    "mid_gross_revenue": 98000,
+    "high_gross_revenue": 127000,
+    "l_cash_on_cash": 0.11,
+    "m_cash_on_cash": 0.17,
+    "h_cash_on_cash": 0.24,
+    "turnkey": true,
+    "furnished": true,
+    "luxury": false,
+    "tax_efficient": true,
+    "new_construction": false,
+    "existing_airbnb": true,
+    "arv": false,
+    "high_cash_on_cash": false,
+    "low_cash_on_cash": false,
+    "add_inground_pool": false,
+    "waterfront": false,
+    "remote": false,
+    "can_support_cohost": true,
+    "renovation_level": 2,
+    "deal_complexity": 3,
+    "market_type": "Mountain",
+    "execution_type": "Turnkey",
+    "seasonality": "Year Round",
+    "regulatory_clarity": "Clear",
+    "offer_competitiveness": "Moderate",
+    "core_value_driver": "Cash Flow",
+    "cash_flow_quality": null,
+    "view_quality": "Excellent",
+    "pool_type": "None",
+    "primary_guest_avatar": "Families",
+    "loom_vid": "https://loom.com/share/abc123",
+    "video_walkthrough": "https://youtube.com/watch?v=xwalk001",
+    "survey": "https://typeform.com/survey/deal-001",
+    "note": "Log cabin with hot tub already installed. Seller motivated - estate sale.",
+    "deal_benefits": null,
+    "property_uniqueness": null,
+    "uw_details": {
+        "purchase_details": {
+            "purchase_price": 1315000,
+            "down_payment_pct": 0.10,
+            "interest_rate": 0.0688,
+            "mortgage_years": 30,
+            "closing_costs_pct": 0.0275
+        },
+        "forecasted_revenue": {
+            "co_hosting_fee_pct": 0,
+            "annual_re_appreciation_pct": 0.0425,
+            "scenarios": {
+                "low": {
+                    "forecasted_revenue": 200000
+                },
+                "mid": {
+                    "forecasted_revenue": 220000
+                },
+                "high": {
+                    "forecasted_revenue": 240000
+                }
+            }
+        },
+        "analyst_notes": "asdkasdaksdalsdlala",
+        "cleaning_cost": {
+            "cost_per_clean": 300,
+            "turns_per_month": 5,
+            "monthly_cleaning_cost": 1500
+        }
+    },
+    "optimization_list": [
+        {
+            "category": "Furniture / Decor / Essentials",
+            "total_price": null,
+            "metric": "flat",
+            "base_price": null,
+            "spec": null,
+            "tier": "Mid"
+        },
+        {
+            "category": "Inground Pool/Deck",
+            "total_price": 120000,
+            "metric": "flat",
+            "base_price": 120000,
+            "spec": null,
+            "tier": "Mid"
+        },
+        {
+            "category": "Grading",
+            "total_price": 15000,
+            "metric": "flat",
+            "base_price": 15000,
+            "spec": null,
+            "tier": "Mid"
+        },
+        {
+            "category": "Landscaping",
+            "total_price": 12500,
+            "metric": "flat",
+            "base_price": 12500,
+            "spec": null,
+            "tier": "Mid"
+        },
+        {
+            "category": "White Linens/Sheets/Decor",
+            "total_price": 40000,
+            "metric": "flat",
+            "base_price": 40000,
+            "spec": null,
+            "tier": "Mid"
+        },
+        {
+            "category": "Design/Project Management",
+            "total_price": 25000,
+            "metric": "flat",
+            "base_price": 25000,
+            "spec": null,
+            "tier": "Mid"
+        },
+        {
+            "category": "Install/Staging/Warehousing",
+            "total_price": null,
+            "metric": "flat",
+            "base_price": null,
+            "spec": null,
+            "tier": "Mid"
+        }
+    ],
+    "operating_expenses": [
+        {
+            "expense": "Internet",
+            "monthly": 125
+        },
+        {
+            "expense": "Utilities",
+            "monthly": 700
+        },
+        {
+            "expense": "Pest Control",
+            "monthly": 50
+        },
+        {
+            "expense": "Pool/Hot Tub Maintenance",
+            "monthly": 375
+        },
+        {
+            "expense": "Outdoor/Landscaping",
+            "monthly": 125
+        },
+        {
+            "expense": "Software",
+            "monthly": 50
+        },
+        {
+            "expense": "Household Supplies",
+            "monthly": 275
+        },
+        {
+            "expense": "Cleaning",
+            "monthly": 1788
+        },
+        {
+            "expense": "Other",
+            "monthly": null
+        },
+        {
+            "expense": "Property Taxes (Monthly)",
+            "monthly": 985
+        },
+        {
+            "expense": "Insurance HOI",
+            "monthly": 450
+        },
+        {
+            "expense": "CapEx Reserve",
+            "monthly": 600
+        }
+    ],
+    "taxes": {
+        "land_assumptions_pct": 0.18,
+        "bonus_amount_pct": 1.0,
+        "tax_rate_pct": 0.37,
+        "sla_multiplier_pct": 0.36
+    },
+    "comp_set": [
+        {
+            "listing_url": "https://www.airbnb.com/rooms/1140067927241599056",
+            "revenue": 112400,
+            "bedrooms": 4,
+            "sleeps": 10
+        },
+        {
+            "listing_url": "https://www.airbnb.com/rooms/843508020823884501",
+            "revenue": 98700,
+            "bedrooms": 4,
+            "sleeps": 8
+        },
+        {
+            "listing_url": "https://www.airbnb.com/rooms/1385147324053316626",
+            "revenue": 87300,
+            "bedrooms": 3,
+            "sleeps": 8
+        },
+        {
+            "listing_url": "https://www.airbnb.com/rooms/1263921128519313481",
+            "revenue": 103200,
+            "bedrooms": 4,
+            "sleeps": 10
+        },
+        {
+            "listing_url": "https://www.airbnb.com/rooms/41934636",
+            "revenue": 91500,
+            "bedrooms": 4,
+            "sleeps": 10
+        }
+    ]
+}

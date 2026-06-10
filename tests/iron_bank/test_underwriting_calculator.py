@@ -5,8 +5,32 @@ from app.iron_bank.schemas.save_underwriting import (
     OperatingExpenseInput,
     OptimizationItemInput,
     PurchaseDetailsInput,
+    UnderwritingTaxInput,
 )
 from app.iron_bank.services.underwriting_calculator import UnderwritingCalculator
+
+
+def test_calculates_taxes_using_sla_multiplier_pct():
+    calculator = UnderwritingCalculator()
+    taxes = UnderwritingTaxInput(
+        land_assumptions_pct=Decimal("0.20"),
+        sla_multiplier_pct=Decimal("0.36"),
+        bonus_amount_pct=Decimal("1"),
+        tax_rate_pct=Decimal("0.37"),
+    )
+    optimization_items = [
+        OptimizationItemInput(category="Paint", total_price=Decimal("7000"))
+    ]
+
+    result = calculator.calculate_taxes(
+        taxes=taxes,
+        purchase_price=Decimal("100000"),
+        optimization_items=optimization_items,
+    )
+
+    assert result["improvement_basis"] == Decimal("87000.00")
+    assert result["estimated_short_life_assets"] == Decimal("31320.0000")
+    assert result["tax_savings"] == Decimal("11588.400000")
 
 
 def test_calculates_forecasted_revenue_for_each_scenario():

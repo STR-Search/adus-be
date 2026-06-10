@@ -154,6 +154,7 @@ class UnderwritingTax(Base):
     )
 
     land_assumptions_pct = Column(Numeric(6, 4), nullable=True)
+    sla_multiplier_pct = Column(Numeric(6, 4), nullable=True)
     improvement_basis = Column(Numeric(12, 2), nullable=True)
     estimated_short_life_assets = Column(Numeric(12, 2), nullable=True)
     bonus_amount_pct = Column(Numeric(6, 4), nullable=True)

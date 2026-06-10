@@ -54,6 +54,7 @@ class UnderwritingTaxInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     land_assumptions_pct: FractionalPercentage
+    sla_multiplier_pct: FractionalPercentage
     improvement_basis: Decimal | None = None
     estimated_short_life_assets: Decimal | None = None
     bonus_amount_pct: FractionalPercentage
@@ -246,6 +247,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                 ],
                 "taxes": {
                     "land_assumptions_pct": 0.2,
+                    "sla_multiplier_pct": 0.36,
                     "bonus_amount_pct": 1.0,
                     "tax_rate_pct": 0.37,
                 },
