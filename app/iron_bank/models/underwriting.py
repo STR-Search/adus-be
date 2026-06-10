@@ -1,16 +1,20 @@
+from datetime import datetime
+from typing import Optional
+
 from sqlalchemy import (
     Column,
+    DateTime,
+    ForeignKey,
     Integer,
+    SmallInteger,
     String,
     Boolean,
     Numeric,
-    DateTime,
     Text,
-    ARRAY,
-    ForeignKey,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 
@@ -69,8 +73,8 @@ class Underwriting(Base):
     high_cash_on_cash = Column(Boolean, default=False)
     low_cash_on_cash = Column(Boolean, default=False)
     add_inground_pool = Column(Boolean, default=False)
-    renovation_level = Column(Boolean, default=False)
-    complex_deal = Column(Boolean, default=False)
+    renovation_level = Column(SmallInteger, nullable=True)
+    deal_complexity = Column(SmallInteger, nullable=True)
     waterfront = Column(Boolean, default=False)
     remote = Column(Boolean, default=False)
     can_support_cohost = Column(Boolean, default=False)
@@ -93,6 +97,13 @@ class Underwriting(Base):
     note = Column(Text, nullable=True)
     deal_benefits = Column(Text, nullable=True)
     property_uniqueness = Column(Text, nullable=True)
+
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     listing = relationship("ScheduledListing", back_populates="underwritings")
 
@@ -125,10 +136,8 @@ class UnderwritingDetail(Base):
     purchase_details = Column(JSONB, nullable=True)
     y1_coc_incl_tax_savings = Column(JSONB, nullable=True)
     forecasted_revenue = Column(JSONB, nullable=True)
-    property_details = Column(JSONB, nullable=True)
-    setup = Column(JSONB, nullable=True)
     cleaning_cost = Column(JSONB, nullable=True)
-    why_this_property = Column(ARRAY(Text), nullable=True)
+    analyst_notes = Column(Text, nullable=True)
 
     underwriting = relationship("Underwriting", back_populates="detail")
 
@@ -145,6 +154,7 @@ class UnderwritingTax(Base):
     )
 
     land_assumptions_pct = Column(Numeric(6, 4), nullable=True)
+    sla_multiplier_pct = Column(Numeric(6, 4), nullable=True)
     improvement_basis = Column(Numeric(12, 2), nullable=True)
     estimated_short_life_assets = Column(Numeric(12, 2), nullable=True)
     bonus_amount_pct = Column(Numeric(6, 4), nullable=True)

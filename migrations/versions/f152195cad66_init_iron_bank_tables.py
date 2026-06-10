@@ -1,8 +1,8 @@
 """init_iron_bank_tables
 
-Revision ID: ddc2db73ae6d
+Revision ID: f152195cad66
 Revises: b2673e068337
-Create Date: 2026-06-09 01:30:34.229169
+Create Date: 2026-06-10 19:47:58.273061
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = 'ddc2db73ae6d'
+revision: str = 'f152195cad66'
 down_revision: Union[str, Sequence[str], None] = 'b2673e068337'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -58,8 +58,8 @@ def upgrade() -> None:
     sa.Column('high_cash_on_cash', sa.Boolean(), nullable=True),
     sa.Column('low_cash_on_cash', sa.Boolean(), nullable=True),
     sa.Column('add_inground_pool', sa.Boolean(), nullable=True),
-    sa.Column('renovation_level', sa.Boolean(), nullable=True),
-    sa.Column('complex_deal', sa.Boolean(), nullable=True),
+    sa.Column('renovation_level', sa.SmallInteger(), nullable=True),
+    sa.Column('deal_complexity', sa.SmallInteger(), nullable=True),
     sa.Column('waterfront', sa.Boolean(), nullable=True),
     sa.Column('remote', sa.Boolean(), nullable=True),
     sa.Column('can_support_cohost', sa.Boolean(), nullable=True),
@@ -80,6 +80,8 @@ def upgrade() -> None:
     sa.Column('note', sa.Text(), nullable=True),
     sa.Column('deal_benefits', sa.Text(), nullable=True),
     sa.Column('property_uniqueness', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.ForeignKeyConstraint(['market_id'], ['markets.market_keys_master.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['zpid'], ['zillow.scheduled_listings.zpid'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id'),
@@ -102,10 +104,8 @@ def upgrade() -> None:
     sa.Column('purchase_details', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('y1_coc_incl_tax_savings', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('forecasted_revenue', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-    sa.Column('property_details', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-    sa.Column('setup', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('cleaning_cost', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-    sa.Column('why_this_property', sa.ARRAY(sa.Text()), nullable=True),
+    sa.Column('analyst_notes', sa.Text(), nullable=True),
     sa.ForeignKeyConstraint(['underwriting_id'], ['iron_bank.underwritings.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
     schema='iron_bank'
@@ -136,6 +136,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('underwriting_id', sa.Integer(), nullable=False),
     sa.Column('land_assumptions_pct', sa.Numeric(precision=6, scale=4), nullable=True),
+    sa.Column('sla_multiplier_pct', sa.Numeric(precision=6, scale=4), nullable=True),
     sa.Column('improvement_basis', sa.Numeric(precision=12, scale=2), nullable=True),
     sa.Column('estimated_short_life_assets', sa.Numeric(precision=12, scale=2), nullable=True),
     sa.Column('bonus_amount_pct', sa.Numeric(precision=6, scale=4), nullable=True),

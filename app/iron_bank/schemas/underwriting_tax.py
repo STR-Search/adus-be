@@ -5,6 +5,7 @@ from pydantic import BaseModel
 class UnderwritingTaxBase(BaseModel):
     underwriting_id: int
     land_assumptions_pct: Decimal | None = None
+    sla_multiplier_pct: Decimal | None = None
     improvement_basis: Decimal | None = None
     estimated_short_life_assets: Decimal | None = None
     bonus_amount_pct: Decimal | None = None

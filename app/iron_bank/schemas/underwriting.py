@@ -44,6 +44,7 @@ class PrimaryGuestAvatar(str, Enum):
 
 
 class UnderwritingBase(BaseModel):
+    zpid: str | None = None
     market_id: int | None = None
     analyst_id: int | None = None
     approver_id: int | None = None
@@ -78,8 +79,8 @@ class UnderwritingBase(BaseModel):
     high_cash_on_cash: bool = False
     low_cash_on_cash: bool = False
     add_inground_pool: bool = False
-    renovation_level: bool = False
-    complex_deal: bool = False
+    renovation_level: int | None = None
+    deal_complexity: int | None = None
     waterfront: bool = False
     remote: bool = False
     can_support_cohost: bool = False
