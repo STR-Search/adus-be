@@ -12,6 +12,7 @@ class PrepareUwDataService:
     _OPEX_METADATA_FIELDS = {"id", "market_id", "market_slug", "bedrooms", "sqft"}
     _OPEX_CLEANING_FIELDS = {"cleaning_fee", "num_of_turns"}
     _OPEX_RANGED_FIELDS = {"pool_hot_tub_low", "pool_hot_tub_high", "furnishings_low", "furnishings_high"}
+    _OPEX_CONFIG_FIELDS = {"land_value", "appreciation"}
 
     def normalize_sqft(self, area: int | None) -> int | None:
         if area is None:
@@ -39,7 +40,12 @@ class PrepareUwDataService:
         bedrooms_data = opex_by_bedrooms.model_dump() if opex_by_bedrooms is not None else {}
         size_data = opex_by_size.model_dump() if opex_by_size is not None else {}
 
-        exclude = self._OPEX_METADATA_FIELDS | self._OPEX_CLEANING_FIELDS | self._OPEX_RANGED_FIELDS
+        exclude = (
+            self._OPEX_METADATA_FIELDS
+            | self._OPEX_CLEANING_FIELDS
+            | self._OPEX_RANGED_FIELDS
+            | self._OPEX_CONFIG_FIELDS
+        )
         absolute = {k: v for k, v in {**bedrooms_data, **size_data}.items() if k not in exclude}
 
         return {
@@ -55,6 +61,16 @@ class PrepareUwDataService:
             },
             "absolute": absolute,
         }
+
+    def _apply_opex_config_values(self, config: dict, opex_by_bedrooms, opex_by_size) -> None:
+        bedrooms_data = opex_by_bedrooms.model_dump() if opex_by_bedrooms is not None else {}
+        size_data = opex_by_size.model_dump() if opex_by_size is not None else {}
+        opex_config = {**bedrooms_data, **size_data}
+
+        if opex_config.get("land_value") is not None:
+            config["land_assumptions"] = opex_config["land_value"]
+        if opex_config.get("appreciation") is not None:
+            config["annual_re_appreciation_pct"] = opex_config["appreciation"]
 
     def prepare(
         self,
@@ -82,6 +98,7 @@ class PrepareUwDataService:
         config = UW_CONFIG_DEFAULTS.model_dump()
         if fred is not None:
             config["fred"] = {"value": fred.value / 100, "date": fred.date}
+        self._apply_opex_config_values(config, opex_by_bedrooms, opex_by_size)
 
         return {
             "market_name": market.market_name if market else None,

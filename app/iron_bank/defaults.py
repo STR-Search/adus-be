@@ -7,10 +7,7 @@ UW_CONFIG_DEFAULTS = UwConfigSchema(
     closing_costs=0.03,
     fred={"value": 0.065, "date": "2024-06-01"},
     land_assumptions=0.2,
+    annual_re_appreciation_pct=0.04,
     tax_rate=0.37,
-    co_hosting={
-        "self": {"fee": 0.0, "fee_type": "percent"},
-        "company": {"fee": 0.2, "fee_type": "percent"},
-        "va": {"fee": 12000, "fee_type": "flat"},
-    },
+    co_hosting_pct=0,
 )

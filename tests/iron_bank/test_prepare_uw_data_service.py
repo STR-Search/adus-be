@@ -1,7 +1,5 @@
 from types import SimpleNamespace
 
-import pytest
-
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 
 
@@ -47,6 +45,8 @@ def _opex_by_size():
         market_slug="smoky-mountains",
         bedrooms=None,
         sqft=2000,
+        land_value=0.2,
+        appreciation=0.045,
         utilities=350,
     )
 
@@ -121,6 +121,14 @@ class TestPrepare:
         assert opex["cleaning"] == {"fee": 275, "num_of_turns": 38}
         assert opex["ranged"] == {"pool_hot_tub": {"low": 1200, "high": 2400}}
         assert opex["absolute"] == {"internet": 100, "utilities": 350}
+
+    def test_moves_land_value_and_appreciation_from_opex_to_config(self):
+        result = self._prepare()
+
+        assert "land_value" not in result["opex"]["absolute"]
+        assert "appreciation" not in result["opex"]["absolute"]
+        assert result["config"]["land_assumptions"] == 0.2
+        assert result["config"]["annual_re_appreciation_pct"] == 0.045
 
     def test_prepends_furnishings_amenity_from_opex(self):
         amenities = self._prepare()["construction_amenities"]
