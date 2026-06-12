@@ -1,7 +1,7 @@
 from typing import Any
 
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
-from app.iron_bank.schemas.get_underwriting import GetUnderwritingResult
+from app.iron_bank.schemas.get_underwriting import GetUnderwritingResult, GetUnderwritingsResult
 from app.iron_bank.schemas.underwriting import UnderwritingBase
 
 
@@ -13,7 +13,31 @@ class GetUnderwritingService:
         underwriting = await self.repository.get_by_id(underwriting_id)
         if underwriting is None:
             raise LookupError(f"Underwriting {underwriting_id} not found")
+        return self._to_result(underwriting)
 
+    async def get_all(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        zpid: str | None = None,
+        market_id: int | None = None,
+    ) -> GetUnderwritingsResult:
+        items, total, pages = await self.repository.get_all_paginated(
+            page=page,
+            page_size=page_size,
+            zpid=zpid,
+            market_id=market_id,
+        )
+        return GetUnderwritingsResult(
+            items=[self._to_result(underwriting) for underwriting in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            pages=pages,
+        )
+
+    def _to_result(self, underwriting) -> GetUnderwritingResult:
         return GetUnderwritingResult.model_validate(
             {
                 **self._parent_data(underwriting),
