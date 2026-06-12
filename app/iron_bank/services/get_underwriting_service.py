@@ -30,7 +30,7 @@ class GetUnderwritingService:
             market_id=market_id,
         )
         return GetUnderwritingsResult(
-            items=[self._to_result(underwriting) for underwriting in items],
+            data=[self._to_result(underwriting) for underwriting in items],
             total=total,
             page=page,
             page_size=page_size,
