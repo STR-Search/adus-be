@@ -1,6 +1,7 @@
+import math
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -29,6 +30,50 @@ class UnderwritingRepository:
                 selectinload(Underwriting.operating_expenses),
                 selectinload(Underwriting.comp_set),
             )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_all_paginated(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        zpid: str | None = None,
+        market_id: int | None = None,
+    ) -> tuple[list[Underwriting], int, int]:
+        """Returns (items, total, pages) ordered by newest underwriting first."""
+        query = select(Underwriting)
+        if zpid is not None:
+            query = query.where(Underwriting.zpid == zpid)
+        if market_id is not None:
+            query = query.where(Underwriting.market_id == market_id)
+
+        total: int = (
+            await self.db.execute(select(func.count()).select_from(query.subquery()))
+        ).scalar_one()
+        pages = math.ceil(total / page_size) if page_size > 0 else 0
+
+        result = await self.db.execute(
+            query.options(
+                selectinload(Underwriting.detail),
+                selectinload(Underwriting.taxes),
+                selectinload(Underwriting.optimization_items),
+                selectinload(Underwriting.operating_expenses),
+                selectinload(Underwriting.comp_set),
+            )
+            .order_by(Underwriting.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        items = list(result.scalars().all())
+        return items, total, pages
+
+    async def get_by_zpid(self, zpid: str) -> Underwriting | None:
+        result = await self.db.execute(
+            select(Underwriting)
+            .where(Underwriting.zpid == zpid)
+            .order_by(Underwriting.id.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 

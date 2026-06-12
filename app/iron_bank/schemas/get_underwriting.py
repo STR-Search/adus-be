@@ -59,3 +59,11 @@ class GetUnderwritingResult(UnderwritingBase):
         default_factory=list
     )
     comp_set: list[GetUnderwritingCompSet] = Field(default_factory=list)
+
+
+class GetUnderwritingsResult(BaseModel):
+    items: list[GetUnderwritingResult]
+    total: int
+    page: int
+    page_size: int
+    pages: int
