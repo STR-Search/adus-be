@@ -1,16 +1,16 @@
 from fastapi import HTTPException
 
 from app.core.logger import logger
-from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
+from app.workflows.prepare_uw_data_job import PrepareUwDataJob
 
 
 class PrepareUwDataController:
-    def __init__(self, service: PrepareUwDataService):
-        self.service = service
+    def __init__(self, job: PrepareUwDataJob):
+        self.job = job
 
     async def get_prepare_uw_data(self, zpid: str) -> dict:
         try:
-            return await self.service.get_uw_data_for_listing(zpid)
+            return await self.job.run(zpid)
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
         except Exception as e:

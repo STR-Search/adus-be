@@ -1,21 +1,9 @@
-from typing import Literal
 from pydantic import BaseModel
 
 
 class FredRateSchema(BaseModel):
     value: float
     date: str
-
-
-class CoHostingFeeSchema(BaseModel):
-    fee: float
-    fee_type: Literal["percent", "flat"]
-
-
-class CoHostingSchema(BaseModel):
-    self: CoHostingFeeSchema
-    company: CoHostingFeeSchema
-    va: CoHostingFeeSchema
 
 
 class UwConfigSchema(BaseModel):
@@ -25,5 +13,6 @@ class UwConfigSchema(BaseModel):
     closing_costs: float
     fred: FredRateSchema
     land_assumptions: float
+    annual_re_appreciation_pct: float
     tax_rate: float
-    co_hosting: CoHostingSchema
+    co_hosting_pct: float
