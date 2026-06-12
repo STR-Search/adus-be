@@ -32,6 +32,15 @@ class UnderwritingRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_zpid(self, zpid: str) -> Underwriting | None:
+        result = await self.db.execute(
+            select(Underwriting)
+            .where(Underwriting.zpid == zpid)
+            .order_by(Underwriting.id.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def create(
         self,
         underwriting_data: dict[str, Any],
