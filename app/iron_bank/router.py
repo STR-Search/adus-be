@@ -7,7 +7,7 @@ from app.iron_bank.controllers.get_underwriting_controller import GetUnderwritin
 from app.iron_bank.controllers.prepare_uw_data_controller import PrepareUwDataController
 from app.iron_bank.controllers.save_underwriting_controller import SaveUnderwritingController
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
-from app.iron_bank.schemas.get_underwriting import GetUnderwritingResult
+from app.iron_bank.schemas.get_underwriting import GetUnderwritingResult, GetUnderwritingsResult
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload, SaveUnderwritingResult
 from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
@@ -71,6 +71,22 @@ async def save_underwriting(
     controller: SaveUnderwritingController = Depends(get_save_underwriting_controller),
 ):
     return await controller.save_underwriting(payload)
+
+
+@router.get("/underwritings", response_model=GetUnderwritingsResult, tags=["iron_bank"])
+async def get_underwritings(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=20),
+    zpid: str | None = Query(None),
+    market_id: int | None = Query(None),
+    controller: GetUnderwritingController = Depends(get_get_underwriting_controller),
+):
+    return await controller.get_underwritings(
+        page=page,
+        page_size=page_size,
+        zpid=zpid,
+        market_id=market_id,
+    )
 
 
 @router.get(

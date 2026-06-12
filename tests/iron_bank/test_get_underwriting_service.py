@@ -10,10 +10,28 @@ class FakeUnderwritingRepository:
     def __init__(self, underwriting):
         self.underwriting = underwriting
         self.requested_id = None
+        self.requested_page = None
 
     async def get_by_id(self, underwriting_id: int):
         self.requested_id = underwriting_id
         return self.underwriting
+
+    async def get_all_paginated(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        zpid: str | None = None,
+        market_id: int | None = None,
+    ):
+        self.requested_page = {
+            "page": page,
+            "page_size": page_size,
+            "zpid": zpid,
+            "market_id": market_id,
+        }
+        items = [self.underwriting] if self.underwriting is not None else []
+        return items, len(items), 1 if items else 0
 
 
 def _underwriting():
@@ -128,3 +146,51 @@ async def test_get_underwriting_raises_lookup_error_when_missing():
 
     with pytest.raises(LookupError):
         await service.get(999)
+
+
+@pytest.mark.asyncio
+async def test_get_all_returns_paginated_results():
+    repository = FakeUnderwritingRepository(_underwriting())
+    service = GetUnderwritingService(repository)
+
+    result = await service.get_all(page=1, page_size=50)
+
+    assert repository.requested_page == {
+        "page": 1,
+        "page_size": 50,
+        "zpid": None,
+        "market_id": None,
+    }
+    assert result.total == 1
+    assert result.page == 1
+    assert result.page_size == 50
+    assert result.pages == 1
+    assert len(result.items) == 1
+    assert result.items[0].id == 42
+    assert result.items[0].taxes.tax_savings == Decimal("60100")
+
+
+@pytest.mark.asyncio
+async def test_get_all_passes_filters_to_repository():
+    repository = FakeUnderwritingRepository(_underwriting())
+    service = GetUnderwritingService(repository)
+
+    await service.get_all(page=1, page_size=20, zpid="12345", market_id=3)
+
+    assert repository.requested_page == {
+        "page": 1,
+        "page_size": 20,
+        "zpid": "12345",
+        "market_id": 3,
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_all_returns_empty_page_when_no_underwritings():
+    service = GetUnderwritingService(FakeUnderwritingRepository(None))
+
+    result = await service.get_all(page=1, page_size=50)
+
+    assert result.items == []
+    assert result.total == 0
+    assert result.pages == 0
