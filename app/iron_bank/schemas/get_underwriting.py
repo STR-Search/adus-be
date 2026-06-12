@@ -62,7 +62,7 @@ class GetUnderwritingResult(UnderwritingBase):
 
 
 class GetUnderwritingsResult(BaseModel):
-    items: list[GetUnderwritingResult]
+    data: list[GetUnderwritingResult]
     total: int
     page: int
     page_size: int
