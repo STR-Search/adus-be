@@ -67,3 +67,38 @@ class GetUnderwritingsResult(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+class ConstructionAmenityOption(BaseModel):
+    id: int
+    location: str | None = None
+    amenity_name: str | None = None
+    price_tier_1: Decimal | None = None
+    price_tier_2: Decimal | None = None
+    price_tier_3: Decimal | None = None
+    notes: str | None = None
+
+
+class ConstructionRemodelingOption(BaseModel):
+    id: int
+    location: str | None = None
+    rehab_item: str | None = None
+    metric: str | None = None
+    price_tier_1: Decimal | None = None
+    price_tier_2: Decimal | None = None
+    price_tier_3: Decimal | None = None
+    notes: str | None = None
+
+
+class EditContextualData(BaseModel):
+    construction_amenities: list[ConstructionAmenityOption] = Field(default_factory=list)
+    construction_remodeling: list[ConstructionRemodelingOption] = Field(default_factory=list)
+
+
+class EditContextData(BaseModel):
+    underwriting: GetUnderwritingResult
+    contextual: EditContextualData
+
+
+class GetUnderwritingEditContextResult(BaseModel):
+    data: EditContextData
