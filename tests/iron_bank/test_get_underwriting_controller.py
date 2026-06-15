@@ -41,10 +41,18 @@ async def test_get_underwritings_controller_returns_500_on_failure():
 
 # --- edit context tests ---
 
+from decimal import Decimal  # noqa: E402
+
 from app.iron_bank.schemas.get_underwriting import GetUnderwritingResult  # noqa: E402
+from app.markets.schemas.construction import ConstructionCostsAmenitiesSchema  # noqa: E402
 
 
 class StubUnderwritingService:
+    async def get(self, underwriting_id: int):
+        return GetUnderwritingResult(id=underwriting_id, zpid="123", market_id=1)
+
+
+class StubUnderwritingNoZpidService:
     async def get(self, underwriting_id: int):
         return GetUnderwritingResult(id=underwriting_id)
 
@@ -59,29 +67,65 @@ class StubConstructionRemodelingService:
         return []
 
 
-@pytest.mark.asyncio
-async def test_get_underwriting_edit_context_returns_combined_result():
-    controller = GetUnderwritingController(
-        StubUnderwritingService(),
+class StubListing:
+    beds = 3
+
+
+class StubListingsService:
+    async def get_by_zpid(self, zpid: str):
+        return StubListing()
+
+
+class StubOpexByBedrooms:
+    furnishings_low = Decimal("1000")
+    furnishings_high = Decimal("2000")
+
+
+class StubOpexByBedroomsService:
+    async def get_by_market_and_bedrooms(self, *, bedrooms: int, market_id: int):
+        return StubOpexByBedrooms()
+
+
+def _make_edit_context_controller(uw_service=None, listings_service=None, opex_service=None):
+    return GetUnderwritingController(
+        uw_service or StubUnderwritingService(),
         StubConstructionAmenitiesService(),
         StubConstructionRemodelingService(),
+        listings_service or StubListingsService(),
+        opex_service or StubOpexByBedroomsService(),
     )
+
+
+@pytest.mark.asyncio
+async def test_get_underwriting_edit_context_includes_furnishings_from_opex():
+    controller = _make_edit_context_controller()
 
     result = await controller.get_underwriting_edit_context(1)
 
     assert isinstance(result, GetUnderwritingEditContextResult)
     assert result.data.underwriting.id == 1
-    assert result.data.contextual.construction_amenities == []
+    furnishings = result.data.contextual.construction_amenities[0]
+    assert furnishings.amenity_name == "Furnishings"
+    assert furnishings.price_tier_1 == Decimal("1000")
+    assert furnishings.price_tier_3 == Decimal("2000")
     assert result.data.contextual.construction_remodeling == []
 
 
 @pytest.mark.asyncio
+async def test_get_underwriting_edit_context_furnishings_none_when_no_zpid():
+    controller = _make_edit_context_controller(uw_service=StubUnderwritingNoZpidService())
+
+    result = await controller.get_underwriting_edit_context(1)
+
+    furnishings = result.data.contextual.construction_amenities[0]
+    assert furnishings.amenity_name == "Furnishings"
+    assert furnishings.price_tier_1 is None
+    assert furnishings.price_tier_3 is None
+
+
+@pytest.mark.asyncio
 async def test_get_underwriting_edit_context_returns_404_when_missing():
-    controller = GetUnderwritingController(
-        MissingUnderwritingService(),
-        StubConstructionAmenitiesService(),
-        StubConstructionRemodelingService(),
-    )
+    controller = _make_edit_context_controller(uw_service=MissingUnderwritingService())
 
     with pytest.raises(HTTPException) as exc_info:
         await controller.get_underwriting_edit_context(999)
@@ -101,6 +145,8 @@ async def test_get_underwriting_edit_context_returns_500_on_construction_failure
         StubUnderwritingService(),
         FailingConstructionService(),
         StubConstructionRemodelingService(),
+        StubListingsService(),
+        StubOpexByBedroomsService(),
     )
 
     with pytest.raises(HTTPException) as exc_info:
