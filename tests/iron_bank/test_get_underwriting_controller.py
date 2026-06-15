@@ -1,10 +1,12 @@
+from decimal import Decimal
+
 import pytest
 from fastapi import HTTPException
 
 from app.iron_bank.controllers.get_underwriting_controller import (
     GetUnderwritingController,
 )
-from app.iron_bank.schemas.get_underwriting import GetUnderwritingEditContextResult
+from app.iron_bank.schemas.get_underwriting import GetUnderwritingEditContextResult, GetUnderwritingResult
 
 
 class MissingUnderwritingService:
@@ -12,39 +14,9 @@ class MissingUnderwritingService:
         raise LookupError(f"Underwriting {underwriting_id} not found")
 
 
-@pytest.mark.asyncio
-async def test_get_underwriting_controller_returns_404_when_missing():
-    controller = GetUnderwritingController(MissingUnderwritingService())
-
-    with pytest.raises(HTTPException) as exc_info:
-        await controller.get_underwriting(999)
-
-    assert exc_info.value.status_code == 404
-    assert exc_info.value.detail == "Underwriting 999 not found"
-
-
 class FailingListService:
     async def get_all(self, *, page: int, page_size: int):
         raise RuntimeError("db unavailable")
-
-
-@pytest.mark.asyncio
-async def test_get_underwritings_controller_returns_500_on_failure():
-    controller = GetUnderwritingController(FailingListService())
-
-    with pytest.raises(HTTPException) as exc_info:
-        await controller.get_underwritings(page=1, page_size=50)
-
-    assert exc_info.value.status_code == 500
-    assert exc_info.value.detail == "Failed to fetch underwritings"
-
-
-# --- edit context tests ---
-
-from decimal import Decimal  # noqa: E402
-
-from app.iron_bank.schemas.get_underwriting import GetUnderwritingResult  # noqa: E402
-from app.markets.schemas.construction import ConstructionCostsAmenitiesSchema  # noqa: E402
 
 
 class StubUnderwritingService:
@@ -67,6 +39,11 @@ class StubConstructionRemodelingService:
         return []
 
 
+class FailingConstructionService:
+    async def get_all(self, **kwargs):
+        raise RuntimeError("db unavailable")
+
+
 class StubListing:
     beds = 3
 
@@ -86,7 +63,7 @@ class StubOpexByBedroomsService:
         return StubOpexByBedrooms()
 
 
-def _make_edit_context_controller(uw_service=None, listings_service=None, opex_service=None):
+def _make_controller(uw_service=None, listings_service=None, opex_service=None):
     return GetUnderwritingController(
         uw_service or StubUnderwritingService(),
         StubConstructionAmenitiesService(),
@@ -97,10 +74,32 @@ def _make_edit_context_controller(uw_service=None, listings_service=None, opex_s
 
 
 @pytest.mark.asyncio
-async def test_get_underwriting_edit_context_includes_furnishings_from_opex():
-    controller = _make_edit_context_controller()
+async def test_get_underwritings_returns_500_on_failure():
+    controller = GetUnderwritingController(FailingListService())
 
-    result = await controller.get_underwriting_edit_context(1)
+    with pytest.raises(HTTPException) as exc_info:
+        await controller.get_underwritings(page=1, page_size=50)
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "Failed to fetch underwritings"
+
+
+@pytest.mark.asyncio
+async def test_get_underwriting_returns_404_when_missing():
+    controller = GetUnderwritingController(MissingUnderwritingService())
+
+    with pytest.raises(HTTPException) as exc_info:
+        await controller.get_underwriting(999)
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Underwriting 999 not found"
+
+
+@pytest.mark.asyncio
+async def test_get_underwriting_includes_furnishings_from_opex():
+    controller = _make_controller()
+
+    result = await controller.get_underwriting(1)
 
     assert isinstance(result, GetUnderwritingEditContextResult)
     assert result.data.underwriting.id == 1
@@ -112,10 +111,10 @@ async def test_get_underwriting_edit_context_includes_furnishings_from_opex():
 
 
 @pytest.mark.asyncio
-async def test_get_underwriting_edit_context_furnishings_none_when_no_zpid():
-    controller = _make_edit_context_controller(uw_service=StubUnderwritingNoZpidService())
+async def test_get_underwriting_furnishings_none_when_no_zpid():
+    controller = _make_controller(uw_service=StubUnderwritingNoZpidService())
 
-    result = await controller.get_underwriting_edit_context(1)
+    result = await controller.get_underwriting(1)
 
     furnishings = result.data.contextual.construction_amenities[0]
     assert furnishings.amenity_name == "Furnishings"
@@ -124,23 +123,7 @@ async def test_get_underwriting_edit_context_furnishings_none_when_no_zpid():
 
 
 @pytest.mark.asyncio
-async def test_get_underwriting_edit_context_returns_404_when_missing():
-    controller = _make_edit_context_controller(uw_service=MissingUnderwritingService())
-
-    with pytest.raises(HTTPException) as exc_info:
-        await controller.get_underwriting_edit_context(999)
-
-    assert exc_info.value.status_code == 404
-    assert exc_info.value.detail == "Underwriting 999 not found"
-
-
-class FailingConstructionService:
-    async def get_all(self, **kwargs):
-        raise RuntimeError("db unavailable")
-
-
-@pytest.mark.asyncio
-async def test_get_underwriting_edit_context_returns_500_on_construction_failure():
+async def test_get_underwriting_returns_500_on_construction_failure():
     controller = GetUnderwritingController(
         StubUnderwritingService(),
         FailingConstructionService(),
@@ -150,7 +133,7 @@ async def test_get_underwriting_edit_context_returns_500_on_construction_failure
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await controller.get_underwriting_edit_context(1)
+        await controller.get_underwriting(1)
 
     assert exc_info.value.status_code == 500
-    assert exc_info.value.detail == "Failed to fetch underwriting edit context"
+    assert exc_info.value.detail == "Failed to fetch underwriting"
