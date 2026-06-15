@@ -82,7 +82,7 @@ class UpdateUnderwritingPayload(BaseModel):
     deal_benefits: str | None = None
     property_uniqueness: str | None = None
 
-    uw_details: UnderwritingDetailsInput | None = None
+    details: UnderwritingDetailsInput | None = None
     taxes: UnderwritingTaxInput | None = None
     optimization_list: list[OptimizationItemInput] = Field(default_factory=list)
     operating_expenses: list[OperatingExpenseInput] = Field(default_factory=list)

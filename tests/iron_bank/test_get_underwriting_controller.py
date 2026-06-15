@@ -1,4 +1,5 @@
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -6,7 +7,11 @@ from fastapi import HTTPException
 from app.iron_bank.controllers.get_underwriting_controller import (
     GetUnderwritingController,
 )
-from app.iron_bank.schemas.get_underwriting import GetUnderwritingEditContextResult, GetUnderwritingResult
+from app.iron_bank.schemas.get_underwriting import (
+    ConstructionAmenityOption,
+    GetUnderwritingEditContextResult,
+    GetUnderwritingResult,
+)
 
 
 class MissingUnderwritingService:
@@ -45,12 +50,32 @@ class FailingConstructionService:
 
 
 class StubListing:
+    zpid = "123"
+    detail_url = "https://www.zillow.com/homedetails/123"
+    img_src = "https://photos.zillowstatic.com/thumb.jpg"
+    price = Decimal("485000")
+    address = "123 Pine Ridge Rd"
     beds = 3
+    baths = Decimal("2.5")
+    area = 1800
 
 
 class StubListingsService:
     async def get_by_zpid(self, zpid: str):
         return StubListing()
+
+
+class StubListingDetailsService:
+    async def get_by_zpid(self, zpid: str):
+        return SimpleNamespace(
+            original_photos=["https://photos.zillowstatic.com/photo-1.jpg"],
+            lot_size_sqft=21780,
+        )
+
+
+class MissingListingDetailsService:
+    async def get_by_zpid(self, zpid: str):
+        return None
 
 
 class StubOpexByBedrooms:
@@ -63,12 +88,18 @@ class StubOpexByBedroomsService:
         return StubOpexByBedrooms()
 
 
-def _make_controller(uw_service=None, listings_service=None, opex_service=None):
+def _make_controller(
+    uw_service=None,
+    listings_service=None,
+    listing_details_service=None,
+    opex_service=None,
+):
     return GetUnderwritingController(
         uw_service or StubUnderwritingService(),
         StubConstructionAmenitiesService(),
         StubConstructionRemodelingService(),
         listings_service or StubListingsService(),
+        listing_details_service or StubListingDetailsService(),
         opex_service or StubOpexByBedroomsService(),
     )
 
@@ -110,12 +141,59 @@ async def test_get_underwriting_includes_furnishings_from_opex():
     assert result.data.contextual.construction_remodeling == []
 
 
+def test_construction_amenity_serializes_decimal_without_exponent_notation():
+    amenity = ConstructionAmenityOption(
+        id=4,
+        amenity_name="Above Ground Pool WITH Deck",
+        price_tier_1=Decimal("4E+4"),
+        price_tier_2=Decimal("5E+4"),
+        price_tier_3=Decimal("52500"),
+    )
+
+    assert amenity.model_dump(mode="json")["price_tier_1"] == "40000"
+    assert amenity.model_dump(mode="json")["price_tier_2"] == "50000"
+    assert amenity.model_dump_json().find("4E+4") == -1
+
+
+@pytest.mark.asyncio
+async def test_get_underwriting_includes_zillow_property():
+    controller = _make_controller()
+
+    result = await controller.get_underwriting(1)
+
+    assert result.data.contextual.zillow_property.model_dump() == {
+        "id": "123",
+        "url": "https://www.zillow.com/homedetails/123",
+        "thumbnail": "https://photos.zillowstatic.com/thumb.jpg",
+        "price": Decimal("485000"),
+        "address": "123 Pine Ridge Rd",
+        "bedrooms": 3,
+        "bathrooms": Decimal("2.5"),
+        "area": 1800,
+        "original_photos": ["https://photos.zillowstatic.com/photo-1.jpg"],
+        "lot_size_sqft": Decimal("21780"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_underwriting_zillow_property_allows_missing_listing_details():
+    controller = _make_controller(
+        listing_details_service=MissingListingDetailsService()
+    )
+
+    result = await controller.get_underwriting(1)
+
+    assert result.data.contextual.zillow_property.original_photos is None
+    assert result.data.contextual.zillow_property.lot_size_sqft is None
+
+
 @pytest.mark.asyncio
 async def test_get_underwriting_furnishings_none_when_no_zpid():
     controller = _make_controller(uw_service=StubUnderwritingNoZpidService())
 
     result = await controller.get_underwriting(1)
 
+    assert result.data.contextual.zillow_property is None
     furnishings = result.data.contextual.construction_amenities[0]
     assert furnishings.amenity_name == "Furnishings"
     assert furnishings.price_tier_1 is None
@@ -129,6 +207,7 @@ async def test_get_underwriting_returns_500_on_construction_failure():
         FailingConstructionService(),
         StubConstructionRemodelingService(),
         StubListingsService(),
+        StubListingDetailsService(),
         StubOpexByBedroomsService(),
     )
 

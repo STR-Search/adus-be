@@ -12,7 +12,7 @@ from app.iron_bank.services.underwriting_calculator import UnderwritingCalculato
 
 class SaveUnderwritingService:
     _CHILD_FIELDS = {
-        "uw_details",
+        "details",
         "taxes",
         "optimization_list",
         "operating_expenses",
@@ -60,27 +60,27 @@ class SaveUnderwritingService:
         payload: SaveUnderwritingPayload,
         tax_data: dict | None = None,
     ) -> dict | None:
-        if payload.uw_details is None:
+        if payload.details is None:
             return None
 
         detail_data = self._without_empty_values(
-            payload.uw_details.model_dump(exclude_unset=True)
+            payload.details.model_dump(exclude_unset=True)
         )
-        if payload.uw_details.purchase_details is not None:
+        if payload.details.purchase_details is not None:
             detail_data["purchase_details"] = (
                 self.calculator.calculate_purchase_details(
-                    payload.uw_details.purchase_details
+                    payload.details.purchase_details
                 )
             )
 
-        if payload.uw_details.forecasted_revenue is not None:
+        if payload.details.forecasted_revenue is not None:
             if "purchase_details" not in detail_data:
                 raise ValueError(
                     "purchase_details is required to calculate forecasted revenue"
                 )
             detail_data["forecasted_revenue"] = (
                 self.calculator.calculate_forecasted_revenue(
-                    forecasted_revenue=payload.uw_details.forecasted_revenue,
+                    forecasted_revenue=payload.details.forecasted_revenue,
                     purchase_details=detail_data["purchase_details"],
                     operating_expenses=payload.operating_expenses,
                     optimization_items=payload.optimization_list,
@@ -109,7 +109,9 @@ class SaveUnderwritingService:
 
         purchase_price = self._get_purchase_price(payload)
         if purchase_price is None:
-            raise ValueError("purchase_price is required to calculate underwriting taxes")
+            raise ValueError(
+                "purchase_price is required to calculate underwriting taxes"
+            )
 
         return self.calculator.calculate_taxes(
             taxes=payload.taxes,
@@ -118,9 +120,6 @@ class SaveUnderwritingService:
         )
 
     def _get_purchase_price(self, payload: SaveUnderwritingPayload):
-        if (
-            payload.uw_details is not None
-            and payload.uw_details.purchase_details is not None
-        ):
-            return payload.uw_details.purchase_details.purchase_price
+        if payload.details is not None and payload.details.purchase_details is not None:
+            return payload.details.purchase_details.purchase_price
         return payload.purchase_price

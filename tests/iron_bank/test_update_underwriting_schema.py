@@ -10,6 +10,7 @@ from app.iron_bank.schemas.update_underwriting import UpdateUnderwritingPayload
         ("id", 123),
         ("zpid", "123456"),
         ("market_id", 3),
+        ("uw_details", {}),
     ],
 )
 def test_update_underwriting_payload_rejects_non_updatable_fields(field, value):

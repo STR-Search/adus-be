@@ -11,7 +11,7 @@ def _payload() -> dict:
     return {
         "market_id": 3,
         "purchase_price": 485000,
-        "uw_details": {
+        "details": {
             "purchase_details": {
                 "purchase_price": 485000,
                 "down_payment_pct": Decimal("0.10"),
@@ -41,12 +41,12 @@ def _payload() -> dict:
 @pytest.mark.parametrize(
     ("path", "value"),
     [
-        (("uw_details", "purchase_details", "down_payment_pct"), Decimal("10")),
-        (("uw_details", "purchase_details", "interest_rate"), Decimal("6.75")),
-        (("uw_details", "purchase_details", "closing_costs_pct"), Decimal("3")),
-        (("uw_details", "forecasted_revenue", "co_hosting_fee_pct"), Decimal("12")),
+        (("details", "purchase_details", "down_payment_pct"), Decimal("10")),
+        (("details", "purchase_details", "interest_rate"), Decimal("6.75")),
+        (("details", "purchase_details", "closing_costs_pct"), Decimal("3")),
+        (("details", "forecasted_revenue", "co_hosting_fee_pct"), Decimal("12")),
         (
-            ("uw_details", "forecasted_revenue", "annual_re_appreciation_pct"),
+            ("details", "forecasted_revenue", "annual_re_appreciation_pct"),
             Decimal("4"),
         ),
         (("taxes", "land_assumptions_pct"), Decimal("20")),
@@ -71,13 +71,21 @@ def test_percentage_inputs_accept_zero_to_one_fractional_values():
 
     result = SaveUnderwritingPayload.model_validate(payload)
 
-    assert result.uw_details.purchase_details.down_payment_pct == Decimal("0.10")
+    assert result.details.purchase_details.down_payment_pct == Decimal("0.10")
     assert result.taxes.tax_rate_pct == Decimal("0.37")
 
 
 def test_taxes_require_sla_multiplier_pct():
     payload = _payload()
     del payload["taxes"]["sla_multiplier_pct"]
+
+    with pytest.raises(ValidationError):
+        SaveUnderwritingPayload.model_validate(payload)
+
+
+def test_save_payload_rejects_legacy_uw_details_field():
+    payload = _payload()
+    payload["uw_details"] = payload.pop("details")
 
     with pytest.raises(ValidationError):
         SaveUnderwritingPayload.model_validate(payload)

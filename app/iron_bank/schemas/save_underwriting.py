@@ -154,7 +154,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                 ),
                 "deal_benefits": None,
                 "property_uniqueness": None,
-                "uw_details": {
+                "details": {
                     "purchase_details": {
                         "purchase_price": 485000,
                         "down_payment_pct": 0.10,
@@ -295,7 +295,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
         },
     )
 
-    uw_details: UnderwritingDetailsInput | None = None
+    details: UnderwritingDetailsInput | None = None
     taxes: UnderwritingTaxInput | None = None
     optimization_list: list[OptimizationItemInput] = Field(default_factory=list)
     operating_expenses: list[OperatingExpenseInput] = Field(default_factory=list)

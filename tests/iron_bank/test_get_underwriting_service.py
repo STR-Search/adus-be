@@ -118,10 +118,8 @@ async def test_get_underwriting_returns_save_shaped_aggregate():
     data = result.model_dump(by_alias=True)
     assert data["id"] == 42
     assert data["market_id"] == 3
-    assert data["uw_details"]["analyst_notes"] == (
-        "Existing hot tub and cabin aesthetic."
-    )
-    assert data["uw_details"]["y1_coc_incl_tax_savings"]["mid_pct"] == Decimal("0.820")
+    assert data["details"]["analyst_notes"] == ("Existing hot tub and cabin aesthetic.")
+    assert data["details"]["y1_coc_incl_tax_savings"]["mid_pct"] == Decimal("0.820")
     assert data["taxes"]["tax_savings"] == Decimal("60100")
     assert data["taxes"]["sla_multiplier_pct"] == Decimal("0.36")
     assert data["optimization_list"] == [

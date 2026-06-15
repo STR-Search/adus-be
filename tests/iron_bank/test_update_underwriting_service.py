@@ -70,6 +70,21 @@ async def test_update_allows_explicitly_clearing_child_collections():
 
 
 @pytest.mark.asyncio
+async def test_update_accepts_details_payload():
+    repository = FakeUnderwritingRepository()
+    service = UpdateUnderwritingService(repository)
+    payload = UpdateUnderwritingPayload.model_validate(
+        {"details": {"analyst_notes": "Fresh underwriting note"}}
+    )
+
+    await service.update(42, payload)
+
+    assert repository.update_kwargs["detail_data"] == {
+        "analyst_notes": "Fresh underwriting note"
+    }
+
+
+@pytest.mark.asyncio
 async def test_update_raises_lookup_error_when_underwriting_does_not_exist():
     repository = FakeUnderwritingRepository(underwriting=None)
     service = UpdateUnderwritingService(repository)

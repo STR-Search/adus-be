@@ -1,6 +1,8 @@
 from decimal import Decimal
 
-from app.iron_bank.services.underwriting_payload_builder import UnderwritingPayloadBuilder
+from app.iron_bank.services.underwriting_payload_builder import (
+    UnderwritingPayloadBuilder,
+)
 
 
 def test_builds_save_payload_from_prepared_uw_data():
@@ -42,9 +44,9 @@ def test_builds_save_payload_from_prepared_uw_data():
     assert payload.property_address == "123 Pine Ridge Rd"
     assert payload.purchase_price == Decimal("485000")
     assert payload.deal_status == "Draft"
-    assert payload.uw_details.purchase_details.purchase_price == Decimal("485000")
-    assert payload.uw_details.purchase_details.interest_rate == Decimal("0.065")
-    assert payload.uw_details.cleaning_cost == {
+    assert payload.details.purchase_details.purchase_price == Decimal("485000")
+    assert payload.details.purchase_details.interest_rate == Decimal("0.065")
+    assert payload.details.cleaning_cost == {
         "cost_per_clean": 275,
         "turns_per_year": 38,
         "annual_cleaning_cost": 10450,
@@ -81,6 +83,6 @@ def test_builds_draft_payload_when_optional_prepared_fields_are_missing():
     assert payload.zpid == "12345"
     assert payload.market_id is None
     assert payload.purchase_price is None
-    assert payload.uw_details is None
+    assert payload.details is None
     assert payload.taxes is None
     assert payload.operating_expenses == []
