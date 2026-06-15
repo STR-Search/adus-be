@@ -37,14 +37,23 @@ def get_underwriting_edit_context_controller(db: AsyncSession = Depends(get_db))
         ConstructionAmenitiesRepository,
         ConstructionRemodelingRepository,
     )
+    from app.markets.repositories.market_repository import MarketRepository
+    from app.markets.repositories.opex_repository import OpexByBedroomsRepository
     from app.markets.services.construction_service import (
         ConstructionAmenitiesService,
         ConstructionRemodelingService,
     )
+    from app.markets.services.opex_service import OpexByBedroomsService
+    from app.zillow.repositories.scheduled_listings_repository import ScheduledListingsRepository
+    from app.zillow.services.scheduled_listings_service import ScheduledListingsService
+
+    market_repo = MarketRepository(db)
     return GetUnderwritingController(
         GetUnderwritingService(UnderwritingRepository(db)),
         ConstructionAmenitiesService(ConstructionAmenitiesRepository(db)),
         ConstructionRemodelingService(ConstructionRemodelingRepository(db)),
+        ScheduledListingsService(ScheduledListingsRepository(db)),
+        OpexByBedroomsService(OpexByBedroomsRepository(db), market_repo),
     )
 
 

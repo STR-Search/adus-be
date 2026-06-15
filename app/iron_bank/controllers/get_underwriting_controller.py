@@ -13,6 +13,7 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingsResult,
 )
 from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
+from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 
 
 class GetUnderwritingController:
@@ -21,10 +22,14 @@ class GetUnderwritingController:
         service: GetUnderwritingService,
         construction_amenities_service: Any = None,
         construction_remodeling_service: Any = None,
+        listings_service: Any = None,
+        opex_by_bedrooms_service: Any = None,
     ):
         self.service = service
         self.construction_amenities_service = construction_amenities_service
         self.construction_remodeling_service = construction_remodeling_service
+        self.listings_service = listings_service
+        self.opex_by_bedrooms_service = opex_by_bedrooms_service
 
     async def get_underwritings(
         self,
@@ -70,17 +75,63 @@ class GetUnderwritingController:
     ) -> GetUnderwritingEditContextResult:
         try:
             underwriting = await self.service.get(underwriting_id)
+
+            opex_by_bedrooms = None
+            if not underwriting.zpid:
+                logger.warning(
+                    "iron_bank.get_underwriting_edit_context.no_zpid",
+                    underwriting_id=underwriting_id,
+                    detail="underwriting has no zpid — furnishings prices will be unavailable",
+                )
+            elif not underwriting.market_id:
+                logger.warning(
+                    "iron_bank.get_underwriting_edit_context.no_market_id",
+                    underwriting_id=underwriting_id,
+                    zpid=underwriting.zpid,
+                    detail="underwriting has no market_id — furnishings prices will be unavailable",
+                )
+            else:
+                listing = await self.listings_service.get_by_zpid(underwriting.zpid)
+                if listing is None:
+                    logger.warning(
+                        "iron_bank.get_underwriting_edit_context.listing_not_found",
+                        underwriting_id=underwriting_id,
+                        zpid=underwriting.zpid,
+                        detail="no listing found for zpid — furnishings prices will be unavailable",
+                    )
+                else:
+                    opex_by_bedrooms = (
+                        await self.opex_by_bedrooms_service.get_by_market_and_bedrooms(
+                            bedrooms=listing.beds, market_id=underwriting.market_id
+                        )
+                    )
+                    if opex_by_bedrooms is None:
+                        logger.warning(
+                            "iron_bank.get_underwriting_edit_context.no_opex",
+                            underwriting_id=underwriting_id,
+                            zpid=underwriting.zpid,
+                            market_id=underwriting.market_id,
+                            bedrooms=listing.beds,
+                            detail="no opex row found for market/bedrooms — furnishings prices will be unavailable",
+                        )
+
             amenities = await self.construction_amenities_service.get_all()
             remodeling = await self.construction_remodeling_service.get_all()
+            amenity_options = PrepareUwDataService.build_amenities_options(
+                opex_by_bedrooms, amenities
+            )
+
             return GetUnderwritingEditContextResult(
                 data=EditContextData(
                     underwriting=underwriting,
                     contextual=EditContextualData(
                         construction_amenities=[
-                            ConstructionAmenityOption.model_validate(a.model_dump()) for a in amenities
+                            ConstructionAmenityOption.model_validate(a)
+                            for a in amenity_options
                         ],
                         construction_remodeling=[
-                            ConstructionRemodelingOption.model_validate(r.model_dump()) for r in remodeling
+                            ConstructionRemodelingOption.model_validate(r.model_dump())
+                            for r in remodeling
                         ],
                     ),
                 )
@@ -93,4 +144,6 @@ class GetUnderwritingController:
                 underwriting_id=underwriting_id,
                 error=str(e),
             )
-            raise HTTPException(status_code=500, detail="Failed to fetch underwriting edit context")
+            raise HTTPException(
+                status_code=500, detail="Failed to fetch underwriting edit context"
+            )

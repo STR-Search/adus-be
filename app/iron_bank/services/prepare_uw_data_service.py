@@ -72,6 +72,19 @@ class PrepareUwDataService:
         if opex_config.get("appreciation") is not None:
             config["annual_re_appreciation_pct"] = opex_config["appreciation"]
 
+    @staticmethod
+    def build_amenities_options(opex_by_bedrooms, construction_amenities: list) -> list[dict]:
+        furnishings = {
+            "amenity_name": "Furnishings",
+            "id": 0,
+            "location": None,
+            "notes": None,
+            "price_tier_1": opex_by_bedrooms.furnishings_low if opex_by_bedrooms else None,
+            "price_tier_2": None,
+            "price_tier_3": opex_by_bedrooms.furnishings_high if opex_by_bedrooms else None,
+        }
+        return [furnishings] + [a.model_dump() for a in construction_amenities]
+
     def prepare(
         self,
         *,
@@ -85,15 +98,7 @@ class PrepareUwDataService:
         construction_remodeling: list,
         fred,
     ) -> dict:
-        amenities = [{
-            "amenity_name": "Furnishings",
-            "id": 0,
-            "location": None,
-            "notes": None,
-            "price_tier_1": opex_by_bedrooms.furnishings_low if opex_by_bedrooms else None,
-            "price_tier_2": None,
-            "price_tier_3": opex_by_bedrooms.furnishings_high if opex_by_bedrooms else None,
-        }] + [a.model_dump() for a in construction_amenities]
+        amenities = self.build_amenities_options(opex_by_bedrooms, construction_amenities)
 
         config = UW_CONFIG_DEFAULTS.model_dump()
         if fred is not None:
