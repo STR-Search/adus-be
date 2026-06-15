@@ -9,7 +9,6 @@ from app.iron_bank.schemas.get_underwriting import (
     EditContextData,
     EditContextualData,
     GetUnderwritingEditContextResult,
-    GetUnderwritingResult,
     GetUnderwritingsResult,
 )
 from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
@@ -57,35 +56,20 @@ class GetUnderwritingController:
             )
             raise HTTPException(status_code=500, detail="Failed to fetch underwritings")
 
-    async def get_underwriting(self, underwriting_id: int) -> GetUnderwritingResult:
-        try:
-            return await self.service.get(underwriting_id)
-        except LookupError as e:
-            raise HTTPException(status_code=404, detail=str(e))
-        except Exception as e:
-            logger.error(
-                "iron_bank.get_underwriting.error",
-                underwriting_id=underwriting_id,
-                error=str(e),
-            )
-            raise HTTPException(status_code=500, detail="Failed to fetch underwriting")
-
-    async def get_underwriting_edit_context(
-        self, underwriting_id: int
-    ) -> GetUnderwritingEditContextResult:
+    async def get_underwriting(self, underwriting_id: int) -> GetUnderwritingEditContextResult:
         try:
             underwriting = await self.service.get(underwriting_id)
 
             opex_by_bedrooms = None
             if not underwriting.zpid:
                 logger.warning(
-                    "iron_bank.get_underwriting_edit_context.no_zpid",
+                    "iron_bank.get_underwriting.no_zpid",
                     underwriting_id=underwriting_id,
                     detail="underwriting has no zpid — furnishings prices will be unavailable",
                 )
             elif not underwriting.market_id:
                 logger.warning(
-                    "iron_bank.get_underwriting_edit_context.no_market_id",
+                    "iron_bank.get_underwriting.no_market_id",
                     underwriting_id=underwriting_id,
                     zpid=underwriting.zpid,
                     detail="underwriting has no market_id — furnishings prices will be unavailable",
@@ -94,7 +78,7 @@ class GetUnderwritingController:
                 listing = await self.listings_service.get_by_zpid(underwriting.zpid)
                 if listing is None:
                     logger.warning(
-                        "iron_bank.get_underwriting_edit_context.listing_not_found",
+                        "iron_bank.get_underwriting.listing_not_found",
                         underwriting_id=underwriting_id,
                         zpid=underwriting.zpid,
                         detail="no listing found for zpid — furnishings prices will be unavailable",
@@ -107,7 +91,7 @@ class GetUnderwritingController:
                     )
                     if opex_by_bedrooms is None:
                         logger.warning(
-                            "iron_bank.get_underwriting_edit_context.no_opex",
+                            "iron_bank.get_underwriting.no_opex",
                             underwriting_id=underwriting_id,
                             zpid=underwriting.zpid,
                             market_id=underwriting.market_id,
@@ -140,10 +124,8 @@ class GetUnderwritingController:
             raise HTTPException(status_code=404, detail=str(e))
         except Exception as e:
             logger.error(
-                "iron_bank.get_underwriting_edit_context.error",
+                "iron_bank.get_underwriting.error",
                 underwriting_id=underwriting_id,
                 error=str(e),
             )
-            raise HTTPException(
-                status_code=500, detail="Failed to fetch underwriting edit context"
-            )
+            raise HTTPException(status_code=500, detail="Failed to fetch underwriting")
