@@ -1,9 +1,15 @@
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from app.iron_bank.schemas.underwriting import UnderwritingBase
+
+
+def _serialize_plain_decimal(value: Decimal | None) -> str | None:
+    if value is None:
+        return None
+    return format(value, "f")
 
 
 class GetUnderwritingDetails(BaseModel):
@@ -50,7 +56,7 @@ class GetUnderwritingCompSet(BaseModel):
 
 class GetUnderwritingResult(UnderwritingBase):
     id: int
-    uw_details: GetUnderwritingDetails | None = None
+    details: GetUnderwritingDetails | None = None
     taxes: GetUnderwritingTaxes | None = None
     optimization_list: list[GetUnderwritingOptimizationItem] = Field(
         default_factory=list
@@ -78,6 +84,15 @@ class ConstructionAmenityOption(BaseModel):
     price_tier_3: Decimal | None = None
     notes: str | None = None
 
+    @field_serializer(
+        "price_tier_1",
+        "price_tier_2",
+        "price_tier_3",
+        when_used="json",
+    )
+    def serialize_price_tier(self, value: Decimal | None) -> str | None:
+        return _serialize_plain_decimal(value)
+
 
 class ConstructionRemodelingOption(BaseModel):
     id: int
@@ -89,10 +104,37 @@ class ConstructionRemodelingOption(BaseModel):
     price_tier_3: Decimal | None = None
     notes: str | None = None
 
+    @field_serializer(
+        "price_tier_1",
+        "price_tier_2",
+        "price_tier_3",
+        when_used="json",
+    )
+    def serialize_price_tier(self, value: Decimal | None) -> str | None:
+        return _serialize_plain_decimal(value)
+
+
+class ZillowProperty(BaseModel):
+    id: str | None = None
+    url: str | None = None
+    thumbnail: str | None = None
+    price: Decimal | None = None
+    address: str | None = None
+    bedrooms: int | None = None
+    bathrooms: Decimal | None = None
+    area: int | None = None
+    original_photos: list | None = None
+    lot_size_sqft: Decimal | None = None
+
 
 class EditContextualData(BaseModel):
-    construction_amenities: list[ConstructionAmenityOption] = Field(default_factory=list)
-    construction_remodeling: list[ConstructionRemodelingOption] = Field(default_factory=list)
+    zillow_property: ZillowProperty | None = None
+    construction_amenities: list[ConstructionAmenityOption] = Field(
+        default_factory=list
+    )
+    construction_remodeling: list[ConstructionRemodelingOption] = Field(
+        default_factory=list
+    )
 
 
 class EditContextData(BaseModel):

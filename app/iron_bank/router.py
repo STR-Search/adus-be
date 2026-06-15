@@ -70,8 +70,14 @@ def get_get_underwriting_controller(
         ConstructionRemodelingService,
     )
     from app.markets.services.opex_service import OpexByBedroomsService
+    from app.zillow.repositories.scheduled_listing_details_repository import (
+        ScheduledListingDetailsRepository,
+    )
     from app.zillow.repositories.scheduled_listings_repository import (
         ScheduledListingsRepository,
+    )
+    from app.zillow.services.scheduled_listing_details_service import (
+        ScheduledListingDetailsService,
     )
     from app.zillow.services.scheduled_listings_service import ScheduledListingsService
 
@@ -81,6 +87,7 @@ def get_get_underwriting_controller(
         ConstructionAmenitiesService(ConstructionAmenitiesRepository(db)),
         ConstructionRemodelingService(ConstructionRemodelingRepository(db)),
         ScheduledListingsService(ScheduledListingsRepository(db)),
+        ScheduledListingDetailsService(ScheduledListingDetailsRepository(db)),
         OpexByBedroomsService(OpexByBedroomsRepository(db), market_repo),
     )
 

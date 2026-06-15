@@ -34,7 +34,7 @@ class UnderwritingPayloadBuilder:
             "listing_url": zillow_property.get("url"),
             "property_address": zillow_property.get("address"),
             "purchase_price": purchase_price,
-            "uw_details": self._build_uw_details(
+            "details": self._build_details(
                 purchase_price=purchase_price,
                 config=config,
                 cleaning_cost=cleaning_cost,
@@ -44,7 +44,7 @@ class UnderwritingPayloadBuilder:
         }
         return SaveUnderwritingPayload.model_validate(payload)
 
-    def _build_uw_details(
+    def _build_details(
         self,
         *,
         purchase_price: Decimal | None,
@@ -55,10 +55,16 @@ class UnderwritingPayloadBuilder:
         if purchase_price is not None:
             detail["purchase_details"] = {
                 "purchase_price": purchase_price,
-                "down_payment_pct": self._decimal_or_default(config.get("down_payment"), Decimal("0.1")),
-                "interest_rate": self._decimal_or_default(config.get("interest_rate"), Decimal("0.07")),
+                "down_payment_pct": self._decimal_or_default(
+                    config.get("down_payment"), Decimal("0.1")
+                ),
+                "interest_rate": self._decimal_or_default(
+                    config.get("interest_rate"), Decimal("0.07")
+                ),
                 "mortgage_years": int(config.get("loan_term_years") or 30),
-                "closing_costs_pct": self._decimal_or_default(config.get("closing_costs"), Decimal("0.03")),
+                "closing_costs_pct": self._decimal_or_default(
+                    config.get("closing_costs"), Decimal("0.03")
+                ),
             }
         if cleaning_cost is not None:
             detail["cleaning_cost"] = cleaning_cost
@@ -66,14 +72,18 @@ class UnderwritingPayloadBuilder:
 
     def _build_taxes(self, config: dict[str, Any]) -> dict[str, Any]:
         return {
-            "land_assumptions_pct": self._decimal_or_default(config.get("land_assumptions"), Decimal("0.2")),
+            "land_assumptions_pct": self._decimal_or_default(
+                config.get("land_assumptions"), Decimal("0.2")
+            ),
             "sla_multiplier_pct": self._decimal_or_default(
                 config.get("sla_multiplier_pct"), self._DEFAULT_SLA_MULTIPLIER_PCT
             ),
             "bonus_amount_pct": self._decimal_or_default(
                 config.get("bonus_amount_pct"), self._DEFAULT_BONUS_AMOUNT_PCT
             ),
-            "tax_rate_pct": self._decimal_or_default(config.get("tax_rate"), Decimal("0.37")),
+            "tax_rate_pct": self._decimal_or_default(
+                config.get("tax_rate"), Decimal("0.37")
+            ),
         }
 
     def _build_cleaning_cost(self, cleaning: dict[str, Any]) -> dict[str, Any] | None:

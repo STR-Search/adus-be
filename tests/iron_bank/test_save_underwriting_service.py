@@ -24,7 +24,7 @@ async def test_save_enriches_forecasted_revenue_before_persistence():
         {
             "market_id": 3,
             "purchase_price": 100000,
-            "uw_details": {
+            "details": {
                 "purchase_details": {
                     "purchase_price": 100000,
                     "down_payment_pct": Decimal("0.20"),
@@ -65,7 +65,9 @@ async def test_save_enriches_forecasted_revenue_before_persistence():
     forecasted_revenue = repository.detail_data["forecasted_revenue"]
     assert forecasted_revenue["scenarios"]["low"]["annual_free_cash_flow"] == -2456.0
     assert forecasted_revenue["scenarios"]["mid"]["principal_pay_down"] == 8000.0
-    assert forecasted_revenue["scenarios"]["high"]["annual_total_re_return_pct"] == 0.4585
+    assert (
+        forecasted_revenue["scenarios"]["high"]["annual_total_re_return_pct"] == 0.4585
+    )
     assert repository.detail_data["y1_coc_incl_tax_savings"] == {
         "low_pct": 0.304,
         "mid_pct": 0.360,

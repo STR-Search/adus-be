@@ -1,7 +1,10 @@
 from typing import Any
 
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
-from app.iron_bank.schemas.get_underwriting import GetUnderwritingResult, GetUnderwritingsResult
+from app.iron_bank.schemas.get_underwriting import (
+    GetUnderwritingResult,
+    GetUnderwritingsResult,
+)
 from app.iron_bank.schemas.underwriting import UnderwritingBase
 
 
@@ -41,7 +44,7 @@ class GetUnderwritingService:
         return GetUnderwritingResult.model_validate(
             {
                 **self._parent_data(underwriting),
-                "uw_details": self._detail_data(underwriting.detail),
+                "details": self._detail_data(underwriting.detail),
                 "taxes": self._tax_data(underwriting.taxes),
                 "optimization_list": [
                     self._optimization_item_data(item)
@@ -51,7 +54,9 @@ class GetUnderwritingService:
                     self._operating_expense_data(expense)
                     for expense in underwriting.operating_expenses
                 ],
-                "comp_set": [self._comp_set_data(comp) for comp in underwriting.comp_set],
+                "comp_set": [
+                    self._comp_set_data(comp) for comp in underwriting.comp_set
+                ],
             }
         )
 

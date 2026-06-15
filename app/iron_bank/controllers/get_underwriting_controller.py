@@ -22,12 +22,14 @@ class GetUnderwritingController:
         construction_amenities_service: Any = None,
         construction_remodeling_service: Any = None,
         listings_service: Any = None,
+        listing_details_service: Any = None,
         opex_by_bedrooms_service: Any = None,
     ):
         self.service = service
         self.construction_amenities_service = construction_amenities_service
         self.construction_remodeling_service = construction_remodeling_service
         self.listings_service = listings_service
+        self.listing_details_service = listing_details_service
         self.opex_by_bedrooms_service = opex_by_bedrooms_service
 
     async def get_underwritings(
@@ -56,11 +58,14 @@ class GetUnderwritingController:
             )
             raise HTTPException(status_code=500, detail="Failed to fetch underwritings")
 
-    async def get_underwriting(self, underwriting_id: int) -> GetUnderwritingEditContextResult:
+    async def get_underwriting(
+        self, underwriting_id: int
+    ) -> GetUnderwritingEditContextResult:
         try:
             underwriting = await self.service.get(underwriting_id)
 
             opex_by_bedrooms = None
+            zillow_property = None
             if not underwriting.zpid:
                 logger.warning(
                     "iron_bank.get_underwriting.no_zpid",
@@ -84,6 +89,12 @@ class GetUnderwritingController:
                         detail="no listing found for zpid — furnishings prices will be unavailable",
                     )
                 else:
+                    listing_details = await self.listing_details_service.get_by_zpid(
+                        underwriting.zpid
+                    )
+                    zillow_property = PrepareUwDataService()._transform_zillow_property(
+                        listing, listing_details
+                    )
                     opex_by_bedrooms = (
                         await self.opex_by_bedrooms_service.get_by_market_and_bedrooms(
                             bedrooms=listing.beds, market_id=underwriting.market_id
@@ -109,6 +120,7 @@ class GetUnderwritingController:
                 data=EditContextData(
                     underwriting=underwriting,
                     contextual=EditContextualData(
+                        zillow_property=zillow_property,
                         construction_amenities=[
                             ConstructionAmenityOption.model_validate(a)
                             for a in amenity_options
