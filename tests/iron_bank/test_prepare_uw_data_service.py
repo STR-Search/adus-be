@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 
 
@@ -96,13 +97,15 @@ class TestPrepare:
         return PrepareUwDataService().prepare(**kwargs)
 
     def test_assembles_market_fields(self):
-        result = self._prepare()
+        prepared = self._prepare()
+        assert isinstance(prepared, PrepareUwDataResult)
+        result = prepared.model_dump()
         assert result["market_name"] == "Smoky Mountains"
         assert result["market_id"] == 3
         assert result["market_slug"] == "smoky-mountains"
 
     def test_transforms_zillow_property(self):
-        result = self._prepare()
+        result = self._prepare().model_dump()
         assert result["zillow_property"] == {
             "id": "12345",
             "url": "https://zillow.com/homes/12345",
@@ -117,13 +120,13 @@ class TestPrepare:
         }
 
     def test_splits_opex_into_cleaning_ranged_absolute(self):
-        opex = self._prepare()["opex"]
+        opex = self._prepare().model_dump()["opex"]
         assert opex["cleaning"] == {"fee": 275, "num_of_turns": 38}
         assert opex["ranged"] == {"pool_hot_tub": {"low": 1200, "high": 2400}}
         assert opex["absolute"] == {"internet": 100, "utilities": 350}
 
     def test_moves_land_value_and_appreciation_from_opex_to_config(self):
-        result = self._prepare()
+        result = self._prepare().model_dump()
 
         assert "land_value" not in result["opex"]["absolute"]
         assert "appreciation" not in result["opex"]["absolute"]
@@ -131,7 +134,7 @@ class TestPrepare:
         assert result["config"]["annual_re_appreciation_pct"] == 0.045
 
     def test_prepends_furnishings_amenity_from_opex(self):
-        amenities = self._prepare()["construction_amenities"]
+        amenities = self._prepare().model_dump()["construction_amenities"]
         assert amenities[0] == {
             "amenity_name": "Furnishings",
             "id": 0,
@@ -144,7 +147,7 @@ class TestPrepare:
         assert amenities[1]["amenity_name"] == "Hot Tub"
 
     def test_config_includes_fred_rate_as_fraction(self):
-        config = self._prepare()["config"]
+        config = self._prepare().model_dump()["config"]
         assert config["fred"] == {"value": 0.065, "date": "2026-06-01"}
 
     def test_handles_all_optional_inputs_missing(self):
@@ -155,7 +158,7 @@ class TestPrepare:
             opex_by_bedrooms=None,
             opex_by_size=None,
             fred=None,
-        )
+        ).model_dump()
         assert result["market_name"] is None
         assert result["market_id"] is None
         assert result["market_slug"] is None

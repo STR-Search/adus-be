@@ -1,4 +1,5 @@
 from app.iron_bank.defaults import UW_CONFIG_DEFAULTS
+from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
 
 
 class PrepareUwDataService:
@@ -97,7 +98,7 @@ class PrepareUwDataService:
         construction_amenities: list,
         construction_remodeling: list,
         fred,
-    ) -> dict:
+    ) -> PrepareUwDataResult:
         amenities = self.build_amenities_options(opex_by_bedrooms, construction_amenities)
 
         config = UW_CONFIG_DEFAULTS.model_dump()
@@ -105,13 +106,13 @@ class PrepareUwDataService:
             config["fred"] = {"value": fred.value / 100, "date": fred.date}
         self._apply_opex_config_values(config, opex_by_bedrooms, opex_by_size)
 
-        return {
+        return PrepareUwDataResult.model_validate({
             "market_name": market.market_name if market else None,
             "market_id": market_id,
             "market_slug": market.market_slug if market else None,
             "zillow_property": self._transform_zillow_property(listing, listing_details),
             "opex": self._transform_opex_costs(opex_by_bedrooms, opex_by_size),
             "construction_amenities": amenities,
-            "construction_remodeling": construction_remodeling,
+            "construction_remodeling": [r.model_dump() for r in construction_remodeling],
             "config": config,
-        }
+        })

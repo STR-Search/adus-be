@@ -2,6 +2,8 @@ from decimal import Decimal, InvalidOperation
 import re
 from typing import Any
 
+from pydantic import BaseModel
+
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
 
 
@@ -19,7 +21,10 @@ class UnderwritingPayloadBuilder:
     # be saved as such.
     _EXCLUDED_ABSOLUTE_EXPENSES = frozenset({"consolidated_shipping"})
 
-    def build(self, prepared: dict[str, Any]) -> SaveUnderwritingPayload:
+    def build(self, prepared: dict[str, Any] | BaseModel) -> SaveUnderwritingPayload:
+        if isinstance(prepared, BaseModel):
+            prepared = prepared.model_dump()
+
         zillow_property = prepared.get("zillow_property") or {}
         config = prepared.get("config") or {}
         opex = prepared.get("opex") or {}

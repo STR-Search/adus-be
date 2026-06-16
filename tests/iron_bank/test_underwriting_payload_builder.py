@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
 from app.iron_bank.services.underwriting_payload_builder import (
     UnderwritingPayloadBuilder,
 )
@@ -86,3 +87,41 @@ def test_builds_draft_payload_when_optional_prepared_fields_are_missing():
     assert payload.details is None
     assert payload.taxes is None
     assert payload.operating_expenses == []
+
+
+def test_builds_save_payload_from_prepared_schema():
+    prepared = PrepareUwDataResult.model_validate(
+        {
+            "market_id": 3,
+            "zillow_property": {
+                "id": "12345",
+                "url": "https://www.zillow.com/homedetails/12345",
+                "price": "485000",
+                "address": "123 Pine Ridge Rd",
+            },
+            "opex": {
+                "cleaning": {"fee": 275, "num_of_turns": 38},
+                "ranged": {"pool_hot_tub": {"low": 125, "high": 275}},
+                "absolute": {"internet": 100},
+            },
+            "construction_amenities": [],
+            "construction_remodeling": [],
+            "config": {
+                "interest_rate": 0.065,
+                "loan_term_years": 30,
+                "down_payment": 0.1,
+                "closing_costs": 0.03,
+                "fred": {"value": 0.065, "date": "2024-06-01"},
+                "land_assumptions": 0.2,
+                "annual_re_appreciation_pct": 0.04,
+                "tax_rate": 0.37,
+                "co_hosting_pct": 0,
+            },
+        }
+    )
+
+    payload = UnderwritingPayloadBuilder().build(prepared)
+
+    assert payload.zpid == "12345"
+    assert payload.market_id == 3
+    assert payload.purchase_price == Decimal("485000")

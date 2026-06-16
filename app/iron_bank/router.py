@@ -17,6 +17,7 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingEditContextResult,
     GetUnderwritingsResult,
 )
+from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
 from app.iron_bank.schemas.save_underwriting import (
     SaveUnderwritingPayload,
     SaveUnderwritingResult,
@@ -92,7 +93,9 @@ def get_get_underwriting_controller(
     )
 
 
-@router.get("/prepare-uw-data", tags=["iron_bank"])
+@router.get(
+    "/prepare-uw-data", response_model=PrepareUwDataResult, tags=["iron_bank"]
+)
 async def get_prepare_uw_data(
     zpid: str = Query(...),
     controller: PrepareUwDataController = Depends(get_prepare_uw_data_controller),
