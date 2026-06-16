@@ -80,7 +80,9 @@ class CleanedData(Base):
     is_guest_favorite: Mapped[bool | None] = mapped_column(Boolean)
     potential_revenue_rank: Mapped[int | None] = mapped_column(Integer)
     data_date: Mapped[datetime | None] = mapped_column(DateTime)
-    created_at: Mapped[datetime | None] = mapped_column(DateTime, server_default=text("now()"))
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime, server_default=text("now()")
+    )
     property_type: Mapped[str] = mapped_column(
         Text,
         nullable=False,

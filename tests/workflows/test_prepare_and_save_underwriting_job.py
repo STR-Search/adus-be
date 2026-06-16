@@ -2,7 +2,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.workflows.prepare_and_save_underwriting_job import PrepareAndSaveUnderwritingJob
+from app.airbnb_public.services.cleaned_data_service import CleanedDataService
+from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
+from app.workflows.prepare_and_save_underwriting_job import (
+    PrepareAndSaveUnderwritingJob,
+)
+from app.zillow.services.scheduled_listings_service import ScheduledListingsService
 
 
 class FakePrepareJob:
@@ -47,7 +52,7 @@ class FakeSaveService:
 @pytest.mark.asyncio
 async def test_prepares_maps_and_saves_listing():
     prepared = {"zillow_property": {"id": "12345"}}
-    payload = SimpleNamespace(zpid="12345")
+    payload = SimpleNamespace(zpid="12345", purchase_price=100000)
     prepare_job = FakePrepareJob(prepared)
     builder = FakePayloadBuilder(payload)
     save_service = FakeSaveService()
@@ -76,7 +81,9 @@ async def test_skips_existing_underwriting_for_zpid():
 
     result = await PrepareAndSaveUnderwritingJob(
         prepare_job=FakePrepareJob({"zillow_property": {"id": "12345"}}),
-        payload_builder=FakePayloadBuilder(SimpleNamespace(zpid="12345")),
+        payload_builder=FakePayloadBuilder(
+            SimpleNamespace(zpid="12345", purchase_price=100000)
+        ),
         save_service=save_service,
         underwriting_repository=FakeExistingRepository(existing),
     ).run("12345")
@@ -87,3 +94,35 @@ async def test_skips_existing_underwriting_for_zpid():
         "underwriting_id": 7,
     }
     assert save_service.saved_payload is None
+
+
+@pytest.mark.asyncio
+async def test_skips_listing_when_purchase_price_is_missing():
+    prepared = {"zillow_property": {"id": "12345"}}
+    payload = SimpleNamespace(zpid="12345", purchase_price=None)
+    prepare_job = FakePrepareJob(prepared)
+    builder = FakePayloadBuilder(payload)
+    save_service = FakeSaveService()
+
+    result = await PrepareAndSaveUnderwritingJob(
+        prepare_job=prepare_job,
+        payload_builder=builder,
+        save_service=save_service,
+        underwriting_repository=FakeExistingRepository(),
+    ).run("12345")
+
+    assert result == {
+        "zpid": "12345",
+        "status": "skipped_no_purchase_price",
+    }
+    assert builder.received is prepared
+    assert save_service.saved_payload is None
+
+
+def test_from_session_wires_save_service_for_airbnb_revenue_fallback():
+    job = PrepareAndSaveUnderwritingJob.from_session(object())
+
+    assert isinstance(job.save_service, SaveUnderwritingService)
+    assert job.save_service.market_service is not None
+    assert isinstance(job.save_service.listings_service, ScheduledListingsService)
+    assert isinstance(job.save_service.cleaned_data_service, CleanedDataService)

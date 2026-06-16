@@ -15,6 +15,7 @@ def _listing():
         detail_url="https://zillow.com/homes/12345",
         img_src="https://photos.zillow.com/12345.jpg",
         price=485000,
+        unformatted_price=None,
         address="123 Pine Ridge Rd",
         beds=4,
         baths=3,
@@ -118,6 +119,15 @@ class TestPrepare:
             "original_photos": ["a.jpg"],
             "lot_size_sqft": 21780,
         }
+
+    def test_prefers_unformatted_price_when_available(self):
+        listing = _listing()
+        listing.price = 0
+        listing.unformatted_price = "485000"
+
+        result = self._prepare(listing=listing).model_dump()
+
+        assert result["zillow_property"]["price"] == 485000
 
     def test_splits_opex_into_cleaning_ranged_absolute(self):
         opex = self._prepare().model_dump()["opex"]

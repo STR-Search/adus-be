@@ -1,13 +1,34 @@
-from typing import Any
+from typing import Any, Protocol
 
 from fastapi.encoders import jsonable_encoder
 
+from app.airbnb_public.schemas.cleaned_data import RevenuePotentialPercentiles
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
 from app.iron_bank.schemas.save_underwriting import (
+    ForecastedRevenueInput,
     SaveUnderwritingPayload,
     SaveUnderwritingResult,
 )
 from app.iron_bank.services.underwriting_calculator import UnderwritingCalculator
+from app.markets.schemas.market import MarketKeysMasterSchema
+from app.zillow.models.scheduled_listings import ScheduledListing
+
+
+class MarketReader(Protocol):
+    async def get_by_id(self, market_id: int) -> MarketKeysMasterSchema | None: ...
+
+
+class ListingReader(Protocol):
+    async def get_by_zpid(self, zpid: str) -> ScheduledListing | None: ...
+
+
+class CleanedDataRevenueReader(Protocol):
+    async def get_revenue_potential_percentiles(
+        self,
+        *,
+        key_market: str,
+        bedrooms: int,
+    ) -> RevenuePotentialPercentiles | None: ...
 
 
 class SaveUnderwritingService:
@@ -23,9 +44,15 @@ class SaveUnderwritingService:
         self,
         repository: UnderwritingRepository,
         calculator: UnderwritingCalculator | None = None,
+        market_service: MarketReader | None = None,
+        listings_service: ListingReader | None = None,
+        cleaned_data_service: CleanedDataRevenueReader | None = None,
     ):
         self.repository = repository
         self.calculator = calculator or UnderwritingCalculator()
+        self.market_service = market_service
+        self.listings_service = listings_service
+        self.cleaned_data_service = cleaned_data_service
 
     async def save(self, payload: SaveUnderwritingPayload) -> SaveUnderwritingResult:
         data = payload.model_dump(exclude_unset=True)
@@ -34,7 +61,12 @@ class SaveUnderwritingService:
             key: value for key, value in data.items() if key not in self._CHILD_FIELDS
         }
         tax_data = self._build_tax_data(payload)
-        detail_data = self._build_detail_data(payload, tax_data)
+        detail_data = await self._build_detail_data(payload, tax_data)
+        self._apply_calculated_underwriting_fields(
+            underwriting_data,
+            detail_data,
+            payload.optimization_list,
+        )
 
         underwriting = await self.repository.create(
             underwriting_data=underwriting_data,
@@ -55,7 +87,7 @@ class SaveUnderwritingService:
     def _without_empty_values(self, data: dict[str, Any]) -> dict[str, Any]:
         return {key: value for key, value in data.items() if value is not None}
 
-    def _build_detail_data(
+    async def _build_detail_data(
         self,
         payload: SaveUnderwritingPayload,
         tax_data: dict | None = None,
@@ -73,14 +105,20 @@ class SaveUnderwritingService:
                 )
             )
 
-        if payload.details.forecasted_revenue is not None:
+        forecasted_revenue_input = payload.details.forecasted_revenue
+        if forecasted_revenue_input is None and "purchase_details" in detail_data:
+            forecasted_revenue_input = await self._build_forecasted_revenue_input(
+                payload
+            )
+
+        if forecasted_revenue_input is not None:
             if "purchase_details" not in detail_data:
                 raise ValueError(
                     "purchase_details is required to calculate forecasted revenue"
                 )
             detail_data["forecasted_revenue"] = (
                 self.calculator.calculate_forecasted_revenue(
-                    forecasted_revenue=payload.details.forecasted_revenue,
+                    forecasted_revenue=forecasted_revenue_input,
                     purchase_details=detail_data["purchase_details"],
                     operating_expenses=payload.operating_expenses,
                     optimization_items=payload.optimization_list,
@@ -102,6 +140,105 @@ class SaveUnderwritingService:
             )
 
         return detail_data
+
+    async def _build_forecasted_revenue_input(
+        self,
+        payload: SaveUnderwritingPayload,
+    ) -> ForecastedRevenueInput | None:
+        if (
+            self.market_service is None
+            or self.listings_service is None
+            or self.cleaned_data_service is None
+        ):
+            return None
+
+        if payload.market_id is None:
+            raise ValueError(
+                "market_id is required to calculate forecasted revenue from Airbnb data"
+            )
+        if payload.zpid is None:
+            raise ValueError(
+                "zpid is required to calculate forecasted revenue from Airbnb data"
+            )
+
+        market = await self.market_service.get_by_id(payload.market_id)
+        if market is None or market.market_name_current is None:
+            raise ValueError(
+                "market_name_current is required for Airbnb revenue lookup"
+            )
+
+        listing = await self.listings_service.get_by_zpid(payload.zpid)
+        if listing is None or listing.beds is None:
+            raise ValueError("listing beds are required for Airbnb revenue lookup")
+
+        percentiles = await self.cleaned_data_service.get_revenue_potential_percentiles(
+            key_market=market.market_name_current,
+            bedrooms=listing.beds,
+        )
+        if percentiles is None:
+            raise ValueError(
+                "Airbnb revenue percentiles were not found for the market and bedrooms"
+            )
+
+        return ForecastedRevenueInput.model_validate(
+            {
+                "co_hosting_fee_pct": 0,
+                "annual_re_appreciation_pct": 0.0425,
+                "scenarios": {
+                    "low": {"forecasted_revenue": percentiles.low},
+                    "mid": {"forecasted_revenue": percentiles.mid},
+                    "high": {"forecasted_revenue": percentiles.high},
+                },
+            }
+        )
+
+    def _apply_calculated_underwriting_fields(
+        self,
+        underwriting_data: dict[str, Any],
+        detail_data: dict | None,
+        optimization_items: list,
+    ) -> None:
+        if detail_data is None:
+            return
+
+        forecasted_revenue = detail_data.get("forecasted_revenue")
+        if forecasted_revenue is not None:
+            scenarios = forecasted_revenue["scenarios"]
+            underwriting_data["low_gross_revenue"] = scenarios["low"][
+                "forecasted_revenue"
+            ]
+            underwriting_data["mid_gross_revenue"] = scenarios["mid"][
+                "forecasted_revenue"
+            ]
+            underwriting_data["high_gross_revenue"] = scenarios["high"][
+                "forecasted_revenue"
+            ]
+
+            purchase_details = detail_data.get("purchase_details")
+            if purchase_details is not None:
+                total_oop = self.calculator.calculate_total_oop(
+                    purchase_details=purchase_details,
+                    optimization_items=optimization_items,
+                )
+                cash_on_cash = self.calculator.calculate_cash_on_cash(
+                    forecasted_revenue=forecasted_revenue,
+                    total_oop=total_oop,
+                )
+                purchase_price = purchase_details["purchase_price"]
+                underwriting_data["total_oop"] = total_oop
+                underwriting_data["prr"] = self.calculator.calculate_prr(
+                    purchase_price=purchase_price,
+                    mid_gross_revenue=scenarios["mid"]["forecasted_revenue"],
+                )
+                underwriting_data["budget_to_pp"] = (
+                    self.calculator.calculate_budget_to_pp(
+                        total_oop=total_oop,
+                        purchase_price=purchase_price,
+                    )
+                )
+                underwriting_data["l_cash_on_cash"] = cash_on_cash["low_pct"]
+                underwriting_data["m_cash_on_cash"] = cash_on_cash["mid_pct"]
+                underwriting_data["h_cash_on_cash"] = cash_on_cash["high_pct"]
 
     def _build_tax_data(self, payload: SaveUnderwritingPayload) -> dict | None:
         if payload.taxes is None:

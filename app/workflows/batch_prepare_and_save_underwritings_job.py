@@ -1,8 +1,12 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.zillow.repositories.scheduled_listings_repository import ScheduledListingsRepository
+from app.zillow.repositories.scheduled_listings_repository import (
+    ScheduledListingsRepository,
+)
 from app.zillow.services.scheduled_listings_service import ScheduledListingsService
-from app.workflows.prepare_and_save_underwriting_job import PrepareAndSaveUnderwritingJob
+from app.workflows.prepare_and_save_underwriting_job import (
+    PrepareAndSaveUnderwritingJob,
+)
 
 
 class BatchPrepareAndSaveUnderwritingsJob:
@@ -28,6 +32,7 @@ class BatchPrepareAndSaveUnderwritingsJob:
         results = []
         saved = 0
         skipped_existing = 0
+        skipped_no_purchase_price = 0
         failed = 0
 
         for listing in listings:
@@ -48,6 +53,8 @@ class BatchPrepareAndSaveUnderwritingsJob:
                 saved += 1
             elif result["status"] == "skipped_existing":
                 skipped_existing += 1
+            elif result["status"] == "skipped_no_purchase_price":
+                skipped_no_purchase_price += 1
             results.append(result)
 
         return {
@@ -55,6 +62,7 @@ class BatchPrepareAndSaveUnderwritingsJob:
             "processed": len(results),
             "saved": saved,
             "skipped_existing": skipped_existing,
+            "skipped_no_purchase_price": skipped_no_purchase_price,
             "failed": failed,
             "results": results,
         }

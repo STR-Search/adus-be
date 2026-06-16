@@ -89,6 +89,26 @@ def test_builds_draft_payload_when_optional_prepared_fields_are_missing():
     assert payload.operating_expenses == []
 
 
+def test_treats_zero_purchase_price_as_missing():
+    prepared = {
+        "market_id": 3,
+        "zillow_property": {
+            "id": "12345",
+            "url": "https://www.zillow.com/homedetails/12345",
+            "price": "0",
+            "address": "123 Pine Ridge Rd",
+        },
+        "opex": {"cleaning": {}, "absolute": {}},
+        "config": {},
+    }
+
+    payload = UnderwritingPayloadBuilder().build(prepared)
+
+    assert payload.purchase_price is None
+    assert payload.details is None
+    assert payload.taxes is None
+
+
 def test_builds_save_payload_from_prepared_schema():
     prepared = PrepareUwDataResult.model_validate(
         {

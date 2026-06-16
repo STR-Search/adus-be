@@ -72,3 +72,9 @@ class CleanedDataSchema(BaseModel):
     property_type: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RevenuePotentialPercentiles(BaseModel):
+    low: float
+    mid: float
+    high: float

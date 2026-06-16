@@ -163,9 +163,9 @@ async def test_get_all_returns_paginated_results():
     assert result.page == 1
     assert result.page_size == 50
     assert result.pages == 1
-    assert len(result.items) == 1
-    assert result.items[0].id == 42
-    assert result.items[0].taxes.tax_savings == Decimal("60100")
+    assert len(result.data) == 1
+    assert result.data[0].id == 42
+    assert result.data[0].taxes.tax_savings == Decimal("60100")
 
 
 @pytest.mark.asyncio
@@ -189,6 +189,6 @@ async def test_get_all_returns_empty_page_when_no_underwritings():
 
     result = await service.get_all(page=1, page_size=50)
 
-    assert result.items == []
+    assert result.data == []
     assert result.total == 0
     assert result.pages == 0

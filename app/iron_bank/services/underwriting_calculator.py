@@ -85,7 +85,7 @@ class UnderwritingCalculator:
             purchase_details["purchase_price"]
             * forecasted_revenue.annual_re_appreciation_pct
         )
-        total_oop = self._calculate_total_oop(
+        total_oop = self.calculate_total_oop(
             purchase_details=purchase_details,
             optimization_items=optimization_items,
         )
@@ -135,7 +135,7 @@ class UnderwritingCalculator:
         purchase_details: dict,
         optimization_items: list[OptimizationItemInput],
     ) -> dict:
-        total_oop = self._calculate_total_oop(
+        total_oop = self.calculate_total_oop(
             purchase_details=purchase_details,
             optimization_items=optimization_items,
         )
@@ -152,6 +152,37 @@ class UnderwritingCalculator:
             )
             for scenario_name, scenario in forecasted_revenue["scenarios"].items()
         }
+
+    def calculate_cash_on_cash(
+        self,
+        forecasted_revenue: dict,
+        total_oop: Decimal,
+    ) -> dict:
+        if total_oop == 0:
+            raise ValueError("total_oop is required to calculate cash on cash")
+
+        return {
+            f"{scenario_name}_pct": self._percentage(
+                scenario["annual_free_cash_flow"] / total_oop
+            )
+            for scenario_name, scenario in forecasted_revenue["scenarios"].items()
+        }
+
+    def calculate_prr(
+        self, purchase_price: Decimal, mid_gross_revenue: Decimal
+    ) -> Decimal:
+        if mid_gross_revenue == 0:
+            raise ValueError("mid gross revenue is required to calculate PRR")
+        return self._percentage(purchase_price / mid_gross_revenue)
+
+    def calculate_budget_to_pp(
+        self,
+        total_oop: Decimal,
+        purchase_price: Decimal,
+    ) -> Decimal:
+        if purchase_price == 0:
+            raise ValueError("purchase_price is required to calculate budget to PP")
+        return self._percentage(total_oop / purchase_price)
 
     def _calculate_debt_service_annual(self, purchase_details: dict) -> Decimal:
         monthly_payment = self._pmt(
@@ -174,7 +205,7 @@ class UnderwritingCalculator:
         )
         return loan_amount - ending_balance
 
-    def _calculate_total_oop(
+    def calculate_total_oop(
         self,
         purchase_details: dict,
         optimization_items: list[OptimizationItemInput],

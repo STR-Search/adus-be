@@ -132,17 +132,19 @@ class UnderwritingPayloadBuilder:
         if value is None:
             return None
         if isinstance(value, Decimal):
-            return value
+            return value if value > 0 else None
         if isinstance(value, int | float):
-            return Decimal(str(value))
+            amount = Decimal(str(value))
+            return amount if amount > 0 else None
 
         cleaned = re.sub(r"[^0-9.\-]", "", str(value))
         if not cleaned:
             return None
         try:
-            return Decimal(cleaned)
+            amount = Decimal(cleaned)
         except InvalidOperation:
             return None
+        return amount if amount > 0 else None
 
     def _decimal_or_default(self, value: Any, default: Decimal) -> Decimal:
         if value is None:

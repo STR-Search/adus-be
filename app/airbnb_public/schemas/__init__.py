@@ -1,3 +1,6 @@
-from app.airbnb_public.schemas.cleaned_data import CleanedDataSchema
+from app.airbnb_public.schemas.cleaned_data import (
+    CleanedDataSchema,
+    RevenuePotentialPercentiles,
+)
 
-__all__ = ["CleanedDataSchema"]
+__all__ = ["CleanedDataSchema", "RevenuePotentialPercentiles"]
