@@ -1,7 +1,7 @@
 from app.iron_bank.schemas.uw_config import UwConfigSchema
 
 UW_CONFIG_DEFAULTS = UwConfigSchema(
-    interest_rate=0.07,
+    interest_rate=0.0688,
     loan_term_years=30,
     down_payment=0.1,
     closing_costs=0.03,

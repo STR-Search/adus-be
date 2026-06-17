@@ -29,7 +29,14 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         }
         tax_data = self._build_tax_data(payload) if "taxes" in data else None
         detail_data = (
-            self._build_detail_data(payload, tax_data) if "details" in data else None
+            await self._build_detail_data(payload, tax_data)
+            if "details" in data
+            else None
+        )
+        self._apply_calculated_underwriting_fields(
+            underwriting_data,
+            detail_data,
+            payload.optimization_list,
         )
 
         underwriting = await self.repository.update(

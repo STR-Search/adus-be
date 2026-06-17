@@ -40,7 +40,9 @@ class Underwriting(Base):
     approver_id = Column(Integer, nullable=True)
 
     deal_status = Column(String(50), nullable=True)
-    deal_added = Column(DateTime(timezone=True), nullable=True)
+    deal_added = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=True
+    )
     deal_submitted = Column(DateTime(timezone=True), nullable=True)
     deal_approved = Column(DateTime(timezone=True), nullable=True)
     property_pending = Column(Boolean, default=False)

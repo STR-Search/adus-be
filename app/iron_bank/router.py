@@ -17,6 +17,7 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingEditContextResult,
     GetUnderwritingsResult,
 )
+from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
 from app.iron_bank.schemas.save_underwriting import (
     SaveUnderwritingPayload,
     SaveUnderwritingResult,
@@ -43,8 +44,24 @@ def get_prepare_uw_data_controller(
 def get_save_underwriting_controller(
     db: AsyncSession = Depends(get_db),
 ) -> SaveUnderwritingController:
+    from app.airbnb_public.repositories.cleaned_data_repository import (
+        CleanedDataRepository,
+    )
+    from app.airbnb_public.services.cleaned_data_service import CleanedDataService
+    from app.markets.repositories.market_repository import MarketRepository
+    from app.markets.services.market_service import MarketService
+    from app.zillow.repositories.scheduled_listings_repository import (
+        ScheduledListingsRepository,
+    )
+    from app.zillow.services.scheduled_listings_service import ScheduledListingsService
+
     return SaveUnderwritingController(
-        SaveUnderwritingService(UnderwritingRepository(db))
+        SaveUnderwritingService(
+            UnderwritingRepository(db),
+            market_service=MarketService(MarketRepository(db)),
+            listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
+            cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
+        )
     )
 
 
@@ -92,7 +109,7 @@ def get_get_underwriting_controller(
     )
 
 
-@router.get("/prepare-uw-data", tags=["iron_bank"])
+@router.get("/prepare-uw-data", response_model=PrepareUwDataResult, tags=["iron_bank"])
 async def get_prepare_uw_data(
     zpid: str = Query(...),
     controller: PrepareUwDataController = Depends(get_prepare_uw_data_controller),

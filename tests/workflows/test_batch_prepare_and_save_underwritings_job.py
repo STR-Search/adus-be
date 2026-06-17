@@ -37,6 +37,7 @@ async def test_processes_recent_listings_and_returns_summary():
             SimpleNamespace(zpid="1"),
             SimpleNamespace(zpid="2"),
             SimpleNamespace(zpid="3"),
+            SimpleNamespace(zpid="4"),
         ]
     )
     prepare_and_save_job = FakePrepareAndSaveJob(
@@ -44,6 +45,7 @@ async def test_processes_recent_listings_and_returns_summary():
             "1": {"zpid": "1", "status": "saved", "underwriting_id": 10},
             "2": {"zpid": "2", "status": "skipped_existing", "underwriting_id": 20},
             "3": RuntimeError("boom"),
+            "4": {"zpid": "4", "status": "skipped_no_purchase_price"},
         }
     )
 
@@ -53,16 +55,18 @@ async def test_processes_recent_listings_and_returns_summary():
     ).run(since_hours=24, limit=500)
 
     assert listings_service.called_with == {"since_hours": 24, "limit": 500}
-    assert prepare_and_save_job.requested_zpids == ["1", "2", "3"]
+    assert prepare_and_save_job.requested_zpids == ["1", "2", "3", "4"]
     assert summary == {
-        "found": 3,
-        "processed": 3,
+        "found": 4,
+        "processed": 4,
         "saved": 1,
         "skipped_existing": 1,
+        "skipped_no_purchase_price": 1,
         "failed": 1,
         "results": [
             {"zpid": "1", "status": "saved", "underwriting_id": 10},
             {"zpid": "2", "status": "skipped_existing", "underwriting_id": 20},
             {"zpid": "3", "status": "failed", "error": "boom"},
+            {"zpid": "4", "status": "skipped_no_purchase_price"},
         ],
     }

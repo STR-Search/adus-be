@@ -86,8 +86,12 @@ def test_calculates_forecasted_revenue_for_each_scenario():
     }
     assert result["scenarios"]["mid"]["operating_expenses_annual"] == Decimal("3600")
     assert result["scenarios"]["mid"]["annual_total_re_return_pct"] == Decimal("0.3733")
-    assert result["scenarios"]["high"]["operating_expenses_annual"] == Decimal("3744.00")
-    assert result["scenarios"]["high"]["annual_total_re_return_pct"] == Decimal("0.4585")
+    assert result["scenarios"]["high"]["operating_expenses_annual"] == Decimal(
+        "3744.00"
+    )
+    assert result["scenarios"]["high"]["annual_total_re_return_pct"] == Decimal(
+        "0.4585"
+    )
 
 
 def test_calculates_y1_coc_including_tax_savings_for_each_scenario():
@@ -135,3 +139,50 @@ def test_calculates_y1_coc_including_tax_savings_for_each_scenario():
         "mid_pct": Decimal("0.140"),
         "high_pct": Decimal("0.225"),
     }
+
+
+def test_calculates_total_oop_and_cash_on_cash_from_forecasted_revenue():
+    calculator = UnderwritingCalculator()
+    purchase_details = {
+        "down_payment_amount": Decimal("200000"),
+        "closing_costs_amount": Decimal("30000"),
+    }
+    optimization_items = [
+        OptimizationItemInput(category="Furniture", total_price=Decimal("20000"))
+    ]
+    forecasted_revenue = {
+        "scenarios": {
+            "low": {"annual_free_cash_flow": Decimal("108480.00")},
+            "mid": {"annual_free_cash_flow": Decimal("128000.00")},
+            "high": {"annual_free_cash_flow": Decimal("147520.00")},
+        }
+    }
+
+    total_oop = calculator.calculate_total_oop(
+        purchase_details=purchase_details,
+        optimization_items=optimization_items,
+    )
+    cash_on_cash = calculator.calculate_cash_on_cash(
+        forecasted_revenue=forecasted_revenue,
+        total_oop=total_oop,
+    )
+
+    assert total_oop == Decimal("250000")
+    assert cash_on_cash == {
+        "low_pct": Decimal("0.4339"),
+        "mid_pct": Decimal("0.5120"),
+        "high_pct": Decimal("0.5901"),
+    }
+
+
+def test_calculates_prr_and_budget_to_pp():
+    calculator = UnderwritingCalculator()
+
+    assert calculator.calculate_prr(
+        purchase_price=Decimal("1000000"),
+        mid_gross_revenue=Decimal("220000"),
+    ) == Decimal("4.5455")
+    assert calculator.calculate_budget_to_pp(
+        total_oop=Decimal("250000"),
+        purchase_price=Decimal("1000000"),
+    ) == Decimal("0.2500")

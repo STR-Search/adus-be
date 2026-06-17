@@ -2,6 +2,8 @@ from decimal import Decimal, InvalidOperation
 import re
 from typing import Any
 
+from pydantic import BaseModel
+
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
 
 
@@ -19,7 +21,10 @@ class UnderwritingPayloadBuilder:
     # be saved as such.
     _EXCLUDED_ABSOLUTE_EXPENSES = frozenset({"consolidated_shipping"})
 
-    def build(self, prepared: dict[str, Any]) -> SaveUnderwritingPayload:
+    def build(self, prepared: dict[str, Any] | BaseModel) -> SaveUnderwritingPayload:
+        if isinstance(prepared, BaseModel):
+            prepared = prepared.model_dump()
+
         zillow_property = prepared.get("zillow_property") or {}
         config = prepared.get("config") or {}
         opex = prepared.get("opex") or {}
@@ -33,7 +38,6 @@ class UnderwritingPayloadBuilder:
             "deal_status": self._DEFAULT_DEAL_STATUS,
             "listing_url": zillow_property.get("url"),
             "property_address": zillow_property.get("address"),
-            "purchase_price": purchase_price,
             "details": self._build_details(
                 purchase_price=purchase_price,
                 config=config,
@@ -127,17 +131,19 @@ class UnderwritingPayloadBuilder:
         if value is None:
             return None
         if isinstance(value, Decimal):
-            return value
+            return value if value > 0 else None
         if isinstance(value, int | float):
-            return Decimal(str(value))
+            amount = Decimal(str(value))
+            return amount if amount > 0 else None
 
         cleaned = re.sub(r"[^0-9.\-]", "", str(value))
         if not cleaned:
             return None
         try:
-            return Decimal(cleaned)
+            amount = Decimal(cleaned)
         except InvalidOperation:
             return None
+        return amount if amount > 0 else None
 
     def _decimal_or_default(self, value: Any, default: Decimal) -> Decimal:
         if value is None:

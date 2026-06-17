@@ -1,9 +1,19 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.airbnb_public.repositories.cleaned_data_repository import CleanedDataRepository
+from app.airbnb_public.services.cleaned_data_service import CleanedDataService
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
 from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
-from app.iron_bank.services.underwriting_payload_builder import UnderwritingPayloadBuilder
+from app.iron_bank.services.underwriting_payload_builder import (
+    UnderwritingPayloadBuilder,
+)
+from app.markets.repositories.market_repository import MarketRepository
+from app.markets.services.market_service import MarketService
 from app.workflows.prepare_uw_data_job import PrepareUwDataJob
+from app.zillow.repositories.scheduled_listings_repository import (
+    ScheduledListingsRepository,
+)
+from app.zillow.services.scheduled_listings_service import ScheduledListingsService
 
 
 class PrepareAndSaveUnderwritingJob:
@@ -28,7 +38,14 @@ class PrepareAndSaveUnderwritingJob:
         return cls(
             prepare_job=PrepareUwDataJob.from_session(db),
             payload_builder=UnderwritingPayloadBuilder(),
-            save_service=SaveUnderwritingService(underwriting_repository),
+            save_service=SaveUnderwritingService(
+                underwriting_repository,
+                market_service=MarketService(MarketRepository(db)),
+                listings_service=ScheduledListingsService(
+                    ScheduledListingsRepository(db)
+                ),
+                cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
+            ),
             underwriting_repository=underwriting_repository,
         )
 
@@ -43,6 +60,12 @@ class PrepareAndSaveUnderwritingJob:
 
         prepared = await self.prepare_job.run(zpid)
         payload = self.payload_builder.build(prepared)
+        if payload.purchase_price is None:
+            return {
+                "zpid": zpid,
+                "status": "skipped_no_purchase_price",
+            }
+
         result = await self.save_service.save(payload)
         return {
             "zpid": zpid,

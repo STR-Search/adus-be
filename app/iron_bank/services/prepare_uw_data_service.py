@@ -1,4 +1,5 @@
 from app.iron_bank.defaults import UW_CONFIG_DEFAULTS
+from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
 
 
 class PrepareUwDataService:
@@ -11,7 +12,12 @@ class PrepareUwDataService:
     _SQFT_CHECKPOINTS = [1000, 1500, 2000, 2750, 3500, 4500]
     _OPEX_METADATA_FIELDS = {"id", "market_id", "market_slug", "bedrooms", "sqft"}
     _OPEX_CLEANING_FIELDS = {"cleaning_fee", "num_of_turns"}
-    _OPEX_RANGED_FIELDS = {"pool_hot_tub_low", "pool_hot_tub_high", "furnishings_low", "furnishings_high"}
+    _OPEX_RANGED_FIELDS = {
+        "pool_hot_tub_low",
+        "pool_hot_tub_high",
+        "furnishings_low",
+        "furnishings_high",
+    }
     _OPEX_CONFIG_FIELDS = {"land_value", "appreciation"}
 
     def normalize_sqft(self, area: int | None) -> int | None:
@@ -27,17 +33,21 @@ class PrepareUwDataService:
             "id": listing.zpid,
             "url": listing.detail_url,
             "thumbnail": listing.img_src,
-            "price": listing.price,
+            "price": getattr(listing, "unformatted_price", None) or listing.price,
             "address": listing.address,
             "bedrooms": listing.beds,
             "bathrooms": listing.baths,
             "area": listing.area,
-            "original_photos": listing_details.original_photos if listing_details else None,
+            "original_photos": (
+                listing_details.original_photos if listing_details else None
+            ),
             "lot_size_sqft": listing_details.lot_size_sqft if listing_details else None,
         }
 
     def _transform_opex_costs(self, opex_by_bedrooms, opex_by_size) -> dict:
-        bedrooms_data = opex_by_bedrooms.model_dump() if opex_by_bedrooms is not None else {}
+        bedrooms_data = (
+            opex_by_bedrooms.model_dump() if opex_by_bedrooms is not None else {}
+        )
         size_data = opex_by_size.model_dump() if opex_by_size is not None else {}
 
         exclude = (
@@ -46,7 +56,9 @@ class PrepareUwDataService:
             | self._OPEX_RANGED_FIELDS
             | self._OPEX_CONFIG_FIELDS
         )
-        absolute = {k: v for k, v in {**bedrooms_data, **size_data}.items() if k not in exclude}
+        absolute = {
+            k: v for k, v in {**bedrooms_data, **size_data}.items() if k not in exclude
+        }
 
         return {
             "cleaning": {
@@ -62,8 +74,12 @@ class PrepareUwDataService:
             "absolute": absolute,
         }
 
-    def _apply_opex_config_values(self, config: dict, opex_by_bedrooms, opex_by_size) -> None:
-        bedrooms_data = opex_by_bedrooms.model_dump() if opex_by_bedrooms is not None else {}
+    def _apply_opex_config_values(
+        self, config: dict, opex_by_bedrooms, opex_by_size
+    ) -> None:
+        bedrooms_data = (
+            opex_by_bedrooms.model_dump() if opex_by_bedrooms is not None else {}
+        )
         size_data = opex_by_size.model_dump() if opex_by_size is not None else {}
         opex_config = {**bedrooms_data, **size_data}
 
@@ -73,15 +89,21 @@ class PrepareUwDataService:
             config["annual_re_appreciation_pct"] = opex_config["appreciation"]
 
     @staticmethod
-    def build_amenities_options(opex_by_bedrooms, construction_amenities: list) -> list[dict]:
+    def build_amenities_options(
+        opex_by_bedrooms, construction_amenities: list
+    ) -> list[dict]:
         furnishings = {
             "amenity_name": "Furnishings",
             "id": 0,
             "location": None,
             "notes": None,
-            "price_tier_1": opex_by_bedrooms.furnishings_low if opex_by_bedrooms else None,
+            "price_tier_1": (
+                opex_by_bedrooms.furnishings_low if opex_by_bedrooms else None
+            ),
             "price_tier_2": None,
-            "price_tier_3": opex_by_bedrooms.furnishings_high if opex_by_bedrooms else None,
+            "price_tier_3": (
+                opex_by_bedrooms.furnishings_high if opex_by_bedrooms else None
+            ),
         }
         return [furnishings] + [a.model_dump() for a in construction_amenities]
 
@@ -97,21 +119,29 @@ class PrepareUwDataService:
         construction_amenities: list,
         construction_remodeling: list,
         fred,
-    ) -> dict:
-        amenities = self.build_amenities_options(opex_by_bedrooms, construction_amenities)
+    ) -> PrepareUwDataResult:
+        amenities = self.build_amenities_options(
+            opex_by_bedrooms, construction_amenities
+        )
 
         config = UW_CONFIG_DEFAULTS.model_dump()
         if fred is not None:
             config["fred"] = {"value": fred.value / 100, "date": fred.date}
         self._apply_opex_config_values(config, opex_by_bedrooms, opex_by_size)
 
-        return {
-            "market_name": market.market_name if market else None,
-            "market_id": market_id,
-            "market_slug": market.market_slug if market else None,
-            "zillow_property": self._transform_zillow_property(listing, listing_details),
-            "opex": self._transform_opex_costs(opex_by_bedrooms, opex_by_size),
-            "construction_amenities": amenities,
-            "construction_remodeling": construction_remodeling,
-            "config": config,
-        }
+        return PrepareUwDataResult.model_validate(
+            {
+                "market_name": market.market_name if market else None,
+                "market_id": market_id,
+                "market_slug": market.market_slug if market else None,
+                "zillow_property": self._transform_zillow_property(
+                    listing, listing_details
+                ),
+                "opex": self._transform_opex_costs(opex_by_bedrooms, opex_by_size),
+                "construction_amenities": amenities,
+                "construction_remodeling": [
+                    r.model_dump() for r in construction_remodeling
+                ],
+                "config": config,
+            }
+        )

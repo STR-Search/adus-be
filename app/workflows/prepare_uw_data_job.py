@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.external_api.services.external_api_service import ExternalApiService
+from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 from app.markets.repositories.construction_repository import (
     ConstructionAmenitiesRepository,
@@ -63,7 +64,7 @@ class PrepareUwDataJob:
             uw_data_service=PrepareUwDataService(),
         )
 
-    async def run(self, zpid: str) -> dict:
+    async def run(self, zpid: str) -> PrepareUwDataResult:
         listing = await self.listings_service.get_by_zpid(zpid)
         if listing is None:
             raise ValueError("No listing found for the provided zpid")
