@@ -43,7 +43,7 @@ def test_builds_save_payload_from_prepared_uw_data():
     assert payload.market_id == 3
     assert payload.listing_url == "https://www.zillow.com/homedetails/12345"
     assert payload.property_address == "123 Pine Ridge Rd"
-    assert payload.purchase_price == Decimal("485000")
+    assert payload.purchase_price is None
     assert payload.deal_status == "Draft"
     assert payload.details.purchase_details.purchase_price == Decimal("485000")
     assert payload.details.purchase_details.interest_rate == Decimal("0.065")
@@ -144,4 +144,4 @@ def test_builds_save_payload_from_prepared_schema():
 
     assert payload.zpid == "12345"
     assert payload.market_id == 3
-    assert payload.purchase_price == Decimal("485000")
+    assert payload.purchase_price is None

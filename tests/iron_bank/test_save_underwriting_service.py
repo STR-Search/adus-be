@@ -118,6 +118,30 @@ async def test_save_enriches_forecasted_revenue_before_persistence():
 
 
 @pytest.mark.asyncio
+async def test_save_promotes_purchase_price_from_purchase_details():
+    repository = FakeUnderwritingRepository()
+    service = SaveUnderwritingService(repository)
+    payload = SaveUnderwritingPayload.model_validate(
+        {
+            "market_id": 3,
+            "details": {
+                "purchase_details": {
+                    "purchase_price": 100000,
+                    "down_payment_pct": Decimal("0.20"),
+                    "interest_rate": Decimal("0"),
+                    "mortgage_years": 10,
+                    "closing_costs_pct": Decimal("0.03"),
+                },
+            },
+        }
+    )
+
+    await service.save(payload)
+
+    assert repository.underwriting_data["purchase_price"] == Decimal("100000")
+
+
+@pytest.mark.asyncio
 async def test_save_builds_missing_forecasted_revenue_from_airbnb_percentiles():
     repository = FakeUnderwritingRepository()
     market_service = FakeMarketService()

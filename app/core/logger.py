@@ -34,7 +34,7 @@ console_handler.setFormatter(
         foreign_pre_chain=shared_processors,               # run same chain
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.dev.ConsoleRenderer(colors=False)
+            structlog.dev.ConsoleRenderer(colors=True)
         ],
     )
 )

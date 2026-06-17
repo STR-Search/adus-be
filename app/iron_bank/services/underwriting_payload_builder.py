@@ -38,7 +38,6 @@ class UnderwritingPayloadBuilder:
             "deal_status": self._DEFAULT_DEAL_STATUS,
             "listing_url": zillow_property.get("url"),
             "property_address": zillow_property.get("address"),
-            "purchase_price": purchase_price,
             "details": self._build_details(
                 purchase_price=purchase_price,
                 config=config,

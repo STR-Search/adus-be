@@ -1,5 +1,6 @@
 from typing import Any, Protocol
 
+import structlog
 from fastapi.encoders import jsonable_encoder
 
 from app.airbnb_public.schemas.cleaned_data import RevenuePotentialPercentiles
@@ -12,6 +13,8 @@ from app.iron_bank.schemas.save_underwriting import (
 from app.iron_bank.services.underwriting_calculator import UnderwritingCalculator
 from app.markets.schemas.market import MarketKeysMasterSchema
 from app.zillow.models.scheduled_listings import ScheduledListing
+
+logger = structlog.get_logger(__name__)
 
 
 class MarketReader(Protocol):
@@ -93,11 +96,19 @@ class SaveUnderwritingService:
         tax_data: dict | None = None,
     ) -> dict | None:
         if payload.details is None:
+            logger.debug("_build_detail_data: no details on payload, skipping")
             return None
 
         detail_data = self._without_empty_values(
             payload.details.model_dump(exclude_unset=True)
         )
+        logger.debug(
+            "_build_detail_data: detail fields present",
+            fields=list(detail_data.keys()),
+            has_purchase_details=payload.details.purchase_details is not None,
+            has_forecasted_revenue=payload.details.forecasted_revenue is not None,
+        )
+
         if payload.details.purchase_details is not None:
             detail_data["purchase_details"] = (
                 self.calculator.calculate_purchase_details(
@@ -106,6 +117,11 @@ class SaveUnderwritingService:
             )
 
         forecasted_revenue_input = payload.details.forecasted_revenue
+        logger.debug(
+            "_build_detail_data: forecasted revenue source",
+            from_payload=forecasted_revenue_input is not None,
+            will_auto_build=forecasted_revenue_input is None and "purchase_details" in detail_data,
+        )
         if forecasted_revenue_input is None and "purchase_details" in detail_data:
             forecasted_revenue_input = await self._build_forecasted_revenue_input(
                 payload
@@ -125,11 +141,17 @@ class SaveUnderwritingService:
                 )
             )
 
-        if (
+        will_calc_y1 = (
             "forecasted_revenue" in detail_data
             and tax_data is not None
             and "purchase_details" in detail_data
-        ):
+        )
+        logger.debug(
+            "_build_detail_data: y1 coc tax savings",
+            will_calculate=will_calc_y1,
+            has_tax_data=tax_data is not None,
+        )
+        if will_calc_y1:
             detail_data["y1_coc_incl_tax_savings"] = (
                 self.calculator.calculate_y1_coc_incl_tax_savings(
                     forecasted_revenue=detail_data["forecasted_revenue"],
@@ -150,6 +172,12 @@ class SaveUnderwritingService:
             or self.listings_service is None
             or self.cleaned_data_service is None
         ):
+            logger.debug(
+                "_build_forecasted_revenue_input: skipping — one or more services not configured",
+                has_market_service=self.market_service is not None,
+                has_listings_service=self.listings_service is not None,
+                has_cleaned_data_service=self.cleaned_data_service is not None,
+            )
             return None
 
         if payload.market_id is None:
@@ -162,12 +190,22 @@ class SaveUnderwritingService:
             )
 
         market = await self.market_service.get_by_id(payload.market_id)
+        logger.debug(
+            "_build_forecasted_revenue_input: market lookup",
+            market_id=payload.market_id,
+            market_name_current=market.market_name_current if market else None,
+        )
         if market is None or market.market_name_current is None:
             raise ValueError(
                 "market_name_current is required for Airbnb revenue lookup"
             )
 
         listing = await self.listings_service.get_by_zpid(payload.zpid)
+        logger.debug(
+            "_build_forecasted_revenue_input: listing lookup",
+            zpid=payload.zpid,
+            beds=listing.beds if listing else None,
+        )
         if listing is None or listing.beds is None:
             raise ValueError("listing beds are required for Airbnb revenue lookup")
 
@@ -175,12 +213,20 @@ class SaveUnderwritingService:
             key_market=market.market_name_current,
             bedrooms=listing.beds,
         )
+        logger.debug(
+            "_build_forecasted_revenue_input: percentiles lookup",
+            key_market=market.market_name_current,
+            bedrooms=listing.beds,
+            percentiles_low=percentiles.low if percentiles else None,
+            percentiles_mid=percentiles.mid if percentiles else None,
+            percentiles_high=percentiles.high if percentiles else None,
+        )
         if percentiles is None:
             raise ValueError(
                 "Airbnb revenue percentiles were not found for the market and bedrooms"
             )
 
-        return ForecastedRevenueInput.model_validate(
+        forecasted_revenue_input = ForecastedRevenueInput.model_validate(
             {
                 "co_hosting_fee_pct": 0,
                 "annual_re_appreciation_pct": 0.0425,
@@ -191,6 +237,15 @@ class SaveUnderwritingService:
                 },
             }
         )
+        logger.debug(
+            "_build_forecasted_revenue_input: estimated forecasted revenue",
+            co_hosting_fee_pct=forecasted_revenue_input.co_hosting_fee_pct,
+            annual_re_appreciation_pct=forecasted_revenue_input.annual_re_appreciation_pct,
+            low_forecasted_revenue=forecasted_revenue_input.scenarios.low.forecasted_revenue,
+            mid_forecasted_revenue=forecasted_revenue_input.scenarios.mid.forecasted_revenue,
+            high_forecasted_revenue=forecasted_revenue_input.scenarios.high.forecasted_revenue,
+        )
+        return forecasted_revenue_input
 
     def _apply_calculated_underwriting_fields(
         self,
@@ -200,6 +255,10 @@ class SaveUnderwritingService:
     ) -> None:
         if detail_data is None:
             return
+
+        purchase_details = detail_data.get("purchase_details")
+        if purchase_details is not None:
+            underwriting_data["purchase_price"] = purchase_details["purchase_price"]
 
         forecasted_revenue = detail_data.get("forecasted_revenue")
         if forecasted_revenue is not None:
@@ -214,7 +273,6 @@ class SaveUnderwritingService:
                 "forecasted_revenue"
             ]
 
-            purchase_details = detail_data.get("purchase_details")
             if purchase_details is not None:
                 total_oop = self.calculator.calculate_total_oop(
                     purchase_details=purchase_details,
@@ -224,16 +282,15 @@ class SaveUnderwritingService:
                     forecasted_revenue=forecasted_revenue,
                     total_oop=total_oop,
                 )
-                purchase_price = purchase_details["purchase_price"]
                 underwriting_data["total_oop"] = total_oop
                 underwriting_data["prr"] = self.calculator.calculate_prr(
-                    purchase_price=purchase_price,
+                    purchase_price=purchase_details["purchase_price"],
                     mid_gross_revenue=scenarios["mid"]["forecasted_revenue"],
                 )
                 underwriting_data["budget_to_pp"] = (
                     self.calculator.calculate_budget_to_pp(
                         total_oop=total_oop,
-                        purchase_price=purchase_price,
+                        purchase_price=purchase_details["purchase_price"],
                     )
                 )
                 underwriting_data["l_cash_on_cash"] = cash_on_cash["low_pct"]
