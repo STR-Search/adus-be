@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
+from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
 
 
@@ -89,3 +90,16 @@ def test_save_payload_rejects_legacy_uw_details_field():
 
     with pytest.raises(ValidationError):
         SaveUnderwritingPayload.model_validate(payload)
+
+
+def test_save_underwriting_accepts_valid_deal_status():
+    payload = {"deal_status": "analyst_started"}
+
+    result = SaveUnderwritingPayload.model_validate(payload)
+
+    assert result.deal_status == DealStatus.ANALYST_STARTED
+
+
+def test_save_underwriting_rejects_invalid_deal_status():
+    with pytest.raises(ValidationError):
+        SaveUnderwritingPayload.model_validate({"deal_status": "not_real"})

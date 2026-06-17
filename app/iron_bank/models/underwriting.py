@@ -9,6 +9,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Boolean,
+    CheckConstraint,
     Numeric,
     Text,
     func,
@@ -20,7 +21,25 @@ from app.core.database import Base
 
 class Underwriting(Base):
     __tablename__ = "underwritings"
-    __table_args__ = {"schema": "iron_bank"}
+    __table_args__ = (
+        CheckConstraint(
+            "deal_status IS NULL OR deal_status IN ("
+            "'template_generated', "
+            "'analyst_started', "
+            "'analyst_completed', "
+            "'delete_zillow', "
+            "'delete_deal', "
+            "'maybe', "
+            "'re_forecast_revenue', "
+            "'awaiting_realtor_details', "
+            "'present_to_clients', "
+            "'client_under_contract', "
+            "'training_deal'"
+            ")",
+            name="ck_underwritings_deal_status",
+        ),
+        {"schema": "iron_bank"},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 

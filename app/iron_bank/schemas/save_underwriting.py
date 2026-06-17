@@ -98,7 +98,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                 "market_id": 3,
                 "analyst_id": 2,
                 "approver_id": 1,
-                "deal_status": "Active",
+                "deal_status": "analyst_started",
                 "deal_added": "2025-03-10T08:00:00Z",
                 "deal_submitted": "2025-03-13T16:30:00Z",
                 "deal_approved": "2025-03-14T10:22:00Z",

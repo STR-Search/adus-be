@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
 
 
@@ -14,7 +15,7 @@ class UnderwritingPayloadBuilder:
     It does not fetch data or persist anything.
     """
 
-    _DEFAULT_DEAL_STATUS = "Draft"
+    _DEFAULT_DEAL_STATUS = DealStatus.TEMPLATE_GENERATED
     _DEFAULT_SLA_MULTIPLIER_PCT = Decimal("0.36")
     _DEFAULT_BONUS_AMOUNT_PCT = Decimal("1")
     # Absolute opex keys that are not monthly operating expenses and must not

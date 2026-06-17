@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
 from app.iron_bank.services.underwriting_payload_builder import (
     UnderwritingPayloadBuilder,
@@ -44,7 +45,7 @@ def test_builds_save_payload_from_prepared_uw_data():
     assert payload.listing_url == "https://www.zillow.com/homedetails/12345"
     assert payload.property_address == "123 Pine Ridge Rd"
     assert payload.purchase_price is None
-    assert payload.deal_status == "Draft"
+    assert payload.deal_status == DealStatus.TEMPLATE_GENERATED
     assert payload.details.purchase_details.purchase_price == Decimal("485000")
     assert payload.details.purchase_details.interest_rate == Decimal("0.065")
     assert payload.details.cleaning_cost == {

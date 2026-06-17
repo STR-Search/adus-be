@@ -3,6 +3,8 @@ from datetime import datetime
 from decimal import Decimal
 from pydantic import BaseModel
 
+from app.iron_bank.enums import DealStatus
+
 
 class MarketType(str, Enum):
     mountain = "Mountain"
@@ -48,7 +50,7 @@ class UnderwritingBase(BaseModel):
     market_id: int | None = None
     analyst_id: int | None = None
     approver_id: int | None = None
-    deal_status: str | None = None
+    deal_status: DealStatus | None = None
     deal_added: datetime | None = None
     deal_submitted: datetime | None = None
     deal_approved: datetime | None = None
