@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.iron_bank.controllers.deal_status_controller import DealStatusController
 from app.iron_bank.controllers.get_underwriting_controller import (
     GetUnderwritingController,
 )
@@ -12,7 +13,14 @@ from app.iron_bank.controllers.save_underwriting_controller import (
 from app.iron_bank.controllers.update_underwriting_controller import (
     UpdateUnderwritingController,
 )
+from app.iron_bank.enums import DealStatus
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
+from app.iron_bank.schemas.deal_status import (
+    DealStatusOptionsResult,
+    DealStatusTransitionsResult,
+    UpdateDealStatusPayload,
+    UpdateDealStatusResult,
+)
 from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingEditContextResult,
     GetUnderwritingsResult,
@@ -27,12 +35,17 @@ from app.iron_bank.schemas.update_underwriting import (
     UpdateUnderwritingResult,
 )
 from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
+from app.iron_bank.services.deal_status_service import DealStatusService
 from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
 from app.iron_bank.services.update_underwriting_service import UpdateUnderwritingService
 from app.workflows.prepare_uw_data_job import PrepareUwDataJob
 import app.iron_bank.models  # noqa: F401 — ensures all models are registered with SQLAlchemy
 
 router = APIRouter(prefix="/iron-bank", tags=["iron_bank"])
+
+
+def get_deal_status_controller() -> DealStatusController:
+    return DealStatusController(DealStatusService())
 
 
 def get_prepare_uw_data_controller(
@@ -117,6 +130,33 @@ async def get_prepare_uw_data(
     return await controller.get_prepare_uw_data(zpid=zpid)
 
 
+@router.get(
+    "/deal-statuses",
+    response_model=DealStatusOptionsResult,
+    tags=["iron_bank"],
+)
+async def get_deal_statuses(
+    controller: DealStatusController = Depends(get_deal_status_controller),
+):
+    return controller.get_deal_statuses()
+
+
+@router.get(
+    "/deal-statuses/transitions",
+    response_model=DealStatusTransitionsResult,
+    tags=["iron_bank"],
+)
+async def get_deal_status_transitions(
+    current_status: DealStatus,
+    actor_role: str,
+    controller: DealStatusController = Depends(get_deal_status_controller),
+):
+    return controller.get_allowed_transitions(
+        current_status=current_status,
+        actor_role=actor_role,
+    )
+
+
 @router.post(
     "/underwritings", response_model=SaveUnderwritingResult, tags=["iron_bank"]
 )
@@ -140,6 +180,24 @@ async def update_underwriting(
     ),
 ):
     return await controller.update_underwriting(underwriting_id, payload)
+
+
+@router.patch(
+    "/underwritings/{underwriting_id}/deal-status",
+    response_model=UpdateDealStatusResult,
+    tags=["iron_bank"],
+)
+async def update_underwriting_deal_status(
+    underwriting_id: int,
+    payload: UpdateDealStatusPayload,
+    controller: UpdateUnderwritingController = Depends(
+        get_update_underwriting_controller
+    ),
+):
+    return await controller.update_deal_status(
+        underwriting_id=underwriting_id,
+        deal_status=payload.deal_status,
+    )
 
 
 @router.get("/underwritings", response_model=GetUnderwritingsResult, tags=["iron_bank"])

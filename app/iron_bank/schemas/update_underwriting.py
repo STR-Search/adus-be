@@ -28,7 +28,6 @@ class UpdateUnderwritingPayload(BaseModel):
 
     analyst_id: int | None = None
     approver_id: int | None = None
-    deal_status: str | None = None
     deal_added: datetime | None = None
     deal_submitted: datetime | None = None
     deal_approved: datetime | None = None

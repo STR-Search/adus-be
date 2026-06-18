@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.update_underwriting import UpdateUnderwritingPayload
 from app.iron_bank.services.update_underwriting_service import UpdateUnderwritingService
 
@@ -28,7 +29,6 @@ async def test_update_leaves_omitted_children_untouched():
     service = UpdateUnderwritingService(repository)
     payload = UpdateUnderwritingPayload.model_validate(
         {
-            "deal_status": "Approved",
             "purchase_price": 125000,
         }
     )
@@ -39,7 +39,6 @@ async def test_update_leaves_omitted_children_untouched():
     assert repository.update_kwargs == {
         "underwriting_id": 42,
         "underwriting_data": {
-            "deal_status": "Approved",
             "purchase_price": 125000,
         },
         "detail_data": None,
@@ -88,7 +87,47 @@ async def test_update_accepts_details_payload():
 async def test_update_raises_lookup_error_when_underwriting_does_not_exist():
     repository = FakeUnderwritingRepository(underwriting=None)
     service = UpdateUnderwritingService(repository)
-    payload = UpdateUnderwritingPayload.model_validate({"deal_status": "Approved"})
+    payload = UpdateUnderwritingPayload.model_validate(
+        {"purchase_price": 125000}
+    )
 
     with pytest.raises(LookupError, match="Underwriting 42 not found"):
         await service.update(42, payload)
+
+
+@pytest.mark.asyncio
+async def test_update_deal_status_updates_only_deal_status():
+    repository = FakeUnderwritingRepository(
+        underwriting=SimpleNamespace(
+            id=42,
+            deal_status=DealStatus.ANALYST_COMPLETED,
+        )
+    )
+    service = UpdateUnderwritingService(repository)
+
+    result = await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.ANALYST_COMPLETED,
+    )
+
+    assert result.model_dump() == {
+        "underwriting_id": 42,
+        "deal_status": DealStatus.ANALYST_COMPLETED,
+    }
+    assert repository.update_kwargs == {
+        "underwriting_id": 42,
+        "underwriting_data": {
+            "deal_status": DealStatus.ANALYST_COMPLETED,
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_deal_status_raises_when_underwriting_does_not_exist():
+    service = UpdateUnderwritingService(FakeUnderwritingRepository(underwriting=None))
+
+    with pytest.raises(LookupError, match="Underwriting 42 not found"):
+        await service.update_deal_status(
+            underwriting_id=42,
+            deal_status=DealStatus.ANALYST_COMPLETED,
+        )
