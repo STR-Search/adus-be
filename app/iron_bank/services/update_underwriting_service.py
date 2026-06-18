@@ -1,6 +1,8 @@
 from fastapi.encoders import jsonable_encoder
 
+from app.iron_bank.enums import DealStatus
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
+from app.iron_bank.schemas.deal_status import UpdateDealStatusResult
 from app.iron_bank.schemas.update_underwriting import (
     UpdateUnderwritingPayload,
     UpdateUnderwritingResult,
@@ -70,3 +72,21 @@ class UpdateUnderwritingService(SaveUnderwritingService):
             raise LookupError(f"Underwriting {underwriting_id} not found")
 
         return UpdateUnderwritingResult(underwriting_id=underwriting.id)
+
+    async def update_deal_status(
+        self,
+        *,
+        underwriting_id: int,
+        deal_status: DealStatus,
+    ) -> UpdateDealStatusResult:
+        underwriting = await self.repository.update(
+            underwriting_id=underwriting_id,
+            underwriting_data={"deal_status": deal_status},
+        )
+        if underwriting is None:
+            raise LookupError(f"Underwriting {underwriting_id} not found")
+
+        return UpdateDealStatusResult(
+            underwriting_id=underwriting.id,
+            deal_status=underwriting.deal_status,
+        )

@@ -3,7 +3,6 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.save_underwriting import (
     CompSetInput,
     OperatingExpenseInput,
@@ -29,7 +28,6 @@ class UpdateUnderwritingPayload(BaseModel):
 
     analyst_id: int | None = None
     approver_id: int | None = None
-    deal_status: DealStatus | None = None
     deal_added: datetime | None = None
     deal_submitted: datetime | None = None
     deal_approved: datetime | None = None

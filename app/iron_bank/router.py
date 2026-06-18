@@ -18,6 +18,8 @@ from app.iron_bank.repositories.underwriting_repository import UnderwritingRepos
 from app.iron_bank.schemas.deal_status import (
     DealStatusOptionsResult,
     DealStatusTransitionsResult,
+    UpdateDealStatusPayload,
+    UpdateDealStatusResult,
 )
 from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingEditContextResult,
@@ -178,6 +180,24 @@ async def update_underwriting(
     ),
 ):
     return await controller.update_underwriting(underwriting_id, payload)
+
+
+@router.patch(
+    "/underwritings/{underwriting_id}/deal-status",
+    response_model=UpdateDealStatusResult,
+    tags=["iron_bank"],
+)
+async def update_underwriting_deal_status(
+    underwriting_id: int,
+    payload: UpdateDealStatusPayload,
+    controller: UpdateUnderwritingController = Depends(
+        get_update_underwriting_controller
+    ),
+):
+    return await controller.update_deal_status(
+        underwriting_id=underwriting_id,
+        deal_status=payload.deal_status,
+    )
 
 
 @router.get("/underwritings", response_model=GetUnderwritingsResult, tags=["iron_bank"])

@@ -11,7 +11,7 @@ class DealStatusTransitionError(ValueError):
 
 
 STATUS_OPTIONS: tuple[tuple[DealStatus, str, int], ...] = (
-    (DealStatus.TEMPLATE_GENERATED, "Template_generated", 1),
+    (DealStatus.TEMPLATE_GENERATED, "Template Generated", 1),
     (DealStatus.ANALYST_STARTED, "Analyst Started", 2),
     (DealStatus.ANALYST_COMPLETED, "Analyst Completed", 3),
     (DealStatus.DELETE_ZILLOW, "Delete - Zillow", 4),
