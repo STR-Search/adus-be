@@ -1,5 +1,6 @@
 import math
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,26 @@ class ScheduledListingDetailsRepository:
             select(ScheduledListingDetail).where(ScheduledListingDetail.zpid == zpid)
         )
         return result.scalar_one_or_none()
+
+    async def get_price_changed_since(
+        self,
+        *,
+        since_hours: int,
+        limit: int | None = None,
+    ) -> list[str]:
+        cutoff_date = (datetime.now(timezone.utc) - timedelta(hours=since_hours)).date()
+        query = (
+            select(ScheduledListingDetail.zpid)
+            .where(ScheduledListingDetail.price_change_date >= cutoff_date)
+            .order_by(
+                ScheduledListingDetail.price_change_date.desc(),
+                ScheduledListingDetail.zpid,
+            )
+        )
+        if limit is not None:
+            query = query.limit(limit)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
 
     async def get_all(
         self, page: int, page_size: int

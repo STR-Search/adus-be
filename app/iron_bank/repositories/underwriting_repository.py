@@ -72,6 +72,13 @@ class UnderwritingRepository:
         result = await self.db.execute(
             select(Underwriting)
             .where(Underwriting.zpid == zpid)
+            .options(
+                selectinload(Underwriting.detail),
+                selectinload(Underwriting.taxes),
+                selectinload(Underwriting.optimization_items),
+                selectinload(Underwriting.operating_expenses),
+                selectinload(Underwriting.comp_set),
+            )
             .order_by(Underwriting.id.desc())
             .limit(1)
         )
