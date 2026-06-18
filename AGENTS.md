@@ -50,3 +50,10 @@ alembic heads
 - All models use `__table_args__ = {"schema": "markets"}` (or `"iron_bank"` for iron_bank models)
 - Routers registered in `app/__init__.py`
 - Never import between domains — shared logic goes in `app/core/`
+
+## Direct execution
+
+- Do not create plans, specifications, design documents, implementation-plan files, or documentation unless I explicitly request them.
+- Do not invoke planning or documentation workflows by default.
+- For coding tasks, inspect the code, implement the change, and verify it directly.
+- Brief progress updates are fine, but do not turn them into formal plans.
