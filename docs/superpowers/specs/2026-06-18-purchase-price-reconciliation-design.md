@@ -80,7 +80,8 @@ The reconciliation update will persist:
 - Recalculated total OOP, PRR, budget-to-purchase-price, and cash-on-cash
   metrics.
 
-The reconciliation update will preserve:
+This list is exhaustive. The reconciliation update will preserve every other
+underwriting field and child record, including:
 
 - Underwriting ID and deal status.
 - Analyst notes, links, classifications, and free-form fields.
