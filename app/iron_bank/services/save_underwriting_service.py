@@ -63,6 +63,7 @@ class SaveUnderwritingService:
         underwriting_data = {
             key: value for key, value in data.items() if key not in self._CHILD_FIELDS
         }
+        await self._apply_listing_boolean_fields(underwriting_data, payload)
         tax_data = self._build_tax_data(payload)
         detail_data = await self._build_detail_data(payload, tax_data)
         self._apply_calculated_underwriting_fields(
@@ -89,6 +90,23 @@ class SaveUnderwritingService:
 
     def _without_empty_values(self, data: dict[str, Any]) -> dict[str, Any]:
         return {key: value for key, value in data.items() if value is not None}
+
+    async def _apply_listing_boolean_fields(
+        self,
+        underwriting_data: dict[str, Any],
+        payload: SaveUnderwritingPayload,
+    ) -> None:
+        if self.listings_service is None or payload.zpid is None:
+            return
+
+        listing = await self.listings_service.get_by_zpid(payload.zpid)
+        if listing is None:
+            return
+
+        underwriting_data["property_pending"] = listing.home_status not in (
+            None,
+            "FOR_SALE",
+        )
 
     async def _build_detail_data(
         self,

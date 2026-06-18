@@ -30,13 +30,14 @@ class FakeMarketService:
 
 
 class FakeListingsService:
-    def __init__(self, beds=4):
+    def __init__(self, beds=4, home_status=None):
         self.beds = beds
+        self.home_status = home_status
         self.zpid = None
 
     async def get_by_zpid(self, zpid: str):
         self.zpid = zpid
-        return SimpleNamespace(beds=self.beds)
+        return SimpleNamespace(beds=self.beds, home_status=self.home_status)
 
 
 class FakeCleanedDataService:
@@ -56,6 +57,33 @@ class FakeCleanedDataService:
     ):
         self.request = {"key_market": key_market, "bedrooms": bedrooms}
         return SimpleNamespace(low=self.low, mid=self.mid, high=self.high)
+
+
+@pytest.mark.parametrize(
+    ("home_status", "expected_property_pending"),
+    [
+        (None, False),
+        ("FOR_SALE", False),
+        ("SOLD", True),
+        ("OTHER", True),
+        ("RECENTLY_SOLD", True),
+        ("PENDING", True),
+    ],
+)
+@pytest.mark.asyncio
+async def test_save_assigns_property_pending_from_listing_home_status(
+    home_status, expected_property_pending
+):
+    repository = FakeUnderwritingRepository()
+    service = SaveUnderwritingService(
+        repository,
+        listings_service=FakeListingsService(home_status=home_status),
+    )
+    payload = SaveUnderwritingPayload.model_validate({"zpid": "12345"})
+
+    await service.save(payload)
+
+    assert repository.underwriting_data["property_pending"] is expected_property_pending
 
 
 @pytest.mark.asyncio
