@@ -3,6 +3,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.iron_bank.schemas.get_underwriting import (
+    GetUnderwritingDetails,
+    GetUnderwritingResult,
+)
 from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
 
 
@@ -193,3 +197,165 @@ async def test_get_all_returns_empty_page_when_no_underwritings():
     assert result.data == []
     assert result.total == 0
     assert result.pages == 0
+
+
+# --- get_edit_context: zillow + furnishings orchestration -------------------
+
+
+class StubListing:
+    zpid = "123"
+    detail_url = "https://www.zillow.com/homedetails/123"
+    img_src = "https://photos.zillowstatic.com/thumb.jpg"
+    price = Decimal("485000")
+    address = "123 Pine Ridge Rd"
+    beds = 3
+    baths = Decimal("2.5")
+    area = 1800
+
+
+class StubListingsService:
+    async def get_by_zpid(self, zpid: str):
+        return StubListing()
+
+
+class ExplodingListingsService:
+    async def get_by_zpid(self, zpid: str):
+        raise AssertionError("non-automated path must not query scheduled_listings")
+
+
+class StubListingDetailsService:
+    async def get_by_zpid(self, zpid: str):
+        return SimpleNamespace(
+            original_photos=["https://photos.zillowstatic.com/photo-1.jpg"],
+            lot_size_sqft=21780,
+        )
+
+
+class MissingListingDetailsService:
+    async def get_by_zpid(self, zpid: str):
+        return None
+
+
+class StubOpexByBedrooms:
+    furnishings_low = Decimal("1000")
+    furnishings_high = Decimal("2000")
+
+
+class StubOpexByBedroomsService:
+    async def get_by_market_and_bedrooms(self, *, bedrooms: int, market_id: int):
+        return StubOpexByBedrooms()
+
+
+class StubConstructionService:
+    async def get_all(self, **kwargs):
+        return []
+
+
+def _make_service(
+    underwriting: GetUnderwritingResult,
+    *,
+    listings_service=None,
+    listing_details_service=None,
+    opex_service=None,
+):
+    service = GetUnderwritingService(
+        repository=None,
+        listings_service=listings_service or StubListingsService(),
+        listing_details_service=listing_details_service or StubListingDetailsService(),
+        opex_by_bedrooms_service=opex_service or StubOpexByBedroomsService(),
+        construction_amenities_service=StubConstructionService(),
+        construction_remodeling_service=StubConstructionService(),
+    )
+
+    async def _get(underwriting_id: int):
+        return underwriting
+
+    service.get = _get
+    return service
+
+
+@pytest.mark.asyncio
+async def test_get_edit_context_automated_hydrates_zillow_from_listing():
+    underwriting = GetUnderwritingResult(
+        id=1, zpid="123", market_id=1, is_automated=True
+    )
+    service = _make_service(underwriting)
+
+    result = await service.get_edit_context(1)
+
+    assert result.data.contextual.zillow_property.model_dump() == {
+        "id": "123",
+        "url": "https://www.zillow.com/homedetails/123",
+        "thumbnail": "https://photos.zillowstatic.com/thumb.jpg",
+        "price": Decimal("485000"),
+        "address": "123 Pine Ridge Rd",
+        "bedrooms": 3,
+        "bathrooms": Decimal("2.5"),
+        "area": 1800,
+        "original_photos": ["https://photos.zillowstatic.com/photo-1.jpg"],
+        "lot_size_sqft": Decimal("21780"),
+    }
+    furnishings = result.data.contextual.construction_amenities[0]
+    assert furnishings.amenity_name == "Furnishings"
+    assert furnishings.price_tier_1 == Decimal("1000")
+    assert furnishings.price_tier_3 == Decimal("2000")
+
+
+@pytest.mark.asyncio
+async def test_get_edit_context_automated_allows_missing_listing_details():
+    underwriting = GetUnderwritingResult(
+        id=1, zpid="123", market_id=1, is_automated=True
+    )
+    service = _make_service(
+        underwriting, listing_details_service=MissingListingDetailsService()
+    )
+
+    result = await service.get_edit_context(1)
+
+    assert result.data.contextual.zillow_property.original_photos is None
+    assert result.data.contextual.zillow_property.lot_size_sqft is None
+
+
+@pytest.mark.asyncio
+async def test_get_edit_context_non_automated_reads_stored_zillow_property():
+    underwriting = GetUnderwritingResult(
+        id=1,
+        zpid="copied-from-browser",
+        market_id=1,
+        is_automated=False,
+        details=GetUnderwritingDetails(
+            zillow_property={
+                "id": "copied-from-browser",
+                "url": "https://www.zillow.com/homedetails/999",
+                "address": "999 Manual Ln",
+                "bedrooms": 3,
+                "price": Decimal("510000"),
+            }
+        ),
+    )
+    # ExplodingListingsService proves the stored path never queries the listings.
+    service = _make_service(underwriting, listings_service=ExplodingListingsService())
+
+    result = await service.get_edit_context(1)
+
+    zillow_property = result.data.contextual.zillow_property
+    assert zillow_property.id == "copied-from-browser"
+    assert zillow_property.bedrooms == 3
+    assert zillow_property.price == Decimal("510000")
+    # furnishings still resolve from opex via the stored bedrooms count
+    furnishings = result.data.contextual.construction_amenities[0]
+    assert furnishings.amenity_name == "Furnishings"
+    assert furnishings.price_tier_1 == Decimal("1000")
+
+
+@pytest.mark.asyncio
+async def test_get_edit_context_no_zpid_yields_no_zillow_property():
+    underwriting = GetUnderwritingResult(id=1, is_automated=True)
+    service = _make_service(underwriting)
+
+    result = await service.get_edit_context(1)
+
+    assert result.data.contextual.zillow_property is None
+    furnishings = result.data.contextual.construction_amenities[0]
+    assert furnishings.amenity_name == "Furnishings"
+    assert furnishings.price_tier_1 is None
