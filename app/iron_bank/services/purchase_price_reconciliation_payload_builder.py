@@ -42,6 +42,7 @@ class PurchasePriceReconciliationPayloadBuilder:
         purchase_details = underwriting.detail.purchase_details
         forecasted_revenue = underwriting.detail.forecasted_revenue
         payload = {
+            "is_automated": underwriting.is_automated,
             "details": {
                 "purchase_details": {
                     "purchase_price": purchase_price,

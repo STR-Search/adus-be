@@ -31,6 +31,7 @@ async def test_reconcile_purchase_price_updates_only_price_dependent_data():
     service = UpdateUnderwritingService(repository)
     payload = SaveUnderwritingPayload.model_validate(
         {
+            "is_automated": False,
             "details": {
                 "purchase_details": {
                     "purchase_price": 525000,

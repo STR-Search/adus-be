@@ -65,6 +65,7 @@ class Underwriting(Base):
     deal_submitted = Column(DateTime(timezone=True), nullable=True)
     deal_approved = Column(DateTime(timezone=True), nullable=True)
     property_pending = Column(Boolean, default=False)
+    is_automated = Column(Boolean, nullable=True)
 
     property_address = Column(String(255), nullable=True)
     street = Column(String(255), nullable=True)
@@ -158,6 +159,7 @@ class UnderwritingDetail(Base):
     y1_coc_incl_tax_savings = Column(JSONB, nullable=True)
     forecasted_revenue = Column(JSONB, nullable=True)
     cleaning_cost = Column(JSONB, nullable=True)
+    zillow_property = Column(JSONB, nullable=True)
     analyst_notes = Column(Text, nullable=True)
 
     underwriting = relationship("Underwriting", back_populates="detail")

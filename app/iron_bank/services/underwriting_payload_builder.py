@@ -39,6 +39,7 @@ class UnderwritingPayloadBuilder:
             "zpid": zillow_property.get("id"),
             "market_id": prepared.get("market_id"),
             "deal_status": self._DEFAULT_DEAL_STATUS,
+            "is_automated": True,
             "listing_url": zillow_property.get("url"),
             "property_address": zillow_property.get("address"),
             "details": self._build_details(

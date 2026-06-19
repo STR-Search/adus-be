@@ -9,6 +9,7 @@ from app.iron_bank.controllers.get_underwriting_controller import (
 )
 from app.iron_bank.schemas.get_underwriting import (
     ConstructionAmenityOption,
+    GetUnderwritingDetails,
     GetUnderwritingEditContextResult,
     GetUnderwritingResult,
 )
@@ -26,7 +27,9 @@ class FailingListService:
 
 class StubUnderwritingService:
     async def get(self, underwriting_id: int):
-        return GetUnderwritingResult(id=underwriting_id, zpid="123", market_id=1)
+        return GetUnderwritingResult(
+            id=underwriting_id, zpid="123", market_id=1, is_automated=True
+        )
 
 
 class StubUnderwritingNoZpidService:
@@ -185,6 +188,49 @@ async def test_get_underwriting_zillow_property_allows_missing_listing_details()
 
     assert result.data.contextual.zillow_property.original_photos is None
     assert result.data.contextual.zillow_property.lot_size_sqft is None
+
+
+class ExplodingListingsService:
+    async def get_by_zpid(self, zpid: str):
+        raise AssertionError("non-automated path must not query scheduled_listings")
+
+
+class StubNonAutomatedUnderwritingService:
+    async def get(self, underwriting_id: int):
+        return GetUnderwritingResult(
+            id=underwriting_id,
+            zpid="copied-from-browser",
+            market_id=1,
+            is_automated=False,
+            details=GetUnderwritingDetails(
+                zillow_property={
+                    "id": "copied-from-browser",
+                    "url": "https://www.zillow.com/homedetails/999",
+                    "address": "999 Manual Ln",
+                    "bedrooms": 3,
+                    "price": Decimal("510000"),
+                }
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_underwriting_non_automated_reads_stored_zillow_property():
+    controller = _make_controller(
+        uw_service=StubNonAutomatedUnderwritingService(),
+        listings_service=ExplodingListingsService(),
+    )
+
+    result = await controller.get_underwriting(1)
+
+    zillow_property = result.data.contextual.zillow_property
+    assert zillow_property.id == "copied-from-browser"
+    assert zillow_property.bedrooms == 3
+    assert zillow_property.price == Decimal("510000")
+    # furnishings prices still resolve from opex via the stored bedrooms count
+    furnishings = result.data.contextual.construction_amenities[0]
+    assert furnishings.amenity_name == "Furnishings"
+    assert furnishings.price_tier_1 == Decimal("1000")
 
 
 @pytest.mark.asyncio

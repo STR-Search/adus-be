@@ -8,6 +8,7 @@ from app.iron_bank.services.purchase_price_reconciliation_payload_builder import
 
 def make_underwriting():
     return SimpleNamespace(
+        is_automated=True,
         detail=SimpleNamespace(
             purchase_details={
                 "purchase_price": 485000,
@@ -68,6 +69,7 @@ def test_build_uses_new_price_and_existing_assumptions():
     )
 
     assert payload.details.purchase_details.purchase_price == Decimal("525000")
+    assert payload.is_automated is True
     assert payload.details.purchase_details.down_payment_pct == Decimal("0.2")
     assert payload.details.purchase_details.interest_rate == Decimal("0.0675")
     assert (

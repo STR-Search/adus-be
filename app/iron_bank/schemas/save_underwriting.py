@@ -3,6 +3,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.iron_bank.schemas.get_underwriting import StoredZillowProperty
 from app.iron_bank.schemas.underwriting import UnderwritingBase
 
 FractionalPercentage = Annotated[Decimal, Field(ge=0, le=1)]
@@ -47,6 +48,7 @@ class UnderwritingDetailsInput(BaseModel):
     y1_coc_incl_tax_savings: dict[str, Any] | None = None
     forecasted_revenue: ForecastedRevenueInput | None = None
     cleaning_cost: dict[str, Any] | None = None
+    zillow_property: StoredZillowProperty | None = None
     analyst_notes: str | None = None
 
 
@@ -91,6 +93,8 @@ class CompSetInput(BaseModel):
 
 
 class SaveUnderwritingPayload(UnderwritingBase):
+    is_automated: bool
+
     model_config = ConfigDict(
         extra="forbid",
         json_schema_extra={
@@ -103,6 +107,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                 "deal_submitted": "2025-03-13T16:30:00Z",
                 "deal_approved": "2025-03-14T10:22:00Z",
                 "property_pending": False,
+                "is_automated": False,
                 "listing_url": "https://www.zillow.com/homedetails/123-pine-ridge-rd",
                 "property_address": "123 Pine Ridge Rd",
                 "street": "Pine Ridge Rd",

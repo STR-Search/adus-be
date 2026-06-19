@@ -17,6 +17,7 @@ class GetUnderwritingDetails(BaseModel):
     y1_coc_incl_tax_savings: dict[str, Any] | None = None
     forecasted_revenue: dict[str, Any] | None = None
     cleaning_cost: dict[str, Any] | None = None
+    zillow_property: dict[str, Any] | None = None
     analyst_notes: str | None = None
 
 
@@ -125,6 +126,17 @@ class ZillowProperty(BaseModel):
     area: int | None = None
     original_photos: list | None = None
     lot_size_sqft: Decimal | None = None
+
+
+class StoredZillowProperty(ZillowProperty):
+    """Persisted shape for non-automated underwritings.
+
+    A permissive superset of ``ZillowProperty``: extra fields are tolerated so
+    the stored JSON can grow without breaking validation, while the response
+    contract stays the ``ZillowProperty`` subset.
+    """
+
+    model_config = ConfigDict(extra="allow")
 
 
 class EditContextualData(BaseModel):

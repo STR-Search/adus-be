@@ -71,6 +71,7 @@ def _underwriting():
                 },
             },
             cleaning_cost={"monthly_cleaning_cost": 1540},
+            zillow_property=None,
             analyst_notes="Existing hot tub and cabin aesthetic.",
         ),
         taxes=SimpleNamespace(

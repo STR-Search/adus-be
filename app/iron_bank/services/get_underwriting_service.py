@@ -77,6 +77,7 @@ class GetUnderwritingService:
             "y1_coc_incl_tax_savings": detail.y1_coc_incl_tax_savings,
             "forecasted_revenue": detail.forecasted_revenue,
             "cleaning_cost": detail.cleaning_cost,
+            "zillow_property": detail.zillow_property,
             "analyst_notes": detail.analyst_notes,
         }
 

@@ -59,6 +59,45 @@ class FakeCleanedDataService:
         return SimpleNamespace(low=self.low, mid=self.mid, high=self.high)
 
 
+@pytest.mark.asyncio
+async def test_save_persists_is_automated():
+    repository = FakeUnderwritingRepository()
+    service = SaveUnderwritingService(repository)
+    payload = SaveUnderwritingPayload.model_validate({"is_automated": False})
+
+    await service.save(payload)
+
+    assert repository.underwriting_data["is_automated"] is False
+
+
+@pytest.mark.asyncio
+async def test_save_persists_client_provided_zillow_property():
+    repository = FakeUnderwritingRepository()
+    service = SaveUnderwritingService(repository)
+    payload = SaveUnderwritingPayload.model_validate(
+        {
+            "is_automated": False,
+            "details": {
+                "zillow_property": {
+                    "id": "copied-from-browser",
+                    "url": "https://www.zillow.com/homedetails/999",
+                    "bedrooms": 3,
+                    "price": 510000,
+                    "some_future_field": "kept",
+                }
+            },
+        }
+    )
+
+    await service.save(payload)
+
+    stored = repository.detail_data["zillow_property"]
+    assert stored["id"] == "copied-from-browser"
+    assert stored["bedrooms"] == 3
+    # superset fields are tolerated and persisted
+    assert stored["some_future_field"] == "kept"
+
+
 @pytest.mark.parametrize(
     ("home_status", "expected_property_pending"),
     [
@@ -79,7 +118,9 @@ async def test_save_assigns_property_pending_from_listing_home_status(
         repository,
         listings_service=FakeListingsService(home_status=home_status),
     )
-    payload = SaveUnderwritingPayload.model_validate({"zpid": "12345"})
+    payload = SaveUnderwritingPayload.model_validate(
+        {"is_automated": False, "zpid": "12345"}
+    )
 
     await service.save(payload)
 
@@ -92,6 +133,7 @@ async def test_save_enriches_forecasted_revenue_before_persistence():
     service = SaveUnderwritingService(repository)
     payload = SaveUnderwritingPayload.model_validate(
         {
+            "is_automated": False,
             "market_id": 3,
             "purchase_price": 100000,
             "details": {
@@ -151,6 +193,7 @@ async def test_save_promotes_purchase_price_from_purchase_details():
     service = SaveUnderwritingService(repository)
     payload = SaveUnderwritingPayload.model_validate(
         {
+            "is_automated": False,
             "market_id": 3,
             "details": {
                 "purchase_details": {
@@ -183,6 +226,7 @@ async def test_save_builds_missing_forecasted_revenue_from_airbnb_percentiles():
     )
     payload = SaveUnderwritingPayload.model_validate(
         {
+            "is_automated": False,
             "zpid": "12345",
             "market_id": 3,
             "purchase_price": 1000000,
@@ -240,6 +284,7 @@ async def test_save_uses_explicit_forecasted_revenue_without_airbnb_lookup():
     )
     payload = SaveUnderwritingPayload.model_validate(
         {
+            "is_automated": False,
             "zpid": "12345",
             "market_id": 3,
             "purchase_price": 100000,
@@ -298,6 +343,7 @@ async def test_save_skips_airbnb_forecast_when_purchase_details_are_missing():
     )
     payload = SaveUnderwritingPayload.model_validate(
         {
+            "is_automated": False,
             "zpid": "12345",
             "market_id": 3,
             "details": {
@@ -326,6 +372,7 @@ def test_forecasted_revenue_requires_all_three_scenarios_when_provided():
     with pytest.raises(ValidationError):
         SaveUnderwritingPayload.model_validate(
             {
+                "is_automated": False,
                 "market_id": 3,
                 "details": {
                     "forecasted_revenue": {

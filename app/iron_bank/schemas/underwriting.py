@@ -58,6 +58,7 @@ class UnderwritingBase(BaseModel):
     deal_submitted: datetime | None = None
     deal_approved: datetime | None = None
     property_pending: bool = False
+    is_automated: bool | None = None
     property_address: str | None = None
     street: str | None = None
     city: str | None = None
