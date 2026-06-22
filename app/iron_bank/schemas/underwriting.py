@@ -1,9 +1,12 @@
 from enum import Enum
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from app.iron_bank.enums import DealStatus
+from app.iron_bank.services.deal_status_service import STATUS_OPTIONS
+
+_STATUS_LABEL: dict[str, str] = {s.value: label for s, label, _ in STATUS_OPTIONS}
 
 
 class MarketType(str, Enum):
@@ -55,6 +58,7 @@ class UnderwritingBase(BaseModel):
     deal_submitted: datetime | None = None
     deal_approved: datetime | None = None
     property_pending: bool = False
+    is_automated: bool | None = None
     property_address: str | None = None
     street: str | None = None
     city: str | None = None
@@ -114,5 +118,12 @@ class UnderwritingRead(UnderwritingBase):
     display_id: str | None = None  # e.g. "UW-001" — generated at API layer
     optimization_total: Decimal | None = None
     operating_expense_total: Decimal | None = None
+
+    @computed_field
+    @property
+    def deal_status_label(self) -> str | None:
+        if self.deal_status is None:
+            return None
+        return _STATUS_LABEL.get(self.deal_status.value)
 
     model_config = {"from_attributes": True}

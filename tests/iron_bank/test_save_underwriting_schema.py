@@ -10,6 +10,7 @@ from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
 
 def _payload() -> dict:
     return {
+        "is_automated": False,
         "market_id": 3,
         "purchase_price": 485000,
         "details": {
@@ -93,7 +94,7 @@ def test_save_payload_rejects_legacy_uw_details_field():
 
 
 def test_save_underwriting_accepts_valid_deal_status():
-    payload = {"deal_status": "analyst_started"}
+    payload = {"is_automated": False, "deal_status": "analyst_started"}
 
     result = SaveUnderwritingPayload.model_validate(payload)
 
@@ -102,4 +103,11 @@ def test_save_underwriting_accepts_valid_deal_status():
 
 def test_save_underwriting_rejects_invalid_deal_status():
     with pytest.raises(ValidationError):
-        SaveUnderwritingPayload.model_validate({"deal_status": "not_real"})
+        SaveUnderwritingPayload.model_validate(
+            {"is_automated": False, "deal_status": "not_real"}
+        )
+
+
+def test_save_underwriting_requires_is_automated():
+    with pytest.raises(ValidationError):
+        SaveUnderwritingPayload.model_validate({})

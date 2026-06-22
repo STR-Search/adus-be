@@ -63,6 +63,7 @@ class SaveUnderwritingService:
         underwriting_data = {
             key: value for key, value in data.items() if key not in self._CHILD_FIELDS
         }
+        await self._apply_listing_boolean_fields(underwriting_data, payload)
         tax_data = self._build_tax_data(payload)
         detail_data = await self._build_detail_data(payload, tax_data)
         self._apply_calculated_underwriting_fields(
@@ -89,6 +90,23 @@ class SaveUnderwritingService:
 
     def _without_empty_values(self, data: dict[str, Any]) -> dict[str, Any]:
         return {key: value for key, value in data.items() if value is not None}
+
+    async def _apply_listing_boolean_fields(
+        self,
+        underwriting_data: dict[str, Any],
+        payload: SaveUnderwritingPayload,
+    ) -> None:
+        if self.listings_service is None or payload.zpid is None:
+            return
+
+        listing = await self.listings_service.get_by_zpid(payload.zpid)
+        if listing is None:
+            return
+
+        underwriting_data["property_pending"] = listing.home_status not in (
+            None,
+            "FOR_SALE",
+        )
 
     async def _build_detail_data(
         self,
@@ -161,7 +179,29 @@ class SaveUnderwritingService:
                 )
             )
 
+        zillow_property = await self._resolve_zillow_property(payload)
+        if zillow_property is not None:
+            detail_data["zillow_property"] = zillow_property
+
         return detail_data
+
+    async def _resolve_zillow_property(
+        self, payload: SaveUnderwritingPayload
+    ) -> dict[str, Any] | None:
+        """Resolve the zillow_property persisted on uw_details.
+
+        Single source-of-truth seam. Currently client-provided: the FE sends
+        ``details.zillow_property`` for non-automated underwritings. Automated
+        underwritings hydrate zillow data live from scheduled_listings on read,
+        so they don't carry it here.
+
+        Future: for non-automated underwritings, fetch from the external zillow
+        API by zpid/url here instead of reading it off the payload. No other
+        call site changes.
+        """
+        if payload.details is None or payload.details.zillow_property is None:
+            return None
+        return payload.details.zillow_property.model_dump(exclude_unset=True)
 
     async def _build_forecasted_revenue_input(
         self,

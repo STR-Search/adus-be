@@ -16,7 +16,7 @@ class FakeSessionFactory:
         return False
 
 
-class FakeBatchJob:
+class FakeCreationJob:
     session = None
     called_with = None
 
@@ -30,18 +30,41 @@ class FakeBatchJob:
         return {"saved": 2, "failed": 0}
 
 
+class FakeReconciliationJob:
+    session = None
+    called_with = None
+
+    @classmethod
+    def from_session(cls, session):
+        cls.session = session
+        return cls()
+
+    async def run(self, *, since_hours, limit):
+        self.__class__.called_with = {"since_hours": since_hours, "limit": limit}
+        return {"updated": 1, "failed": 0}
+
+
 @pytest.mark.asyncio
-async def test_run_batch_uses_session_and_batch_job():
+async def test_run_batch_runs_creation_and_price_reconciliation():
     summary = await run_uw_auto_prepare.run_batch(
         since_hours=24,
         limit=500,
         session_factory=FakeSessionFactory,
-        job_cls=FakeBatchJob,
+        creation_job_cls=FakeCreationJob,
+        reconciliation_job_cls=FakeReconciliationJob,
     )
 
-    assert summary == {"saved": 2, "failed": 0}
-    assert FakeBatchJob.session.name == "session"
-    assert FakeBatchJob.called_with == {"since_hours": 24, "limit": 500}
+    assert summary == {
+        "creation": {"saved": 2, "failed": 0},
+        "price_reconciliation": {"updated": 1, "failed": 0},
+    }
+    assert FakeCreationJob.session.name == "session"
+    assert FakeReconciliationJob.session.name == "session"
+    assert FakeCreationJob.called_with == {"since_hours": 24, "limit": 500}
+    assert FakeReconciliationJob.called_with == {
+        "since_hours": 24,
+        "limit": 500,
+    }
 
 
 class FakeSingleJob:

@@ -1,11 +1,13 @@
-from decimal import Decimal, InvalidOperation
-import re
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel
 
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
+from app.iron_bank.services.purchase_price_reconciliation_payload_builder import (
+    PurchasePriceReconciliationPayloadBuilder,
+)
 
 
 class UnderwritingPayloadBuilder:
@@ -37,6 +39,7 @@ class UnderwritingPayloadBuilder:
             "zpid": zillow_property.get("id"),
             "market_id": prepared.get("market_id"),
             "deal_status": self._DEFAULT_DEAL_STATUS,
+            "is_automated": True,
             "listing_url": zillow_property.get("url"),
             "property_address": zillow_property.get("address"),
             "details": self._build_details(
@@ -129,22 +132,7 @@ class UnderwritingPayloadBuilder:
         return expenses
 
     def _money_to_decimal(self, value: Any) -> Decimal | None:
-        if value is None:
-            return None
-        if isinstance(value, Decimal):
-            return value if value > 0 else None
-        if isinstance(value, int | float):
-            amount = Decimal(str(value))
-            return amount if amount > 0 else None
-
-        cleaned = re.sub(r"[^0-9.\-]", "", str(value))
-        if not cleaned:
-            return None
-        try:
-            amount = Decimal(cleaned)
-        except InvalidOperation:
-            return None
-        return amount if amount > 0 else None
+        return PurchasePriceReconciliationPayloadBuilder.normalize_purchase_price(value)
 
     def _decimal_or_default(self, value: Any, default: Decimal) -> Decimal:
         if value is None:

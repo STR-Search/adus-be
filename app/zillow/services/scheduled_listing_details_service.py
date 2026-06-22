@@ -1,6 +1,8 @@
 import uuid
 
-from app.zillow.repositories.scheduled_listing_details_repository import ScheduledListingDetailsRepository
+from app.zillow.repositories.scheduled_listing_details_repository import (
+    ScheduledListingDetailsRepository,
+)
 from app.zillow.schemas.scheduled_listing_details import (
     PaginatedScheduledListingDetails,
     ScheduledListingDetailSchema,
@@ -17,8 +19,23 @@ class ScheduledListingDetailsService:
             return None
         return ScheduledListingDetailSchema.model_validate(record)
 
-    async def get_all(self, page: int, page_size: int) -> PaginatedScheduledListingDetails:
-        items, total, pages = await self.repository.get_all(page=page, page_size=page_size)
+    async def get_price_changed_zpids_since(
+        self,
+        *,
+        since_hours: int,
+        limit: int | None = None,
+    ) -> list[str]:
+        return await self.repository.get_price_changed_since(
+            since_hours=since_hours,
+            limit=limit,
+        )
+
+    async def get_all(
+        self, page: int, page_size: int
+    ) -> PaginatedScheduledListingDetails:
+        items, total, pages = await self.repository.get_all(
+            page=page, page_size=page_size
+        )
         return PaginatedScheduledListingDetails(
             items=[ScheduledListingDetailSchema.model_validate(item) for item in items],
             total=total,
@@ -37,8 +54,12 @@ class ScheduledListingDetailsService:
             pages=pages,
         )
 
-    async def get_active(self, page: int, page_size: int) -> PaginatedScheduledListingDetails:
-        items, total, pages = await self.repository.get_active(page=page, page_size=page_size)
+    async def get_active(
+        self, page: int, page_size: int
+    ) -> PaginatedScheduledListingDetails:
+        items, total, pages = await self.repository.get_active(
+            page=page, page_size=page_size
+        )
         return PaginatedScheduledListingDetails(
             items=[ScheduledListingDetailSchema.model_validate(item) for item in items],
             total=total,

@@ -11,7 +11,12 @@ from app.core.database import AsyncSessionLocal
 from app.workflows.batch_prepare_and_save_underwritings_job import (
     BatchPrepareAndSaveUnderwritingsJob,
 )
-from app.workflows.prepare_and_save_underwriting_job import PrepareAndSaveUnderwritingJob
+from app.workflows.batch_reconcile_underwriting_prices_job import (
+    BatchReconcileUnderwritingPricesJob,
+)
+from app.workflows.prepare_and_save_underwriting_job import (
+    PrepareAndSaveUnderwritingJob,
+)
 
 
 async def run_batch(
@@ -19,11 +24,22 @@ async def run_batch(
     since_hours: int,
     limit: int | None,
     session_factory=AsyncSessionLocal,
-    job_cls=BatchPrepareAndSaveUnderwritingsJob,
+    creation_job_cls=BatchPrepareAndSaveUnderwritingsJob,
+    reconciliation_job_cls=BatchReconcileUnderwritingPricesJob,
 ) -> dict[str, Any]:
     async with session_factory() as session:
-        job = job_cls.from_session(session)
-        return await job.run(since_hours=since_hours, limit=limit)
+        creation = await creation_job_cls.from_session(session).run(
+            since_hours=since_hours,
+            limit=limit,
+        )
+        price_reconciliation = await reconciliation_job_cls.from_session(session).run(
+            since_hours=since_hours,
+            limit=limit,
+        )
+        return {
+            "creation": creation,
+            "price_reconciliation": price_reconciliation,
+        }
 
 
 async def run_single(
@@ -42,7 +58,9 @@ def parse_args() -> argparse.Namespace:
         description="Prepare and save draft underwriting rows for recent Zillow listings."
     )
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--since-hours", type=int, help="Process listings from the last N hours.")
+    group.add_argument(
+        "--since-hours", type=int, help="Process listings from the last N hours."
+    )
     group.add_argument("--zpid", type=str, help="Process a single listing by zpid.")
     parser.add_argument("--limit", type=int, default=None)
     return parser.parse_args()

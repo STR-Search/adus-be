@@ -113,12 +113,22 @@ def get_get_underwriting_controller(
 
     market_repo = MarketRepository(db)
     return GetUnderwritingController(
-        GetUnderwritingService(UnderwritingRepository(db)),
-        ConstructionAmenitiesService(ConstructionAmenitiesRepository(db)),
-        ConstructionRemodelingService(ConstructionRemodelingRepository(db)),
-        ScheduledListingsService(ScheduledListingsRepository(db)),
-        ScheduledListingDetailsService(ScheduledListingDetailsRepository(db)),
-        OpexByBedroomsService(OpexByBedroomsRepository(db), market_repo),
+        GetUnderwritingService(
+            UnderwritingRepository(db),
+            listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
+            listing_details_service=ScheduledListingDetailsService(
+                ScheduledListingDetailsRepository(db)
+            ),
+            opex_by_bedrooms_service=OpexByBedroomsService(
+                OpexByBedroomsRepository(db), market_repo
+            ),
+            construction_amenities_service=ConstructionAmenitiesService(
+                ConstructionAmenitiesRepository(db)
+            ),
+            construction_remodeling_service=ConstructionRemodelingService(
+                ConstructionRemodelingRepository(db)
+            ),
+        )
     )
 
 
