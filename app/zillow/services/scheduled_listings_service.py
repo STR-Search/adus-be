@@ -32,6 +32,19 @@ class ScheduledListingsService:
             limit=limit,
         )
 
+    async def get_active_since_by_market(
+        self,
+        *,
+        market_id: int,
+        since_hours: int,
+        limit: int | None = None,
+    ) -> list[ScheduledListing]:
+        return await self.repository.get_active_since_by_market(
+            market_id=market_id,
+            since_hours=since_hours,
+            limit=limit,
+        )
+
     async def get_listings_summary_by_market(
         self, market_id: int
     ) -> ListingSummaryByMarket:

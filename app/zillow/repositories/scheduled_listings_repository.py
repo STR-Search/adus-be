@@ -101,6 +101,38 @@ class ScheduledListingsRepository:
         )
         return items
 
+    async def get_active_since_by_market(
+        self,
+        *,
+        market_id: int,
+        since_hours: int,
+        limit: int | None = None,
+    ) -> list[ScheduledListing]:
+        """Returns active listings created in the last since_hours for a market."""
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
+        query = (
+            select(ScheduledListing)
+            .join(ScheduledPreset, ScheduledPreset.id == ScheduledListing.preset_id)
+            .where(ScheduledPreset.market_id == market_id)
+            .where(ScheduledListing.keep_updated.is_(True))
+            .where(ScheduledListing.remove_listing.is_(False))
+            .where(ScheduledListing.created_at >= cutoff)
+            .order_by(ScheduledListing.created_at.desc(), ScheduledListing.zpid)
+        )
+        if limit is not None:
+            query = query.limit(limit)
+
+        result = await self.db.execute(query)
+        items = list(result.scalars().all())
+        logger.debug(
+            "zillow.scheduled_listings.get_active_since_by_market",
+            market_id=market_id,
+            since_hours=since_hours,
+            limit=limit,
+            count=len(items),
+        )
+        return items
+
     async def get_passing_filters(self, preset_id: uuid.UUID) -> list[ScheduledListing]:
         result = await self.db.execute(
             select(ScheduledListing)
