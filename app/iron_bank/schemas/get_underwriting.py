@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
-from app.iron_bank.schemas.underwriting import UnderwritingBase
+from app.iron_bank.schemas.underwriting import UnderwritingRead
 
 
 def _serialize_plain_decimal(value: Decimal | None) -> str | None:
@@ -55,8 +55,7 @@ class GetUnderwritingCompSet(BaseModel):
     sleeps: int | None = None
 
 
-class GetUnderwritingResult(UnderwritingBase):
-    id: int
+class GetUnderwritingResult(UnderwritingRead):
     details: GetUnderwritingDetails | None = None
     taxes: GetUnderwritingTaxes | None = None
     optimization_list: list[GetUnderwritingOptimizationItem] = Field(
