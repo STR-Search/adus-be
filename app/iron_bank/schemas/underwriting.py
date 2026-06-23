@@ -113,17 +113,22 @@ class UnderwritingCreate(UnderwritingBase):
     pass
 
 
-class UnderwritingRead(UnderwritingBase):
-    id: int
-    display_id: str | None = None  # e.g. "UW-001" — generated at API layer
-    optimization_total: Decimal | None = None
-    operating_expense_total: Decimal | None = None
+class DealStatusLabelMixin(BaseModel):
+    """Adds a translated ``deal_status_label`` derived from ``deal_status``."""
 
     @computed_field
     @property
     def deal_status_label(self) -> str | None:
-        if self.deal_status is None:
+        deal_status: DealStatus | None = getattr(self, "deal_status", None)
+        if deal_status is None:
             return None
-        return _STATUS_LABEL.get(self.deal_status.value)
+        return _STATUS_LABEL.get(deal_status.value)
+
+
+class UnderwritingRead(UnderwritingBase, DealStatusLabelMixin):
+    id: int
+    display_id: str | None = None  # e.g. "UW-001" — generated at API layer
+    optimization_total: Decimal | None = None
+    operating_expense_total: Decimal | None = None
 
     model_config = {"from_attributes": True}

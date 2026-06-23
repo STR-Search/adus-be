@@ -11,7 +11,7 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingResult,
     GetUnderwritingsResult,
 )
-from app.iron_bank.schemas.underwriting import UnderwritingBase
+from app.iron_bank.schemas.underwriting import UnderwritingRead
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 
 
@@ -121,12 +121,12 @@ class GetUnderwritingService:
         )
 
     def _parent_data(self, underwriting) -> dict[str, Any]:
+        # UnderwritingRead.model_fields covers UnderwritingBase plus id and the
+        # column_property totals (optimization_total, operating_expense_total).
+        # deal_status_label is a computed_field, so it's derived, not copied here.
         return {
-            "id": underwriting.id,
-            **{
-                field: getattr(underwriting, field, None)
-                for field in UnderwritingBase.model_fields
-            },
+            field: getattr(underwriting, field, None)
+            for field in UnderwritingRead.model_fields
         }
 
     def _detail_data(self, detail) -> dict[str, Any] | None:

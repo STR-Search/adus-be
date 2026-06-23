@@ -13,8 +13,12 @@ from app.iron_bank.controllers.save_underwriting_controller import (
 from app.iron_bank.controllers.update_underwriting_controller import (
     UpdateUnderwritingController,
 )
+from app.iron_bank.controllers.workflow_trigger_controller import (
+    WorkflowTriggerController,
+)
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
+from app.iron_bank.schemas.batch_prepare_uw import BatchPrepareUwByMarketResult
 from app.iron_bank.schemas.deal_status import (
     DealStatusOptionsResult,
     DealStatusTransitionsResult,
@@ -38,6 +42,9 @@ from app.iron_bank.services.get_underwriting_service import GetUnderwritingServi
 from app.iron_bank.services.deal_status_service import DealStatusService
 from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
 from app.iron_bank.services.update_underwriting_service import UpdateUnderwritingService
+from app.workflows.batch_prepare_and_save_underwritings_by_market_job import (
+    BatchPrepareAndSaveUnderwritingsByMarketJob,
+)
 from app.workflows.prepare_uw_data_job import PrepareUwDataJob
 import app.iron_bank.models  # noqa: F401 — ensures all models are registered with SQLAlchemy
 
@@ -52,6 +59,16 @@ def get_prepare_uw_data_controller(
     db: AsyncSession = Depends(get_db),
 ) -> PrepareUwDataController:
     return PrepareUwDataController(PrepareUwDataJob.from_session(db))
+
+
+def get_workflow_trigger_controller(
+    db: AsyncSession = Depends(get_db),
+) -> WorkflowTriggerController:
+    return WorkflowTriggerController(
+        batch_prepare_by_market_job=BatchPrepareAndSaveUnderwritingsByMarketJob.from_session(
+            db
+        ),
+    )
 
 
 def get_save_underwriting_controller(
@@ -138,6 +155,24 @@ async def get_prepare_uw_data(
     controller: PrepareUwDataController = Depends(get_prepare_uw_data_controller),
 ):
     return await controller.get_prepare_uw_data(zpid=zpid)
+
+
+@router.post(
+    "/underwritings/batch-prepare-by-market",
+    response_model=BatchPrepareUwByMarketResult,
+    tags=["iron_bank"],
+)
+async def batch_prepare_underwritings_by_market(
+    market_id: int = Query(...),
+    since_hours: int = Query(..., ge=1),
+    limit: int | None = Query(None, ge=1),
+    controller: WorkflowTriggerController = Depends(get_workflow_trigger_controller),
+):
+    return await controller.batch_prepare_by_market(
+        market_id=market_id,
+        since_hours=since_hours,
+        limit=limit,
+    )
 
 
 @router.get(
