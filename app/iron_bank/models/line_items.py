@@ -20,6 +20,7 @@ class UnderwritingOptimizationItem(Base):
     base_price = Column(Numeric(12, 2), nullable=True)
     spec = Column(Text, nullable=True)
     tier = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
 
     underwriting = relationship("Underwriting", back_populates="optimization_items")
 

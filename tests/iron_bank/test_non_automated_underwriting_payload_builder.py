@@ -61,7 +61,7 @@ def test_build_from_zillow_property_seeds_default_financing_and_taxes():
     purchase_details = payload.details.purchase_details
     assert purchase_details.purchase_price == Decimal("389000.0")
     assert purchase_details.down_payment_pct == Decimal("0.1")
-    assert purchase_details.interest_rate == Decimal("0.07")
+    assert purchase_details.interest_rate == Decimal("0.0688")
     assert purchase_details.mortgage_years == 30
     assert purchase_details.closing_costs_pct == Decimal("0.03")
 

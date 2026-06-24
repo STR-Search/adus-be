@@ -35,7 +35,7 @@ class BaseUnderwritingPayloadBuilder:
                     config.get("down_payment"), Decimal("0.1")
                 ),
                 "interest_rate": self._decimal_or_default(
-                    config.get("interest_rate"), Decimal("0.07")
+                    config.get("interest_rate"), Decimal("0.0688")
                 ),
                 "mortgage_years": int(config.get("loan_term_years") or 30),
                 "closing_costs_pct": self._decimal_or_default(
