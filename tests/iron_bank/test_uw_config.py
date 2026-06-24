@@ -5,7 +5,7 @@ from app.iron_bank.schemas.uw_config import UwConfigSchema
 def test_uw_config_schema_includes_annual_re_appreciation_pct():
     config = UwConfigSchema.model_validate(
         {
-            "interest_rate": 0.07,
+            "interest_rate": 0.0688,
             "loan_term_years": 30,
             "down_payment": 0.1,
             "closing_costs": 0.03,

@@ -50,8 +50,16 @@ def test_update_deal_status_rejects_unrelated_fields():
         )
 
 
-def test_generic_update_rejects_deal_status():
+def test_generic_update_accepts_deal_status():
+    # deal_status is editable from the generic update payload so the FE can
+    # change it alongside other fields, not only via the dedicated endpoint.
+    payload = UpdateUnderwritingPayload.model_validate(
+        {"deal_status": "client_under_contract"}
+    )
+
+    assert payload.deal_status == DealStatus.CLIENT_UNDER_CONTRACT
+
+
+def test_generic_update_rejects_invalid_deal_status():
     with pytest.raises(ValidationError):
-        UpdateUnderwritingPayload.model_validate(
-            {"deal_status": "client_under_contract"}
-        )
+        UpdateUnderwritingPayload.model_validate({"deal_status": "not_real"})

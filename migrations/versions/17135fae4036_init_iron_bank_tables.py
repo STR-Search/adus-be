@@ -130,6 +130,7 @@ def upgrade() -> None:
     sa.Column('base_price', sa.Numeric(precision=12, scale=2), nullable=True),
     sa.Column('spec', sa.Text(), nullable=True),
     sa.Column('tier', sa.Text(), nullable=True),
+    sa.Column('notes', sa.Text(), nullable=True),
     sa.ForeignKeyConstraint(['underwriting_id'], ['iron_bank.underwritings.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
     schema='iron_bank'

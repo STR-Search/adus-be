@@ -52,6 +52,7 @@ class GetUnderwritingOptimizationItem(BaseModel):
     base_price: Decimal | None = None
     spec: str | None = None
     tier: str | None = None
+    notes: str | None = None
 
 
 class GetUnderwritingOperatingExpense(BaseModel):

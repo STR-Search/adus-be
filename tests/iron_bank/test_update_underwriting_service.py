@@ -146,6 +146,22 @@ async def test_update_accepts_details_payload():
 
 
 @pytest.mark.asyncio
+async def test_update_changes_deal_status_via_payload():
+    repository = FakeUnderwritingRepository()
+    service = UpdateUnderwritingService(repository)
+    payload = UpdateUnderwritingPayload.model_validate(
+        {"deal_status": "analyst_completed"}
+    )
+
+    result = await service.update(42, payload)
+
+    assert result.underwriting_id == 42
+    assert repository.update_kwargs["underwriting_data"] == {
+        "deal_status": DealStatus.ANALYST_COMPLETED,
+    }
+
+
+@pytest.mark.asyncio
 async def test_update_raises_lookup_error_when_underwriting_does_not_exist():
     repository = FakeUnderwritingRepository(underwriting=None)
     service = UpdateUnderwritingService(repository)

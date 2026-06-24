@@ -231,6 +231,7 @@ class GetUnderwritingService:
             "base_price": item.base_price,
             "spec": item.spec,
             "tier": item.tier,
+            "notes": item.notes,
         }
 
     def _operating_expense_data(self, expense) -> dict[str, Any]:

@@ -66,7 +66,7 @@
             "details": {
                 "purchase_details": {
                     "loan_amount": 485100,
-                    "interest_rate": 0.07,
+                    "interest_rate": 0.0688,
                     "mortgage_years": 30,
                     "purchase_price": 539000,
                     "down_payment_pct": 0.1,
