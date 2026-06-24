@@ -19,6 +19,16 @@ class ScheduledListingDetailsRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_zpids(self, zpids: list[str]) -> list[ScheduledListingDetail]:
+        if not zpids:
+            return []
+        result = await self.db.execute(
+            select(ScheduledListingDetail).where(
+                ScheduledListingDetail.zpid.in_(zpids)
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_price_changed_since(
         self,
         *,

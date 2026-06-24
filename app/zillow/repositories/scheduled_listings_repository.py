@@ -194,6 +194,16 @@ class ScheduledListingsRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_zpids(self, zpids: list[str]) -> list[ScheduledListing]:
+        if not zpids:
+            return []
+        result = await self.db.execute(
+            select(ScheduledListing)
+            .options(joinedload(ScheduledListing.preset))
+            .where(ScheduledListing.zpid.in_(zpids))
+        )
+        return list(result.scalars().unique().all())
+
     async def get_zillow_listings_paginated(
         self,
         page: int,

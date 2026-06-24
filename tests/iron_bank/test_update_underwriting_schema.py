@@ -11,13 +11,20 @@ from app.iron_bank.schemas.update_underwriting import UpdateUnderwritingPayload
     [
         ("id", 123),
         ("zpid", "123456"),
-        ("market_id", 3),
         ("uw_details", {}),
     ],
 )
 def test_update_underwriting_payload_rejects_non_updatable_fields(field, value):
     with pytest.raises(ValidationError):
         UpdateUnderwritingPayload.model_validate({field: value})
+
+
+def test_update_underwriting_payload_accepts_market_id():
+    # market_id is updatable so an analyst can assign a non-automated draft to a
+    # market, which unlocks the Airbnb forecasted-revenue estimate.
+    payload = UpdateUnderwritingPayload.model_validate({"market_id": 3})
+
+    assert payload.market_id == 3
 
 
 def test_update_deal_status_accepts_valid_deal_status():

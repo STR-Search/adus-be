@@ -1,0 +1,601 @@
+[
+    {
+        "address": {
+            "city": "San Antonio",
+            "community": null,
+            "neighborhood": null,
+            "state": "TX",
+            "streetAddress": "727 N Pine St",
+            "subdivision": "Dignowity Hill Historic District",
+            "zipcode": "78202"
+        },
+        "agent_contact_info": "(512) 216-8713",
+        "agent_name": "Brandon Hauser",
+        "bathrooms": 4.0,
+        "bedrooms": 5,
+        "broker_contact_info": "(512) 296-0669",
+        "broker_name": "Team West Real Estate LLC",
+        "city": "San Antonio",
+        "cooling": "Other, Ceiling Fan(s), Central Air",
+        "description": "Established as the 1909 residence of civic leader Richard Friedrich, this storied estate in the heart of the Dignowity Hill Historic District offers a rare opportunity to steward a significant piece of San Antonio\u2019s industrial and cultural legacy. The property is offered strictly as-is, presenting a dedicated restoration enthusiast with a blank canvas to revitalize a one-of-a-kind historic landmark.  The estate is composed of three distinct structures situated on an oversized lot. The stately two-story main residence retains its original architectural character, including period-specific wood flooring and a rare, early 1900s-era built-in \"cold closet\", a nod to the family\u2019s refrigeration heritage. Behind the main home, the grounds feature a two-story carriage house and an additional detached stone-facade structure currently utilized for storage.  The backyard is further distinguished by a large in-ground concrete pool structure, offering an expansive footprint for outdoor recreation. From the rear of the property, one can catch a glimpse of the downtown San Antonio skyline through the mature tree canopy. Positioned near the Pearl District and major downtown corridors, this property represents a rare combination of historic provenance and untapped potential in San Antonio\u2019s first exclusive residential neighborhood.",
+        "fencing": "See Remarks, Back Yard, Chain Link, Wood",
+        "flooring": "Carpet, Linoleum, Tile, Wood",
+        "furnished": false,
+        "has_garage": false,
+        "heating": "See Remarks, Central",
+        "home_insights": "Detached stone-facade structure, Original architectural character, Oversized lot, Period-specific wood flooring, Stately two-story main residence, Two-story carriage house",
+        "home_status": "FOR_SALE",
+        "home_type": "SINGLE_FAMILY",
+        "last_sold_price": 0.0,
+        "last_updated_in_zillow": "2026-06-18 16:17:36",
+        "latitude": 29.428448,
+        "living_area": 4608,
+        "living_area_value": 4608.0,
+        "longitude": -98.470505,
+        "lot_size_acre": 0.2456,
+        "lot_size_sqft": 10698.0,
+        "mls_name": "Unlock MLS",
+        "mlsid": "3610802",
+        "monthly_hoa_fee": 0.0,
+        "mortgage_rates": {
+            "thirtyYearFixedRate": 6.348
+        },
+        "neighborhood_name": "Dignowity Hill",
+        "original_photos": [
+            {
+                "caption": "",
+                "mixedSources": {
+                    "jpeg": [
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/81408e81e3565dbf7096da6a82b8e14f-d_d.jpg",
+                            "width": 800
+                        },
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/81408e81e3565dbf7096da6a82b8e14f-o_a.jpg",
+                            "width": 1024
+                        },
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/81408e81e3565dbf7096da6a82b8e14f-uncropped_scaled_within_1344_1008.jpg",
+                            "width": 1344
+                        },
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/81408e81e3565dbf7096da6a82b8e14f-uncropped_scaled_within_1536_1152.jpg",
+                            "width": 1536
+                        }
+                    ],
+                    "webp": [
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/81408e81e3565dbf7096da6a82b8e14f-d_d.webp",
+                            "width": 800
+                        },
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/81408e81e3565dbf7096da6a82b8e14f-o_a.webp",
+                            "width": 1024
+                        },
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/81408e81e3565dbf7096da6a82b8e14f-uncropped_scaled_within_1344_1008.webp",
+                            "width": 1344
+                        },
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/81408e81e3565dbf7096da6a82b8e14f-uncropped_scaled_within_1536_1152.webp",
+                            "width": 1536
+                        }
+                    ]
+                }
+            },
+            {
+                "caption": "",
+                "mixedSources": {
+                    "jpeg": [
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/556339b004b38ba10cf71adc5850418b-d_d.jpg",
+                            "width": 800
+                        },
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/556339b004b38ba10cf71adc5850418b-o_a.jpg",
+                            "width": 1024
+                        },
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/556339b004b38ba10cf71adc5850418b-uncropped_scaled_within_1344_1008.jpg",
+                            "width": 1344
+                        },
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/556339b004b38ba10cf71adc5850418b-uncropped_scaled_within_1536_1152.jpg",
+                            "width": 1536
+                        }
+                    ],
+                    "webp": [
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/556339b004b38ba10cf71adc5850418b-d_d.webp",
+                            "width": 800
+                        },
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/556339b004b38ba10cf71adc5850418b-o_a.webp",
+                            "width": 1024
+                        },
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/556339b004b38ba10cf71adc5850418b-uncropped_scaled_within_1344_1008.webp",
+                            "width": 1344
+                        },
+                        {
+                            "url": "https://photos.zillowstatic.com/fp/556339b004b38ba10cf71adc5850418b-uncropped_scaled_within_1536_1152.webp",
+                            "width": 1536
+                        }
+                    ]
+                }
+            }
+        ],
+        "parcel_id": "105522",
+        "parking_capacity": 0,
+        "photo_count": 40,
+        "pool_features": "See Remarks, In Ground",
+        "price": 389000.0,
+        "price_change": -6000.0,
+        "price_change_date": "2026-06-18",
+        "price_history": [
+            {
+                "attributeSource": {
+                    "infoString1": "3610802",
+                    "infoString2": "Unlock MLS",
+                    "infoString3": "https://photos.zillowstatic.com/fp/410aa80cbd8a38ab49e64bd71d94162b-zillow_web_logo_inf_11.jpg"
+                },
+                "buyerAgent": null,
+                "date": "2026-06-18",
+                "event": "Price change",
+                "postingIsRental": false,
+                "price": 389000,
+                "priceChangeRate": -0.015189873417721518,
+                "pricePerSquareFoot": 84,
+                "sellerAgent": null,
+                "showCountyLink": false,
+                "source": "Unlock MLS",
+                "time": 1781740800000
+            },
+            {
+                "attributeSource": {
+                    "infoString1": "3610802",
+                    "infoString2": "Unlock MLS",
+                    "infoString3": "https://photos.zillowstatic.com/fp/410aa80cbd8a38ab49e64bd71d94162b-zillow_web_logo_inf_11.jpg"
+                },
+                "buyerAgent": null,
+                "date": "2026-05-21",
+                "event": "Price change",
+                "postingIsRental": false,
+                "price": 395000,
+                "priceChangeRate": -0.036585365853658534,
+                "pricePerSquareFoot": 86,
+                "sellerAgent": null,
+                "showCountyLink": false,
+                "source": "Unlock MLS",
+                "time": 1779321600000
+            },
+            {
+                "attributeSource": {
+                    "infoString1": "3610802",
+                    "infoString2": "Unlock MLS",
+                    "infoString3": "https://photos.zillowstatic.com/fp/410aa80cbd8a38ab49e64bd71d94162b-zillow_web_logo_inf_11.jpg"
+                },
+                "buyerAgent": null,
+                "date": "2026-05-13",
+                "event": "Listed for sale",
+                "postingIsRental": false,
+                "price": 410000,
+                "priceChangeRate": 0,
+                "pricePerSquareFoot": 89,
+                "sellerAgent": null,
+                "showCountyLink": false,
+                "source": "Unlock MLS",
+                "time": 1778630400000
+            }
+        ],
+        "rent_zestimate": 3090.0,
+        "reso_facts": {
+            "accessibilityFeatures": [
+                "None"
+            ],
+            "appliances": [
+                "See Remarks"
+            ],
+            "atAGlanceFacts": [
+                {
+                    "factLabel": "Type",
+                    "factValue": "Single Family Residence"
+                },
+                {
+                    "factLabel": "Year Built",
+                    "factValue": "1927"
+                },
+                {
+                    "factLabel": "Heating",
+                    "factValue": "See Remarks, Central"
+                },
+                {
+                    "factLabel": "Cooling",
+                    "factValue": "Other, Ceiling Fan(s), Central Air"
+                },
+                {
+                    "factLabel": "Parking",
+                    "factValue": "Carport"
+                },
+                {
+                    "factLabel": "Lot",
+                    "factValue": "10,698 sqft"
+                },
+                {
+                    "factLabel": "Days on Zillow",
+                    "factValue": "41 Days"
+                },
+                {
+                    "factLabel": "Price/sqft",
+                    "factValue": "$84"
+                },
+                {
+                    "factLabel": "Offer Review Date",
+                    "factValue": null
+                }
+            ],
+            "bathrooms": 4,
+            "bathroomsFloat": 4,
+            "bathroomsFull": 3,
+            "bathroomsHalf": 1,
+            "bedrooms": 5,
+            "canRaiseHorses": false,
+            "cityRegion": "San Antonio",
+            "communityFeatures": [
+                "Suburban"
+            ],
+            "cooling": [
+                "Other",
+                "Ceiling Fan(s)",
+                "Central Air"
+            ],
+            "coveredParkingCapacity": 0,
+            "elementarySchool": "Outside School District",
+            "elementarySchoolDistrict": "San Antonio Isd",
+            "exteriorFeatures": [
+                "Balcony"
+            ],
+            "fencing": "See Remarks, Back Yard, Chain Link, Wood",
+            "fireplaceFeatures": [
+                "See Remarks",
+                "Family Room",
+                "Living Room",
+                "Masonry",
+                "Stone"
+            ],
+            "fireplaces": 1,
+            "flooring": [
+                "Carpet",
+                "Linoleum",
+                "Tile",
+                "Wood"
+            ],
+            "foundationDetails": [
+                "See Remarks",
+                "Pillar/Post/Pier"
+            ],
+            "furnished": false,
+            "garageParkingCapacity": 0,
+            "hasAdditionalParcels": false,
+            "hasAssociation": false,
+            "hasAttachedGarage": false,
+            "hasAttachedProperty": false,
+            "hasCooling": true,
+            "hasElectricOnProperty": true,
+            "hasGarage": false,
+            "hasHeating": true,
+            "hasHomeWarranty": false,
+            "hasLandLease": false,
+            "hasPrivatePool": true,
+            "hasSpa": false,
+            "hasView": true,
+            "heating": [
+                "See Remarks",
+                "Central"
+            ],
+            "highSchool": "Brackenridge",
+            "highSchoolDistrict": "San Antonio Isd",
+            "homeType": "SingleFamily",
+            "horseYN": false,
+            "interiorFeatures": [
+                "See Remarks",
+                "Built-in Features",
+                "Cedar Closet(s)",
+                "Ceiling Fan(s)",
+                "High Ceilings",
+                "Crown Molding",
+                "Entrance Foyer",
+                "French Doors",
+                "Interior Steps",
+                "Natural Woodwork",
+                "Pantry",
+                "Storage",
+                "Walk-In Closet(s)"
+            ],
+            "isNewConstruction": false,
+            "levels": "Two",
+            "listingTerms": "See Remarks,Cash",
+            "livingArea": "4,608 sqft",
+            "lotFeatures": [
+                "See Remarks",
+                "Back Yard",
+                "Front Yard",
+                "Level",
+                "Trees-Medium (20 Ft - 40 Ft)"
+            ],
+            "lotSize": "10,698 sqft",
+            "mainLevelBedrooms": 1,
+            "middleOrJuniorSchool": "Outside School District",
+            "middleOrJuniorSchoolDistrict": "San Antonio Isd",
+            "onMarketDate": 1778653542000,
+            "otherStructures": [
+                "See Remarks",
+                "Guest House",
+                "Second Residence",
+                "Storage"
+            ],
+            "parcelNumber": "005490090070",
+            "parkingCapacity": 0,
+            "parkingFeatures": [
+                "Carport"
+            ],
+            "patioAndPorchFeatures": [
+                "See Remarks",
+                "Covered",
+                "Front Porch",
+                "Porch"
+            ],
+            "poolFeatures": [
+                "See Remarks",
+                "In Ground"
+            ],
+            "pricePerSquareFoot": 84,
+            "propertyCondition": "See Remarks",
+            "propertySubType": [
+                "Single Family Residence"
+            ],
+            "roofType": "See Remarks, Asphalt, Shingle",
+            "sewer": [
+                "Public Sewer"
+            ],
+            "specialListingConditions": "See Remarks",
+            "stories": 2,
+            "subdivisionName": "Dignowity Hill Historic District",
+            "taxAnnualAmount": 13081,
+            "taxAssessedValue": 536010,
+            "utilities": [
+                "See Remarks",
+                "Electricity Connected",
+                "Natural Gas Connected",
+                "Sewer Connected",
+                "Water Connected"
+            ],
+            "view": [
+                "See Remarks",
+                "City",
+                "Skyline"
+            ],
+            "virtualTour": "https://drive.google.com/file/d/1H7UEOu9S9QUMraTQlyVGV9K-lvtIbagD/view?usp=sharing",
+            "waterSource": [
+                "Public"
+            ],
+            "waterfrontFeatures": [
+                "None"
+            ],
+            "windowFeatures": [
+                "Plantation Shutters"
+            ],
+            "yearBuilt": 1927
+        },
+        "schools": [
+            {
+                "assigned": null,
+                "distance": 0.3,
+                "grades": "PK-8",
+                "isAssigned": null,
+                "level": "Primary",
+                "link": "https://www.greatschools.org/texas/san-antonio/5977-Bowden-Elementary-School/",
+                "name": "Bowden Elementary School",
+                "rating": 2,
+                "size": null,
+                "studentsPerTeacher": null,
+                "totalCount": null,
+                "type": "Public"
+            },
+            {
+                "assigned": null,
+                "distance": 2,
+                "grades": "9-12",
+                "isAssigned": null,
+                "level": "High",
+                "link": "https://www.greatschools.org/texas/san-antonio/6055-Brackenridge-High-School/",
+                "name": "Brackenridge High School",
+                "rating": 4,
+                "size": null,
+                "studentsPerTeacher": null,
+                "totalCount": null,
+                "type": "Public"
+            }
+        ],
+        "sewer": "Public Sewer",
+        "state": "TX",
+        "street_address": "727 N Pine St",
+        "tax_assessed_value": 536010,
+        "tax_history": [
+            {
+                "taxIncreaseRate": 2.4660606,
+                "taxPaid": 13081.19,
+                "time": 1750691874104,
+                "value": 420000,
+                "valueIncreaseRate": 0.044596825
+            },
+            {
+                "taxIncreaseRate": -0.04363602,
+                "taxPaid": 3774.08,
+                "time": 1719155874104,
+                "value": 402069,
+                "valueIncreaseRate": 0.06942346
+            },
+            {
+                "taxIncreaseRate": -0.15837109,
+                "taxPaid": 3946.28,
+                "time": 1687533474104,
+                "value": 375968,
+                "valueIncreaseRate": 0.10888659
+            },
+            {
+                "taxIncreaseRate": -0.052830234,
+                "taxPaid": 4688.86,
+                "time": 1655997474104,
+                "value": 339050,
+                "valueIncreaseRate": 0.040640377
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": 4950.39,
+                "time": 1624461474104,
+                "value": 325809,
+                "valueIncreaseRate": 0.06480837
+            },
+            {
+                "taxIncreaseRate": 0.0042764763,
+                "taxPaid": 4950.39,
+                "time": 1592925474104,
+                "value": 305979,
+                "valueIncreaseRate": 0.061866652
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": 4929.31,
+                "time": 1561303074104,
+                "value": 288152,
+                "valueIncreaseRate": 0.13122779
+            },
+            {
+                "taxIncreaseRate": 0.24584176,
+                "taxPaid": 4929.31,
+                "time": 1529767074104,
+                "value": 254725,
+                "valueIncreaseRate": 0.12969106
+            },
+            {
+                "taxIncreaseRate": -0.23656325,
+                "taxPaid": 3956.61,
+                "time": 1498231074104,
+                "value": 225482,
+                "valueIncreaseRate": -0.12355209
+            },
+            {
+                "taxIncreaseRate": 0.4108268,
+                "taxPaid": 5182.63,
+                "time": 1466695074104,
+                "value": 257268,
+                "valueIncreaseRate": 0.09205288
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": 3673.47,
+                "time": 1435072674104,
+                "value": 235582,
+                "valueIncreaseRate": 0.30405805
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": 3673.47,
+                "time": 1403536674104,
+                "value": 180653,
+                "valueIncreaseRate": 0.10087142
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": null,
+                "time": 1372000674104,
+                "value": 164100,
+                "valueIncreaseRate": 0.025881471
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": null,
+                "time": 1340464674104,
+                "value": 159960,
+                "valueIncreaseRate": -0.08206129
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": null,
+                "time": 1308842274104,
+                "value": 174260,
+                "valueIncreaseRate": 0.112125136
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": null,
+                "time": 1214234274104,
+                "value": 156691,
+                "valueIncreaseRate": 0.045303535
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": null,
+                "time": 1182611874104,
+                "value": 149900,
+                "valueIncreaseRate": 0.03945635
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": null,
+                "time": 1151075874104,
+                "value": 144210,
+                "valueIncreaseRate": 0.062711865
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": null,
+                "time": 1119539874104,
+                "value": 135700,
+                "valueIncreaseRate": 0
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": null,
+                "time": 1088003874104,
+                "value": null,
+                "valueIncreaseRate": 0
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": null,
+                "time": 1056381474104,
+                "value": null,
+                "valueIncreaseRate": 0
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": null,
+                "time": 1024845474104,
+                "value": null,
+                "valueIncreaseRate": 0
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": null,
+                "time": 993309474104,
+                "value": null,
+                "valueIncreaseRate": 0
+            },
+            {
+                "taxIncreaseRate": 0,
+                "taxPaid": null,
+                "time": 961773474104,
+                "value": null,
+                "valueIncreaseRate": 0
+            }
+        ],
+        "updated_at": "2026-06-23T15:18:02.136921+00:00",
+        "view": "See Remarks, City, Skyline",
+        "year_built": 1927,
+        "zestimate": 373700.0,
+        "zipcode": "78202",
+        "zpid": "26110417"
+    }
+]

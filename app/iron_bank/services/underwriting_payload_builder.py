@@ -1,25 +1,20 @@
-from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel
 
-from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
-from app.iron_bank.services.purchase_price_reconciliation_payload_builder import (
-    PurchasePriceReconciliationPayloadBuilder,
+from app.iron_bank.services.base_underwriting_payload_builder import (
+    BaseUnderwritingPayloadBuilder,
 )
 
 
-class UnderwritingPayloadBuilder:
+class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
     """Builds a save payload from prepared UW data.
 
     This replaces the FE mapping step for automated/draft underwriting flows.
     It does not fetch data or persist anything.
     """
 
-    _DEFAULT_DEAL_STATUS = DealStatus.TEMPLATE_GENERATED
-    _DEFAULT_SLA_MULTIPLIER_PCT = Decimal("0.36")
-    _DEFAULT_BONUS_AMOUNT_PCT = Decimal("1")
     # Absolute opex keys that are not monthly operating expenses and must not
     # be saved as such.
     _EXCLUDED_ABSOLUTE_EXPENSES = frozenset({"consolidated_shipping"})
@@ -51,48 +46,6 @@ class UnderwritingPayloadBuilder:
             "operating_expenses": self._build_operating_expenses(opex),
         }
         return SaveUnderwritingPayload.model_validate(payload)
-
-    def _build_details(
-        self,
-        *,
-        purchase_price: Decimal | None,
-        config: dict[str, Any],
-        cleaning_cost: dict[str, Any] | None,
-    ) -> dict[str, Any] | None:
-        detail: dict[str, Any] = {}
-        if purchase_price is not None:
-            detail["purchase_details"] = {
-                "purchase_price": purchase_price,
-                "down_payment_pct": self._decimal_or_default(
-                    config.get("down_payment"), Decimal("0.1")
-                ),
-                "interest_rate": self._decimal_or_default(
-                    config.get("interest_rate"), Decimal("0.07")
-                ),
-                "mortgage_years": int(config.get("loan_term_years") or 30),
-                "closing_costs_pct": self._decimal_or_default(
-                    config.get("closing_costs"), Decimal("0.03")
-                ),
-            }
-        if cleaning_cost is not None:
-            detail["cleaning_cost"] = cleaning_cost
-        return detail or None
-
-    def _build_taxes(self, config: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "land_assumptions_pct": self._decimal_or_default(
-                config.get("land_assumptions"), Decimal("0.2")
-            ),
-            "sla_multiplier_pct": self._decimal_or_default(
-                config.get("sla_multiplier_pct"), self._DEFAULT_SLA_MULTIPLIER_PCT
-            ),
-            "bonus_amount_pct": self._decimal_or_default(
-                config.get("bonus_amount_pct"), self._DEFAULT_BONUS_AMOUNT_PCT
-            ),
-            "tax_rate_pct": self._decimal_or_default(
-                config.get("tax_rate"), Decimal("0.37")
-            ),
-        }
 
     def _build_cleaning_cost(self, cleaning: dict[str, Any]) -> dict[str, Any] | None:
         fee = cleaning.get("fee")
@@ -130,14 +83,6 @@ class UnderwritingPayloadBuilder:
             if amount is not None and name not in self._EXCLUDED_ABSOLUTE_EXPENSES
         )
         return expenses
-
-    def _money_to_decimal(self, value: Any) -> Decimal | None:
-        return PurchasePriceReconciliationPayloadBuilder.normalize_purchase_price(value)
-
-    def _decimal_or_default(self, value: Any, default: Decimal) -> Decimal:
-        if value is None:
-            return default
-        return Decimal(str(value))
 
     def _humanize_expense_name(self, value: str) -> str:
         return value.replace("_", " ").title()

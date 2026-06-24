@@ -65,7 +65,13 @@ class SaveUnderwritingService:
         }
         await self._apply_listing_boolean_fields(underwriting_data, payload)
         tax_data = self._build_tax_data(payload)
-        detail_data = await self._build_detail_data(payload, tax_data)
+        bedrooms = await self._resolve_bedrooms_for_save(payload)
+        detail_data = await self._build_detail_data(
+            payload,
+            tax_data,
+            market_id=payload.market_id,
+            bedrooms=bedrooms,
+        )
         self._apply_calculated_underwriting_fields(
             underwriting_data,
             detail_data,
@@ -112,6 +118,9 @@ class SaveUnderwritingService:
         self,
         payload: SaveUnderwritingPayload,
         tax_data: dict | None = None,
+        *,
+        market_id: int | None = None,
+        bedrooms: int | None = None,
     ) -> dict | None:
         if payload.details is None:
             logger.debug("_build_detail_data: no details on payload, skipping")
@@ -142,7 +151,8 @@ class SaveUnderwritingService:
         )
         if forecasted_revenue_input is None and "purchase_details" in detail_data:
             forecasted_revenue_input = await self._build_forecasted_revenue_input(
-                payload
+                market_id=market_id,
+                bedrooms=bedrooms,
             )
 
         if forecasted_revenue_input is not None:
@@ -190,81 +200,109 @@ class SaveUnderwritingService:
     ) -> dict[str, Any] | None:
         """Resolve the zillow_property persisted on uw_details.
 
-        Single source-of-truth seam. Currently client-provided: the FE sends
-        ``details.zillow_property`` for non-automated underwritings. Automated
+        Client/builder-provided only: non-automated underwritings carry
+        ``details.zillow_property`` (built upfront from the external API at
+        creation time — see CreateUnderwritingFromUrlService). Automated
         underwritings hydrate zillow data live from scheduled_listings on read,
-        so they don't carry it here.
-
-        Future: for non-automated underwritings, fetch from the external zillow
-        API by zpid/url here instead of reading it off the payload. No other
-        call site changes.
+        so they don't carry it here. No network calls happen during save.
         """
         if payload.details is None or payload.details.zillow_property is None:
             return None
         return payload.details.zillow_property.model_dump(exclude_unset=True)
 
+    async def _resolve_bedrooms_for_save(
+        self, payload: SaveUnderwritingPayload
+    ) -> int | None:
+        """Resolve the bedroom count used for the Airbnb revenue lookup.
+
+        Non-automated payloads carry the property data inline, so bedrooms come
+        from ``details.zillow_property``. Automated payloads don't, so they fall
+        back to ``scheduled_listings`` via ``zpid``.
+        """
+        if (
+            payload.details is not None
+            and payload.details.zillow_property is not None
+            and payload.details.zillow_property.bedrooms is not None
+        ):
+            return payload.details.zillow_property.bedrooms
+
+        if self.listings_service is not None and payload.zpid is not None:
+            listing = await self.listings_service.get_by_zpid(payload.zpid)
+            if listing is not None:
+                return listing.beds
+
+        return None
+
     async def _build_forecasted_revenue_input(
         self,
-        payload: SaveUnderwritingPayload,
+        *,
+        market_id: int | None,
+        bedrooms: int | None,
     ) -> ForecastedRevenueInput | None:
-        if (
-            self.market_service is None
-            or self.listings_service is None
-            or self.cleaned_data_service is None
-        ):
+        """Estimate forecasted revenue from Airbnb comps keyed by (market, beds).
+
+        Returns ``None`` (with an explanatory log) for any condition under which
+        the estimate can't be produced, rather than raising — a missing estimate
+        leaves the field unpopulated for the analyst to fill, and must not break
+        a save or an update. ``bedrooms`` is resolved by the caller (from
+        ``scheduled_listings`` for automated underwritings, or from the stored
+        ``zillow_property`` for non-automated ones), so this method is agnostic
+        to where the property data lives.
+        """
+        if self.market_service is None or self.cleaned_data_service is None:
             logger.debug(
-                "_build_forecasted_revenue_input: skipping — one or more services not configured",
+                "_build_forecasted_revenue_input: skipping — market or cleaned-data "
+                "service not configured",
                 has_market_service=self.market_service is not None,
-                has_listings_service=self.listings_service is not None,
                 has_cleaned_data_service=self.cleaned_data_service is not None,
             )
             return None
 
-        if payload.market_id is None:
-            raise ValueError(
-                "market_id is required to calculate forecasted revenue from Airbnb data"
+        if market_id is None or bedrooms is None:
+            logger.debug(
+                "_build_forecasted_revenue_input: skipping — market_id and bedrooms "
+                "are both required for the Airbnb revenue lookup; forecasted_revenue "
+                "will not be estimated",
+                market_id=market_id,
+                bedrooms=bedrooms,
             )
-        if payload.zpid is None:
-            raise ValueError(
-                "zpid is required to calculate forecasted revenue from Airbnb data"
-            )
+            return None
 
-        market = await self.market_service.get_by_id(payload.market_id)
+        market = await self.market_service.get_by_id(market_id)
         logger.debug(
             "_build_forecasted_revenue_input: market lookup",
-            market_id=payload.market_id,
+            market_id=market_id,
             market_name_current=market.market_name_current if market else None,
         )
         if market is None or market.market_name_current is None:
-            raise ValueError(
-                "market_name_current is required for Airbnb revenue lookup"
+            logger.warning(
+                "_build_forecasted_revenue_input: skipping — no market_name_current "
+                "for market_id; forecasted_revenue will not be estimated",
+                market_id=market_id,
             )
-
-        listing = await self.listings_service.get_by_zpid(payload.zpid)
-        logger.debug(
-            "_build_forecasted_revenue_input: listing lookup",
-            zpid=payload.zpid,
-            beds=listing.beds if listing else None,
-        )
-        if listing is None or listing.beds is None:
-            raise ValueError("listing beds are required for Airbnb revenue lookup")
+            return None
 
         percentiles = await self.cleaned_data_service.get_revenue_potential_percentiles(
             key_market=market.market_name_current,
-            bedrooms=listing.beds,
+            bedrooms=bedrooms,
         )
         logger.debug(
             "_build_forecasted_revenue_input: percentiles lookup",
             key_market=market.market_name_current,
-            bedrooms=listing.beds,
+            bedrooms=bedrooms,
             percentiles_low=percentiles.low if percentiles else None,
             percentiles_mid=percentiles.mid if percentiles else None,
             percentiles_high=percentiles.high if percentiles else None,
         )
         if percentiles is None:
-            raise ValueError(
-                "Airbnb revenue percentiles were not found for the market and bedrooms"
+            logger.warning(
+                "_build_forecasted_revenue_input: skipping — no Airbnb revenue "
+                "percentiles for market/bedrooms; forecasted_revenue will not be "
+                "estimated",
+                key_market=market.market_name_current,
+                bedrooms=bedrooms,
             )
+            return None
 
         forecasted_revenue_input = ForecastedRevenueInput.model_validate(
             {
@@ -301,41 +339,56 @@ class SaveUnderwritingService:
             underwriting_data["purchase_price"] = purchase_details["purchase_price"]
 
         forecasted_revenue = detail_data.get("forecasted_revenue")
-        if forecasted_revenue is not None:
-            scenarios = forecasted_revenue["scenarios"]
-            underwriting_data["low_gross_revenue"] = scenarios["low"][
-                "forecasted_revenue"
-            ]
-            underwriting_data["mid_gross_revenue"] = scenarios["mid"][
-                "forecasted_revenue"
-            ]
-            underwriting_data["high_gross_revenue"] = scenarios["high"][
-                "forecasted_revenue"
-            ]
+        if forecasted_revenue is None:
+            logger.debug(
+                "_apply_calculated_underwriting_fields: no forecasted_revenue — "
+                "low/mid/high_gross_revenue, total_oop, prr, budget_to_pp and "
+                "cash_on_cash will not be calculated. forecasted_revenue requires "
+                "Airbnb comps (market_id + bedrooms); fill these in via update.",
+                has_purchase_details=purchase_details is not None,
+            )
+            return
 
-            if purchase_details is not None:
-                total_oop = self.calculator.calculate_total_oop(
-                    purchase_details=purchase_details,
-                    optimization_items=optimization_items,
-                )
-                cash_on_cash = self.calculator.calculate_cash_on_cash(
-                    forecasted_revenue=forecasted_revenue,
-                    total_oop=total_oop,
-                )
-                underwriting_data["total_oop"] = total_oop
-                underwriting_data["prr"] = self.calculator.calculate_prr(
-                    purchase_price=purchase_details["purchase_price"],
-                    mid_gross_revenue=scenarios["mid"]["forecasted_revenue"],
-                )
-                underwriting_data["budget_to_pp"] = (
-                    self.calculator.calculate_budget_to_pp(
-                        total_oop=total_oop,
-                        purchase_price=purchase_details["purchase_price"],
-                    )
-                )
-                underwriting_data["l_cash_on_cash"] = cash_on_cash["low_pct"]
-                underwriting_data["m_cash_on_cash"] = cash_on_cash["mid_pct"]
-                underwriting_data["h_cash_on_cash"] = cash_on_cash["high_pct"]
+        scenarios = forecasted_revenue["scenarios"]
+        underwriting_data["low_gross_revenue"] = scenarios["low"][
+            "forecasted_revenue"
+        ]
+        underwriting_data["mid_gross_revenue"] = scenarios["mid"][
+            "forecasted_revenue"
+        ]
+        underwriting_data["high_gross_revenue"] = scenarios["high"][
+            "forecasted_revenue"
+        ]
+
+        if purchase_details is None:
+            logger.debug(
+                "_apply_calculated_underwriting_fields: forecasted_revenue present "
+                "but no purchase_details — total_oop, prr, budget_to_pp and "
+                "cash_on_cash will not be calculated (they need purchase_price and "
+                "financing terms).",
+            )
+            return
+
+        total_oop = self.calculator.calculate_total_oop(
+            purchase_details=purchase_details,
+            optimization_items=optimization_items,
+        )
+        cash_on_cash = self.calculator.calculate_cash_on_cash(
+            forecasted_revenue=forecasted_revenue,
+            total_oop=total_oop,
+        )
+        underwriting_data["total_oop"] = total_oop
+        underwriting_data["prr"] = self.calculator.calculate_prr(
+            purchase_price=purchase_details["purchase_price"],
+            mid_gross_revenue=scenarios["mid"]["forecasted_revenue"],
+        )
+        underwriting_data["budget_to_pp"] = self.calculator.calculate_budget_to_pp(
+            total_oop=total_oop,
+            purchase_price=purchase_details["purchase_price"],
+        )
+        underwriting_data["l_cash_on_cash"] = cash_on_cash["low_pct"]
+        underwriting_data["m_cash_on_cash"] = cash_on_cash["mid_pct"]
+        underwriting_data["h_cash_on_cash"] = cash_on_cash["high_pct"]
 
     def _build_tax_data(self, payload: SaveUnderwritingPayload) -> dict | None:
         if payload.taxes is None:

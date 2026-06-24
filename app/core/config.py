@@ -11,6 +11,13 @@ class Config(BaseSettings):
     CORS_ORIGINS: str = "*"
     FRED_API_KEY: str = ""
 
+    # Zillow property-details API (Supabase-authenticated)
+    ZILLOW_API_BASE: str = ""
+    SUPABASE_URL: str = ""
+    SUPABASE_ANON_KEY: str = ""
+    SERVICE_EMAIL: str = ""
+    SERVICE_PASSWORD: str = ""
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"
