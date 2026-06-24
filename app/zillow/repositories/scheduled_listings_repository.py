@@ -80,7 +80,8 @@ class ScheduledListingsRepository:
         limit: int | None = None,
     ) -> list[ScheduledListing]:
         """Returns active listings created in the last since_hours."""
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
+        server_now = datetime.now(timezone.utc)
+        cutoff = server_now - timedelta(hours=since_hours)
         query = (
             select(ScheduledListing)
             .where(ScheduledListing.keep_updated.is_(True))
@@ -97,6 +98,8 @@ class ScheduledListingsRepository:
             "zillow.scheduled_listings.get_active_since",
             since_hours=since_hours,
             limit=limit,
+            server_now_utc=server_now.isoformat(),
+            cutoff_utc=cutoff.isoformat(),
             count=len(items),
         )
         return items
@@ -109,7 +112,8 @@ class ScheduledListingsRepository:
         limit: int | None = None,
     ) -> list[ScheduledListing]:
         """Returns active listings created in the last since_hours for a market."""
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
+        server_now = datetime.now(timezone.utc)
+        cutoff = server_now - timedelta(hours=since_hours)
         query = (
             select(ScheduledListing)
             .join(ScheduledPreset, ScheduledPreset.id == ScheduledListing.preset_id)
@@ -129,6 +133,8 @@ class ScheduledListingsRepository:
             market_id=market_id,
             since_hours=since_hours,
             limit=limit,
+            server_now_utc=server_now.isoformat(),
+            cutoff_utc=cutoff.isoformat(),
             count=len(items),
         )
         return items
