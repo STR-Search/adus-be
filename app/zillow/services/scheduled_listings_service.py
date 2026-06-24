@@ -21,6 +21,12 @@ class ScheduledListingsService:
     async def get_by_detail_url(self, detail_url: str) -> ScheduledListing | None:
         return await self.repository.get_by_detail_url(detail_url)
 
+    async def get_by_zpids(
+        self, zpids: list[str]
+    ) -> dict[str, ScheduledListing]:
+        listings = await self.repository.get_by_zpids(zpids)
+        return {listing.zpid: listing for listing in listings}
+
     async def get_active_since(
         self,
         *,

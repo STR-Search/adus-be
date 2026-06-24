@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.iron_bank.controllers.create_underwriting_from_url_controller import (
+    CreateUnderwritingFromUrlController,
+)
 from app.iron_bank.controllers.deal_status_controller import DealStatusController
 from app.iron_bank.controllers.get_underwriting_controller import (
     GetUnderwritingController,
@@ -19,6 +22,9 @@ from app.iron_bank.controllers.workflow_trigger_controller import (
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
 from app.iron_bank.schemas.batch_prepare_uw import BatchPrepareUwByMarketResult
+from app.iron_bank.schemas.create_underwriting_from_url import (
+    CreateUnderwritingFromUrlPayload,
+)
 from app.iron_bank.schemas.deal_status import (
     DealStatusOptionsResult,
     DealStatusTransitionsResult,
@@ -37,6 +43,9 @@ from app.iron_bank.schemas.save_underwriting import (
 from app.iron_bank.schemas.update_underwriting import (
     UpdateUnderwritingPayload,
     UpdateUnderwritingResult,
+)
+from app.iron_bank.services.create_underwriting_from_url_service import (
+    CreateUnderwritingFromUrlService,
 )
 from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
 from app.iron_bank.services.deal_status_service import DealStatusService
@@ -95,11 +104,44 @@ def get_save_underwriting_controller(
     )
 
 
+def get_create_underwriting_from_url_controller(
+    db: AsyncSession = Depends(get_db),
+) -> CreateUnderwritingFromUrlController:
+    from app.external_api.services.zillow_property_service import (
+        ZillowPropertyService,
+    )
+
+    repository = UnderwritingRepository(db)
+    return CreateUnderwritingFromUrlController(
+        CreateUnderwritingFromUrlService(
+            zillow_property_service=ZillowPropertyService(),
+            save_service=SaveUnderwritingService(repository),
+            underwriting_reader=repository,
+        )
+    )
+
+
 def get_update_underwriting_controller(
     db: AsyncSession = Depends(get_db),
 ) -> UpdateUnderwritingController:
+    from app.airbnb_public.repositories.cleaned_data_repository import (
+        CleanedDataRepository,
+    )
+    from app.airbnb_public.services.cleaned_data_service import CleanedDataService
+    from app.markets.repositories.market_repository import MarketRepository
+    from app.markets.services.market_service import MarketService
+    from app.zillow.repositories.scheduled_listings_repository import (
+        ScheduledListingsRepository,
+    )
+    from app.zillow.services.scheduled_listings_service import ScheduledListingsService
+
     return UpdateUnderwritingController(
-        UpdateUnderwritingService(UnderwritingRepository(db))
+        UpdateUnderwritingService(
+            UnderwritingRepository(db),
+            market_service=MarketService(MarketRepository(db)),
+            listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
+            cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
+        )
     )
 
 
@@ -210,6 +252,20 @@ async def save_underwriting(
     controller: SaveUnderwritingController = Depends(get_save_underwriting_controller),
 ):
     return await controller.save_underwriting(payload)
+
+
+@router.post(
+    "/underwritings/from-zillow-url",
+    response_model=SaveUnderwritingResult,
+    tags=["iron_bank"],
+)
+async def create_underwriting_from_url(
+    payload: CreateUnderwritingFromUrlPayload,
+    controller: CreateUnderwritingFromUrlController = Depends(
+        get_create_underwriting_from_url_controller
+    ),
+):
+    return await controller.create_from_url(url=payload.url)
 
 
 @router.put(

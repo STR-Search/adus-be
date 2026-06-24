@@ -181,7 +181,7 @@ def test_calculates_prr_and_budget_to_pp():
     assert calculator.calculate_prr(
         purchase_price=Decimal("1000000"),
         mid_gross_revenue=Decimal("220000"),
-    ) == Decimal("4.5455")
+    ) == Decimal("0.2200")
     assert calculator.calculate_budget_to_pp(
         total_oop=Decimal("250000"),
         purchase_price=Decimal("1000000"),

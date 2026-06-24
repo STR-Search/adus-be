@@ -26,6 +26,7 @@ from app.iron_bank.schemas.underwriting import (
 class UpdateUnderwritingPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    market_id: int | None = None
     analyst_id: int | None = None
     approver_id: int | None = None
     deal_added: datetime | None = None

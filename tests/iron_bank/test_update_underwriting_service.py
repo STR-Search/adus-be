@@ -191,3 +191,133 @@ async def test_update_deal_status_raises_when_underwriting_does_not_exist():
             underwriting_id=42,
             deal_status=DealStatus.ANALYST_COMPLETED,
         )
+
+
+# --- recalc-on-update: forecasted_revenue estimated when a market is assigned -
+
+
+class FakeRepoWithExisting:
+    def __init__(self, existing):
+        self.existing = existing
+        self.update_kwargs = None
+
+    async def get_by_id(self, underwriting_id: int):
+        return self.existing
+
+    async def update(self, underwriting_id: int, **kwargs):
+        self.update_kwargs = {"underwriting_id": underwriting_id, **kwargs}
+        return SimpleNamespace(id=underwriting_id)
+
+
+class FakeMarketService:
+    async def get_by_id(self, market_id: int):
+        return SimpleNamespace(market_name_current="Gatlinburg")
+
+
+class FakeListingsService:
+    def __init__(self, beds=4):
+        self.beds = beds
+        self.requested_zpid = None
+
+    async def get_by_zpid(self, zpid: str):
+        self.requested_zpid = zpid
+        return SimpleNamespace(beds=self.beds, home_status="FOR_SALE")
+
+
+class FakeCleanedDataService:
+    async def get_revenue_potential_percentiles(self, *, key_market, bedrooms):
+        return SimpleNamespace(
+            low=Decimal("72000"), mid=Decimal("98000"), high=Decimal("127000")
+        )
+
+
+def _details_with_purchase_only():
+    return {
+        "market_id": 3,
+        "details": {
+            "purchase_details": {
+                "purchase_price": 485000,
+                "down_payment_pct": Decimal("0.10"),
+                "interest_rate": Decimal("0"),
+                "mortgage_years": 30,
+                "closing_costs_pct": Decimal("0.03"),
+            }
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_estimates_revenue_for_automated_beds_from_scheduled_listings():
+    # automated row: no stored zillow_property, beds come from scheduled_listings
+    repository = FakeRepoWithExisting(
+        SimpleNamespace(id=42, zpid="123", market_id=None, detail=None)
+    )
+    listings_service = FakeListingsService()
+    service = UpdateUnderwritingService(
+        repository,
+        market_service=FakeMarketService(),
+        listings_service=listings_service,
+        cleaned_data_service=FakeCleanedDataService(),
+    )
+    payload = UpdateUnderwritingPayload.model_validate(_details_with_purchase_only())
+
+    await service.update(42, payload)
+
+    # beds were looked up from scheduled_listings via the row's zpid
+    assert listings_service.requested_zpid == "123"
+    # revenue + downstream metrics are now computed and persisted
+    underwriting_data = repository.update_kwargs["underwriting_data"]
+    assert underwriting_data["mid_gross_revenue"] == Decimal("98000")
+    assert "total_oop" in underwriting_data
+    assert "prr" in underwriting_data
+    assert "forecasted_revenue" in repository.update_kwargs["detail_data"]
+
+
+@pytest.mark.asyncio
+async def test_update_estimates_revenue_for_non_automated_beds_from_stored_zillow():
+    # non-automated row: zpid is null, beds come from the stored zillow_property
+    repository = FakeRepoWithExisting(
+        SimpleNamespace(
+            id=42,
+            zpid=None,
+            market_id=None,
+            detail=SimpleNamespace(zillow_property={"bedrooms": 4}),
+        )
+    )
+    listings_service = FakeListingsService()
+    service = UpdateUnderwritingService(
+        repository,
+        market_service=FakeMarketService(),
+        listings_service=listings_service,
+        cleaned_data_service=FakeCleanedDataService(),
+    )
+    payload = UpdateUnderwritingPayload.model_validate(_details_with_purchase_only())
+
+    await service.update(42, payload)
+
+    # no scheduled_listings lookup needed — beds came from stored zillow_property
+    assert listings_service.requested_zpid is None
+    underwriting_data = repository.update_kwargs["underwriting_data"]
+    assert underwriting_data["mid_gross_revenue"] == Decimal("98000")
+    assert "forecasted_revenue" in repository.update_kwargs["detail_data"]
+
+
+@pytest.mark.asyncio
+async def test_update_skips_revenue_when_no_bedrooms_source():
+    # neither stored zillow_property nor a resolvable zpid → graceful skip
+    repository = FakeRepoWithExisting(
+        SimpleNamespace(id=42, zpid=None, market_id=None, detail=None)
+    )
+    service = UpdateUnderwritingService(
+        repository,
+        market_service=FakeMarketService(),
+        listings_service=FakeListingsService(),
+        cleaned_data_service=FakeCleanedDataService(),
+    )
+    payload = UpdateUnderwritingPayload.model_validate(_details_with_purchase_only())
+
+    await service.update(42, payload)
+
+    underwriting_data = repository.update_kwargs["underwriting_data"]
+    assert "mid_gross_revenue" not in underwriting_data
+    assert "forecasted_revenue" not in repository.update_kwargs["detail_data"]

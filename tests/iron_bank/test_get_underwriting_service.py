@@ -173,6 +173,82 @@ async def test_get_all_returns_paginated_results():
     assert result.data[0].taxes.tax_savings == Decimal("60100")
 
 
+class FakeListRepository:
+    def __init__(self, items):
+        self.items = items
+
+    async def get_all_paginated(self, *, page, page_size, zpid=None, market_id=None):
+        return self.items, len(self.items), 1
+
+
+class StubBatchListingsService:
+    def __init__(self, listings):
+        self.listings = listings
+        self.requested_zpids = None
+
+    async def get_by_zpids(self, zpids):
+        self.requested_zpids = zpids
+        return self.listings
+
+
+class StubBatchListingDetailsService:
+    def __init__(self, details):
+        self.details = details
+
+    async def get_by_zpids(self, zpids):
+        return self.details
+
+
+@pytest.mark.asyncio
+async def test_get_all_batch_hydrates_automated_zillow_into_details():
+    automated = _underwriting()
+    automated.id = 7
+    automated.is_automated = True
+    automated.zpid = "123"
+    automated.detail.zillow_property = None  # automated stores nothing
+
+    non_automated = _underwriting()
+    non_automated.id = 8
+    non_automated.is_automated = False
+    non_automated.zpid = "copied"
+    non_automated.detail.zillow_property = {"id": "copied", "bedrooms": 9}
+    listings_service = StubBatchListingsService({"123": StubListing()})
+    details_service = StubBatchListingDetailsService(
+        {
+            "123": SimpleNamespace(
+                original_photos=["https://photos.zillowstatic.com/photo-1.jpg"],
+                lot_size_sqft=21780,
+            )
+        }
+    )
+    service = GetUnderwritingService(
+        FakeListRepository([automated, non_automated]),
+        listings_service=listings_service,
+        listing_details_service=details_service,
+    )
+
+    result = await service.get_all(page=1, page_size=50)
+
+    # only the automated item's zpid is batch-queried
+    assert listings_service.requested_zpids == ["123"]
+    # automated item hydrated live into details, coerced to the schema
+    assert result.data[0].details.zillow_property.model_dump() == {
+        "id": "123",
+        "url": "https://www.zillow.com/homedetails/123",
+        "thumbnail": "https://photos.zillowstatic.com/thumb.jpg",
+        "price": Decimal("485000"),
+        "address": "123 Pine Ridge Rd",
+        "bedrooms": 3,
+        "bathrooms": Decimal("2.5"),
+        "area": 1800,
+        "original_photos": ["https://photos.zillowstatic.com/photo-1.jpg"],
+        "lot_size_sqft": Decimal("21780"),
+    }
+    # non-automated item keeps its stored zillow_property (coerced to schema)
+    assert result.data[1].details.zillow_property.id == "copied"
+    assert result.data[1].details.zillow_property.bedrooms == 9
+
+
 @pytest.mark.asyncio
 async def test_get_all_passes_filters_to_repository():
     repository = FakeUnderwritingRepository(_underwriting())
@@ -283,7 +359,8 @@ async def test_get_edit_context_automated_hydrates_zillow_from_listing():
 
     result = await service.get_edit_context(1)
 
-    assert result.data.contextual.zillow_property.model_dump() == {
+    # zillow_property now lives on details, coerced to the ZillowProperty schema.
+    assert result.data.underwriting.details.zillow_property.model_dump() == {
         "id": "123",
         "url": "https://www.zillow.com/homedetails/123",
         "thumbnail": "https://photos.zillowstatic.com/thumb.jpg",
@@ -312,8 +389,8 @@ async def test_get_edit_context_automated_allows_missing_listing_details():
 
     result = await service.get_edit_context(1)
 
-    assert result.data.contextual.zillow_property.original_photos is None
-    assert result.data.contextual.zillow_property.lot_size_sqft is None
+    assert result.data.underwriting.details.zillow_property.original_photos is None
+    assert result.data.underwriting.details.zillow_property.lot_size_sqft is None
 
 
 @pytest.mark.asyncio
@@ -338,7 +415,7 @@ async def test_get_edit_context_non_automated_reads_stored_zillow_property():
 
     result = await service.get_edit_context(1)
 
-    zillow_property = result.data.contextual.zillow_property
+    zillow_property = result.data.underwriting.details.zillow_property
     assert zillow_property.id == "copied-from-browser"
     assert zillow_property.bedrooms == 3
     assert zillow_property.price == Decimal("510000")
@@ -355,7 +432,8 @@ async def test_get_edit_context_no_zpid_yields_no_zillow_property():
 
     result = await service.get_edit_context(1)
 
-    assert result.data.contextual.zillow_property is None
+    # no zpid → nothing hydrated, details stays absent
+    assert result.data.underwriting.details is None
     furnishings = result.data.contextual.construction_amenities[0]
     assert furnishings.amenity_name == "Furnishings"
     assert furnishings.price_tier_1 is None

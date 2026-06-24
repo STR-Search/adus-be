@@ -19,6 +19,15 @@ class ScheduledListingDetailsService:
             return None
         return ScheduledListingDetailSchema.model_validate(record)
 
+    async def get_by_zpids(
+        self, zpids: list[str]
+    ) -> dict[str, ScheduledListingDetailSchema]:
+        records = await self.repository.get_by_zpids(zpids)
+        return {
+            record.zpid: ScheduledListingDetailSchema.model_validate(record)
+            for record in records
+        }
+
     async def get_price_changed_zpids_since(
         self,
         *,

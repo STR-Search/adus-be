@@ -7,9 +7,11 @@ from app.iron_bank.schemas.get_underwriting import (
     ConstructionRemodelingOption,
     EditContextData,
     EditContextualData,
+    GetUnderwritingDetails,
     GetUnderwritingEditContextResult,
     GetUnderwritingResult,
     GetUnderwritingsResult,
+    ZillowProperty,
 )
 from app.iron_bank.schemas.underwriting import UnderwritingRead
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
@@ -55,6 +57,11 @@ class GetUnderwritingService:
                 underwriting
             )
 
+        # zillow_property is intrinsic property data, so it belongs on details
+        # alongside purchase_details/forecasted_revenue — not in the contextual
+        # bag, which holds only global edit-form reference data.
+        self._apply_zillow_to_details(underwriting, zillow_property)
+
         amenities = await self.construction_amenities_service.get_all()
         remodeling = await self.construction_remodeling_service.get_all()
         amenity_options = PrepareUwDataService.build_amenities_options(
@@ -65,7 +72,6 @@ class GetUnderwritingService:
             data=EditContextData(
                 underwriting=underwriting,
                 contextual=EditContextualData(
-                    zillow_property=zillow_property,
                     construction_amenities=[
                         ConstructionAmenityOption.model_validate(a)
                         for a in amenity_options
@@ -77,6 +83,26 @@ class GetUnderwritingService:
                 ),
             )
         )
+
+    @staticmethod
+    def _apply_zillow_to_details(
+        result: GetUnderwritingResult, zillow_property
+    ) -> None:
+        """Place a hydrated zillow_property onto the result's details.
+
+        For non-automated underwritings the value is already present (read from
+        storage); for automated ones this routes the live-hydrated value in.
+        The value is coerced to the ``ZillowProperty`` schema so the response
+        always follows the contract (extra fields dropped, types normalized),
+        regardless of whether assignment validation is enabled.
+        """
+        if zillow_property is None:
+            return
+        coerced = ZillowProperty.model_validate(zillow_property)
+        if result.details is None:
+            result.details = GetUnderwritingDetails(zillow_property=coerced)
+        else:
+            result.details.zillow_property = coerced
 
     async def get_all(
         self,
@@ -92,13 +118,55 @@ class GetUnderwritingService:
             zpid=zpid,
             market_id=market_id,
         )
+        results = [self._to_result(underwriting) for underwriting in items]
+        await self._hydrate_automated_zillow(items, results)
         return GetUnderwritingsResult(
-            data=[self._to_result(underwriting) for underwriting in items],
+            data=results,
             total=total,
             page=page,
             page_size=page_size,
             pages=pages,
         )
+
+    async def _hydrate_automated_zillow(self, items, results) -> None:
+        """Batch-hydrate zillow_property for automated underwritings in a list.
+
+        Non-automated items already carry their stored zillow_property;
+        automated ones persist nothing, so we fetch their listings live in two
+        batched queries (one per zpid set) and route the transformed value onto
+        each result's details — keeping zillow_property present across the list
+        without an N+1 of per-item lookups.
+        """
+        if self.listings_service is None or self.listing_details_service is None:
+            return
+
+        automated = [
+            (underwriting, result)
+            for underwriting, result in zip(items, results)
+            if underwriting.is_automated and underwriting.zpid
+        ]
+        if not automated:
+            return
+
+        zpids = [underwriting.zpid for underwriting, _ in automated]
+        listings = await self.listings_service.get_by_zpids(zpids)
+        listing_details = await self.listing_details_service.get_by_zpids(zpids)
+        transformer = PrepareUwDataService()
+
+        for underwriting, result in automated:
+            listing = listings.get(underwriting.zpid)
+            if listing is None:
+                logger.warning(
+                    "iron_bank.get_underwritings.listing_not_found",
+                    underwriting_id=underwriting.id,
+                    zpid=underwriting.zpid,
+                    detail="no listing found for zpid — zillow_property will be unavailable",
+                )
+                continue
+            zillow_property = transformer._transform_zillow_property(
+                listing, listing_details.get(underwriting.zpid)
+            )
+            self._apply_zillow_to_details(result, zillow_property)
 
     def _to_result(self, underwriting) -> GetUnderwritingResult:
         return GetUnderwritingResult.model_validate(
@@ -239,7 +307,7 @@ class GetUnderwritingService:
             return zillow_property, None
 
         opex_by_bedrooms = await self._opex_by_bedrooms(
-            underwriting, bedrooms=zillow_property.get("bedrooms")
+            underwriting, bedrooms=zillow_property.bedrooms
         )
         return zillow_property, opex_by_bedrooms
 

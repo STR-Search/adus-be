@@ -12,12 +12,25 @@ def _serialize_plain_decimal(value: Decimal | None) -> str | None:
     return format(value, "f")
 
 
+class ZillowProperty(BaseModel):
+    id: str | None = None
+    url: str | None = None
+    thumbnail: str | None = None
+    price: Decimal | None = None
+    address: str | None = None
+    bedrooms: int | None = None
+    bathrooms: Decimal | None = None
+    area: int | None = None
+    original_photos: list | None = None
+    lot_size_sqft: Decimal | None = None
+
+
 class GetUnderwritingDetails(BaseModel):
     purchase_details: dict[str, Any] | None = None
     y1_coc_incl_tax_savings: dict[str, Any] | None = None
     forecasted_revenue: dict[str, Any] | None = None
     cleaning_cost: dict[str, Any] | None = None
-    zillow_property: dict[str, Any] | None = None
+    zillow_property: ZillowProperty | None = None
     analyst_notes: str | None = None
 
 
@@ -114,19 +127,6 @@ class ConstructionRemodelingOption(BaseModel):
         return _serialize_plain_decimal(value)
 
 
-class ZillowProperty(BaseModel):
-    id: str | None = None
-    url: str | None = None
-    thumbnail: str | None = None
-    price: Decimal | None = None
-    address: str | None = None
-    bedrooms: int | None = None
-    bathrooms: Decimal | None = None
-    area: int | None = None
-    original_photos: list | None = None
-    lot_size_sqft: Decimal | None = None
-
-
 class StoredZillowProperty(ZillowProperty):
     """Persisted shape for non-automated underwritings.
 
@@ -139,7 +139,6 @@ class StoredZillowProperty(ZillowProperty):
 
 
 class EditContextualData(BaseModel):
-    zillow_property: ZillowProperty | None = None
     construction_amenities: list[ConstructionAmenityOption] = Field(
         default_factory=list
     )

@@ -27,8 +27,17 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         self,
         repository: UnderwritingRepository,
         calculator: UnderwritingCalculator | None = None,
+        market_service=None,
+        listings_service=None,
+        cleaned_data_service=None,
     ):
-        super().__init__(repository=repository, calculator=calculator)
+        super().__init__(
+            repository=repository,
+            calculator=calculator,
+            market_service=market_service,
+            listings_service=listings_service,
+            cleaned_data_service=cleaned_data_service,
+        )
 
     async def update(
         self,
@@ -41,11 +50,14 @@ class UpdateUnderwritingService(SaveUnderwritingService):
             key: value for key, value in data.items() if key not in self._CHILD_FIELDS
         }
         tax_data = self._build_tax_data(payload) if "taxes" in data else None
-        detail_data = (
-            await self._build_detail_data(payload, tax_data)
-            if "details" in data
-            else None
-        )
+        detail_data = None
+        if "details" in data:
+            market_id, bedrooms = await self._resolve_market_and_bedrooms_for_update(
+                underwriting_id, payload
+            )
+            detail_data = await self._build_detail_data(
+                payload, tax_data, market_id=market_id, bedrooms=bedrooms
+            )
         self._apply_calculated_underwriting_fields(
             underwriting_data,
             detail_data,
@@ -84,6 +96,67 @@ class UpdateUnderwritingService(SaveUnderwritingService):
 
         return UpdateUnderwritingResult(underwriting_id=underwriting.id)
 
+    async def _resolve_market_and_bedrooms_for_update(
+        self,
+        underwriting_id: int,
+        payload: UpdateUnderwritingPayload,
+    ) -> tuple[int | None, int | None]:
+        """Recover the inputs the Airbnb revenue estimate needs.
+
+        ``market_id`` may be (re)assigned in the update payload; the property
+        data (bedrooms) lives on the persisted row, since the update payload
+        usually doesn't resend it. We only fetch the existing record when an
+        estimate could actually be produced — i.e. the update sets
+        ``purchase_details`` but no explicit ``forecasted_revenue`` — so
+        unrelated updates don't pay for a lookup.
+        """
+        needs_estimate = (
+            payload.details is not None
+            and payload.details.purchase_details is not None
+            and payload.details.forecasted_revenue is None
+        )
+        if not needs_estimate:
+            return None, None
+
+        existing = await self.repository.get_by_id(underwriting_id)
+        if existing is None:
+            return payload.market_id, None
+
+        market_id = (
+            payload.market_id if payload.market_id is not None else existing.market_id
+        )
+        bedrooms = await self._resolve_bedrooms_for_update(payload, existing)
+        return market_id, bedrooms
+
+    async def _resolve_bedrooms_for_update(
+        self,
+        payload: UpdateUnderwritingPayload,
+        existing,
+    ) -> int | None:
+        """Resolve bedrooms for the revenue estimate on update.
+
+        Prefers a ``zillow_property`` resent in the update payload, then the
+        stored ``zillow_property`` on the existing row (non-automated), then
+        ``scheduled_listings`` via the row's ``zpid`` (automated).
+        """
+        if (
+            payload.details is not None
+            and payload.details.zillow_property is not None
+            and payload.details.zillow_property.bedrooms is not None
+        ):
+            return payload.details.zillow_property.bedrooms
+
+        stored = getattr(existing.detail, "zillow_property", None) if existing.detail else None
+        if isinstance(stored, dict) and stored.get("bedrooms") is not None:
+            return stored["bedrooms"]
+
+        if self.listings_service is not None and existing.zpid is not None:
+            listing = await self.listings_service.get_by_zpid(existing.zpid)
+            if listing is not None:
+                return listing.beds
+
+        return None
+
     async def update_deal_status(
         self,
         *,
@@ -108,7 +181,10 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         payload: SaveUnderwritingPayload,
     ) -> UpdateUnderwritingResult:
         tax_data = self._build_tax_data(payload)
-        detail_data = await self._build_detail_data(payload, tax_data)
+        bedrooms = await self._resolve_bedrooms_for_save(payload)
+        detail_data = await self._build_detail_data(
+            payload, tax_data, market_id=payload.market_id, bedrooms=bedrooms
+        )
         calculated_underwriting_data: dict = {}
         self._apply_calculated_underwriting_fields(
             calculated_underwriting_data,
