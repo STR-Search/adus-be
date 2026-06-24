@@ -52,7 +52,13 @@ class FakeSaveService:
 @pytest.mark.asyncio
 async def test_prepares_maps_and_saves_listing():
     prepared = {"zillow_property": {"id": "12345"}}
-    payload = SimpleNamespace(zpid="12345", purchase_price=100000)
+    payload = SimpleNamespace(
+        zpid="12345",
+        purchase_price=None,
+        details=SimpleNamespace(
+            purchase_details=SimpleNamespace(purchase_price=100000)
+        ),
+    )
     prepare_job = FakePrepareJob(prepared)
     builder = FakePayloadBuilder(payload)
     save_service = FakeSaveService()

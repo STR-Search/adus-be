@@ -60,7 +60,12 @@ class PrepareAndSaveUnderwritingJob:
 
         prepared = await self.prepare_job.run(zpid)
         payload = self.payload_builder.build(prepared)
-        if payload.purchase_price is None:
+        purchase_price = payload.purchase_price
+        details = getattr(payload, "details", None)
+        if details is not None and details.purchase_details is not None:
+            purchase_price = details.purchase_details.purchase_price
+
+        if purchase_price is None:
             return {
                 "zpid": zpid,
                 "status": "skipped_no_purchase_price",
