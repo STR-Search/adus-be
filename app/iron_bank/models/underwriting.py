@@ -38,6 +38,10 @@ class Underwriting(Base):
             ")",
             name="ck_underwritings_deal_status",
         ),
+        CheckConstraint(
+            "deal_score IS NULL OR (deal_score >= 1 AND deal_score <= 100)",
+            name="ck_underwritings_deal_score",
+        ),
         {"schema": "iron_bank"},
     )
 
@@ -119,6 +123,8 @@ class Underwriting(Base):
     note = Column(Text, nullable=True)
     deal_benefits = Column(Text, nullable=True)
     property_uniqueness = Column(Text, nullable=True)
+
+    deal_score = Column(Integer, nullable=True)
 
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
