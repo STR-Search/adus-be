@@ -1,7 +1,7 @@
 from enum import Enum
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, Field, computed_field
 
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.services.deal_status_service import STATUS_OPTIONS
@@ -107,6 +107,7 @@ class UnderwritingBase(BaseModel):
     note: str | None = None
     deal_benefits: str | None = None
     property_uniqueness: str | None = None
+    deal_score: int | None = Field(default=None, ge=1, le=100)
 
 
 class UnderwritingCreate(UnderwritingBase):

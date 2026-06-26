@@ -83,6 +83,7 @@ class UpdateUnderwritingPayload(BaseModel):
     note: str | None = None
     deal_benefits: str | None = None
     property_uniqueness: str | None = None
+    deal_score: int | None = Field(default=None, ge=1, le=100)
 
     details: UnderwritingDetailsInput | None = None
     taxes: UnderwritingTaxInput | None = None
