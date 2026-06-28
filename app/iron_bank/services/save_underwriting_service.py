@@ -78,6 +78,13 @@ class SaveUnderwritingService:
             payload.optimization_list,
         )
 
+        logger.debug(
+            "save.repository.create: start",
+            optimization_count=len(payload.optimization_list),
+            operating_expenses_count=len(payload.operating_expenses),
+            comp_set_count=len(payload.comp_set),
+            has_detail_data=detail_data is not None,
+        )
         underwriting = await self.repository.create(
             underwriting_data=underwriting_data,
             detail_data=jsonable_encoder(detail_data) if detail_data else None,
@@ -91,6 +98,10 @@ class SaveUnderwritingService:
                 for item in payload.operating_expenses
             ],
             comp_set=[item.model_dump(exclude_unset=True) for item in payload.comp_set],
+        )
+        logger.debug(
+            "save.repository.create: complete",
+            underwriting_id=underwriting.id,
         )
         return SaveUnderwritingResult(underwriting_id=underwriting.id)
 
