@@ -21,3 +21,4 @@ wheels/
 .vscode/
 
 *.csv
+*.txt
