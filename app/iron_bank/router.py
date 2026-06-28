@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -307,6 +309,12 @@ async def get_underwritings(
     page_size: int = Query(20, ge=1, le=20),
     zpid: str | None = Query(None),
     market_id: int | None = Query(None),
+    deal_status: DealStatus | None = Query(None),
+    analyst_id: int | None = Query(None),
+    min_purchase_price: Decimal | None = Query(None, ge=0),
+    max_purchase_price: Decimal | None = Query(None, ge=0),
+    min_total_oop: Decimal | None = Query(None, ge=0),
+    max_total_oop: Decimal | None = Query(None, ge=0),
     controller: GetUnderwritingController = Depends(get_get_underwriting_controller),
 ):
     return await controller.get_underwritings(
@@ -314,6 +322,12 @@ async def get_underwritings(
         page_size=page_size,
         zpid=zpid,
         market_id=market_id,
+        deal_status=deal_status,
+        analyst_id=analyst_id,
+        min_purchase_price=min_purchase_price,
+        max_purchase_price=max_purchase_price,
+        min_total_oop=min_total_oop,
+        max_total_oop=max_total_oop,
     )
 
 

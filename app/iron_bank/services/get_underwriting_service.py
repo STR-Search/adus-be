@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Any
 
 from app.core.logger import logger
@@ -111,12 +112,24 @@ class GetUnderwritingService:
         page_size: int,
         zpid: str | None = None,
         market_id: int | None = None,
+        deal_status: str | None = None,
+        analyst_id: int | None = None,
+        min_purchase_price: Decimal | None = None,
+        max_purchase_price: Decimal | None = None,
+        min_total_oop: Decimal | None = None,
+        max_total_oop: Decimal | None = None,
     ) -> GetUnderwritingsResult:
         items, total, pages = await self.repository.get_all_paginated(
             page=page,
             page_size=page_size,
             zpid=zpid,
             market_id=market_id,
+            deal_status=deal_status,
+            analyst_id=analyst_id,
+            min_purchase_price=min_purchase_price,
+            max_purchase_price=max_purchase_price,
+            min_total_oop=min_total_oop,
+            max_total_oop=max_total_oop,
         )
         results = [self._to_result(underwriting) for underwriting in items]
         await self._hydrate_automated_zillow(items, results)
