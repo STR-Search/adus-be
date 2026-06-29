@@ -10,8 +10,9 @@ from app.core.config import get_config
 from app.core.database import Base
 import app.markets.models   # noqa: F401
 import app.iron_bank.models # noqa: F401
+import app.users.models     # noqa: F401
 
-TARGET_SCHEMAS = ["markets", "iron_bank"]
+TARGET_SCHEMAS = ["markets", "iron_bank", "users"]
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_config().async_database_url)

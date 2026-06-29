@@ -7,6 +7,7 @@ from app.core.config import get_config
 from app.external_api.router import router as external_api_router
 from app.iron_bank.router import router as iron_bank_router
 from app.markets.router import router as markets_router
+from app.users.router import router as users_router
 from app.zillow.router import router as zillow_router
 from app.middleware.auth import AuthMiddleware
 
@@ -34,5 +35,6 @@ def create_app() -> FastAPI:
     application.include_router(iron_bank_router)
     application.include_router(external_api_router)
     application.include_router(zillow_router)
+    application.include_router(users_router)
 
     return application
