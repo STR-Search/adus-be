@@ -1,4 +1,5 @@
 import math
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import delete, func, select
@@ -40,6 +41,12 @@ class UnderwritingRepository:
         page_size: int,
         zpid: str | None = None,
         market_id: int | None = None,
+        deal_status: str | None = None,
+        analyst_id: int | None = None,
+        min_purchase_price: Decimal | None = None,
+        max_purchase_price: Decimal | None = None,
+        min_total_oop: Decimal | None = None,
+        max_total_oop: Decimal | None = None,
     ) -> tuple[list[Underwriting], int, int]:
         """Returns (items, total, pages) ordered by newest underwriting first."""
         query = select(Underwriting)
@@ -47,6 +54,18 @@ class UnderwritingRepository:
             query = query.where(Underwriting.zpid == zpid)
         if market_id is not None:
             query = query.where(Underwriting.market_id == market_id)
+        if deal_status is not None:
+            query = query.where(Underwriting.deal_status == deal_status)
+        if analyst_id is not None:
+            query = query.where(Underwriting.analyst_id == analyst_id)
+        if min_purchase_price is not None:
+            query = query.where(Underwriting.purchase_price >= min_purchase_price)
+        if max_purchase_price is not None:
+            query = query.where(Underwriting.purchase_price <= max_purchase_price)
+        if min_total_oop is not None:
+            query = query.where(Underwriting.total_oop >= min_total_oop)
+        if max_total_oop is not None:
+            query = query.where(Underwriting.total_oop <= max_total_oop)
 
         total: int = (
             await self.db.execute(select(func.count()).select_from(query.subquery()))
