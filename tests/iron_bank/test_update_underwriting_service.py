@@ -20,6 +20,9 @@ class FakeUnderwritingRepository:
         )
         self.update_kwargs = None
 
+    async def get_by_id(self, underwriting_id: int):
+        return self.underwriting
+
     async def update(self, underwriting_id: int, **kwargs):
         self.update_kwargs = {"underwriting_id": underwriting_id, **kwargs}
         return self.underwriting
@@ -172,11 +175,13 @@ async def test_update_raises_lookup_error_when_underwriting_does_not_exist():
 
 
 @pytest.mark.asyncio
-async def test_update_deal_status_updates_only_deal_status():
+async def test_update_deal_status_preserves_existing_analyst():
     repository = FakeUnderwritingRepository(
         underwriting=SimpleNamespace(
             id=42,
             deal_status=DealStatus.ANALYST_COMPLETED,
+            analyst_id=7,
+            approver_id=None,
         )
     )
     service = UpdateUnderwritingService(repository)
@@ -184,17 +189,69 @@ async def test_update_deal_status_updates_only_deal_status():
     result = await service.update_deal_status(
         underwriting_id=42,
         deal_status=DealStatus.ANALYST_COMPLETED,
+        actor_user_id=99,
     )
 
     assert result.model_dump() == {
         "underwriting_id": 42,
         "deal_status": DealStatus.ANALYST_COMPLETED,
     }
+    # analyst_id already set -> not overwritten; status not present_to_clients
+    # -> approver untouched.
     assert repository.update_kwargs == {
         "underwriting_id": 42,
         "underwriting_data": {
             "deal_status": DealStatus.ANALYST_COMPLETED,
         },
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_deal_status_assigns_analyst_when_unset():
+    repository = FakeUnderwritingRepository(
+        underwriting=SimpleNamespace(
+            id=42,
+            deal_status=DealStatus.ANALYST_STARTED,
+            analyst_id=None,
+            approver_id=None,
+        )
+    )
+    service = UpdateUnderwritingService(repository)
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.ANALYST_STARTED,
+        actor_user_id=99,
+    )
+
+    assert repository.update_kwargs["underwriting_data"] == {
+        "deal_status": DealStatus.ANALYST_STARTED,
+        "analyst_id": 99,
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_deal_status_assigns_approver_on_present_to_clients():
+    repository = FakeUnderwritingRepository(
+        underwriting=SimpleNamespace(
+            id=42,
+            deal_status=DealStatus.PRESENT_TO_CLIENTS,
+            analyst_id=7,
+            approver_id=None,
+        )
+    )
+    service = UpdateUnderwritingService(repository)
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=99,
+    )
+
+    # analyst preserved (already set), approver set to the acting user.
+    assert repository.update_kwargs["underwriting_data"] == {
+        "deal_status": DealStatus.PRESENT_TO_CLIENTS,
+        "approver_id": 99,
     }
 
 
@@ -206,6 +263,7 @@ async def test_update_deal_status_raises_when_underwriting_does_not_exist():
         await service.update_deal_status(
             underwriting_id=42,
             deal_status=DealStatus.ANALYST_COMPLETED,
+            actor_user_id=99,
         )
 
 

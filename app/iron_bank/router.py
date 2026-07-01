@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.dependencies import get_current_user
 from app.iron_bank.controllers.create_underwriting_from_url_controller import (
     CreateUnderwritingFromUrlController,
 )
@@ -297,10 +298,12 @@ async def update_underwriting_deal_status(
     controller: UpdateUnderwritingController = Depends(
         get_update_underwriting_controller
     ),
+    current_user=Depends(get_current_user),
 ):
     return await controller.update_deal_status(
         underwriting_id=underwriting_id,
         deal_status=payload.deal_status,
+        actor_user_id=current_user.id,
     )
 
 

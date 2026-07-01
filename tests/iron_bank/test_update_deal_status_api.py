@@ -1,6 +1,9 @@
+from types import SimpleNamespace
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.dependencies import get_current_user
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.router import get_update_underwriting_controller, router
 from app.iron_bank.schemas.deal_status import UpdateDealStatusResult
@@ -12,6 +15,7 @@ class FakeUpdateUnderwritingController:
         *,
         underwriting_id: int,
         deal_status: DealStatus,
+        actor_user_id: int,
     ) -> UpdateDealStatusResult:
         return UpdateDealStatusResult(
             underwriting_id=underwriting_id,
@@ -25,6 +29,7 @@ def build_client() -> TestClient:
     app.dependency_overrides[get_update_underwriting_controller] = (
         FakeUpdateUnderwritingController
     )
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=99)
     return TestClient(app)
 
 

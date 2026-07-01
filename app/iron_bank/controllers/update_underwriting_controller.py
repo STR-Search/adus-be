@@ -38,11 +38,13 @@ class UpdateUnderwritingController:
         *,
         underwriting_id: int,
         deal_status: DealStatus,
+        actor_user_id: int,
     ) -> UpdateDealStatusResult:
         try:
             return await self.service.update_deal_status(
                 underwriting_id=underwriting_id,
                 deal_status=deal_status,
+                actor_user_id=actor_user_id,
             )
         except LookupError as e:
             raise HTTPException(status_code=404, detail=str(e))
