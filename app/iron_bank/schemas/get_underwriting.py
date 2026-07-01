@@ -1,8 +1,9 @@
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
+from app.iron_bank.enums import DealStatus, SortOrder, UnderwritingSortBy
 from app.iron_bank.schemas.underwriting import UnderwritingRead
 
 
@@ -79,6 +80,48 @@ class GetUnderwritingResult(UnderwritingRead):
         default_factory=list
     )
     comp_set: list[GetUnderwritingCompSet] = Field(default_factory=list)
+
+
+class GetUnderwritingsQuery(BaseModel):
+    """Query params for the underwritings list endpoint.
+
+    Field names, types, and defaults mirror the previous inline ``Query(...)``
+    params exactly, so the URL contract is unchanged. The added value is the
+    cross-field ``min <= max`` validation that inline params can't express.
+    """
+
+    page: int = Field(1, ge=1)
+    page_size: int = Field(20, ge=1, le=20)
+    zpid: str | None = None
+    market_id: int | None = None
+    deal_status: DealStatus | None = None
+    analyst_id: int | None = None
+    min_purchase_price: Decimal | None = Field(None, ge=0)
+    max_purchase_price: Decimal | None = Field(None, ge=0)
+    min_total_oop: Decimal | None = Field(None, ge=0)
+    max_total_oop: Decimal | None = Field(None, ge=0)
+    sort_by: UnderwritingSortBy = UnderwritingSortBy.ID
+    sort_order: SortOrder = SortOrder.DESC
+
+    @model_validator(mode="after")
+    def check_ranges(self):
+        if (
+            self.min_purchase_price is not None
+            and self.max_purchase_price is not None
+            and self.min_purchase_price > self.max_purchase_price
+        ):
+            raise ValueError(
+                "min_purchase_price must be less than or equal to max_purchase_price"
+            )
+        if (
+            self.min_total_oop is not None
+            and self.max_total_oop is not None
+            and self.min_total_oop > self.max_total_oop
+        ):
+            raise ValueError(
+                "min_total_oop must be less than or equal to max_total_oop"
+            )
+        return self
 
 
 class GetUnderwritingsResult(BaseModel):
