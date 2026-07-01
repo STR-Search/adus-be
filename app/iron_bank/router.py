@@ -21,7 +21,7 @@ from app.iron_bank.controllers.update_underwriting_controller import (
 from app.iron_bank.controllers.workflow_trigger_controller import (
     WorkflowTriggerController,
 )
-from app.iron_bank.enums import DealStatus
+from app.iron_bank.enums import DealStatus, SortOrder, UnderwritingSortBy
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
 from app.iron_bank.schemas.batch_prepare_uw import BatchPrepareUwByMarketResult
 from app.iron_bank.schemas.create_underwriting_from_url import (
@@ -315,6 +315,8 @@ async def get_underwritings(
     max_purchase_price: Decimal | None = Query(None, ge=0),
     min_total_oop: Decimal | None = Query(None, ge=0),
     max_total_oop: Decimal | None = Query(None, ge=0),
+    sort_by: UnderwritingSortBy = Query(UnderwritingSortBy.ID),
+    sort_order: SortOrder = Query(SortOrder.DESC),
     controller: GetUnderwritingController = Depends(get_get_underwriting_controller),
 ):
     return await controller.get_underwritings(
@@ -328,6 +330,8 @@ async def get_underwritings(
         max_purchase_price=max_purchase_price,
         min_total_oop=min_total_oop,
         max_total_oop=max_total_oop,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
 
 

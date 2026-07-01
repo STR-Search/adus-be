@@ -3,6 +3,7 @@ from decimal import Decimal
 from fastapi import HTTPException
 
 from app.core.logger import logger
+from app.iron_bank.enums import SortOrder, UnderwritingSortBy
 from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingEditContextResult,
     GetUnderwritingsResult,
@@ -27,6 +28,8 @@ class GetUnderwritingController:
         max_purchase_price: Decimal | None = None,
         min_total_oop: Decimal | None = None,
         max_total_oop: Decimal | None = None,
+        sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
+        sort_order: SortOrder = SortOrder.DESC,
     ) -> GetUnderwritingsResult:
         try:
             return await self.service.get_all(
@@ -40,6 +43,8 @@ class GetUnderwritingController:
                 max_purchase_price=max_purchase_price,
                 min_total_oop=min_total_oop,
                 max_total_oop=max_total_oop,
+                sort_by=sort_by,
+                sort_order=sort_order,
             )
         except Exception as e:
             logger.error(
@@ -54,6 +59,8 @@ class GetUnderwritingController:
                 max_purchase_price=max_purchase_price,
                 min_total_oop=min_total_oop,
                 max_total_oop=max_total_oop,
+                sort_by=sort_by,
+                sort_order=sort_order,
                 error=str(e),
             )
             raise HTTPException(status_code=500, detail="Failed to fetch underwritings")

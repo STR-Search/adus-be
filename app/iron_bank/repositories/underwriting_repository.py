@@ -6,6 +6,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.iron_bank.enums import SortOrder, UnderwritingSortBy
 from app.iron_bank.models import (
     Underwriting,
     UnderwritingCompSet,
@@ -47,6 +48,8 @@ class UnderwritingRepository:
         max_purchase_price: Decimal | None = None,
         min_total_oop: Decimal | None = None,
         max_total_oop: Decimal | None = None,
+        sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
+        sort_order: SortOrder = SortOrder.DESC,
     ) -> tuple[list[Underwriting], int, int]:
         """Returns (items, total, pages) ordered by newest underwriting first."""
         query = select(Underwriting)
@@ -72,6 +75,15 @@ class UnderwritingRepository:
         ).scalar_one()
         pages = math.ceil(total / page_size) if page_size > 0 else 0
 
+        # Sort in-DB before pagination so ordering spans the whole result set,
+        # not just the current page. sort_by is an enum, so getattr only ever
+        # resolves a known column. id is appended as a stable tiebreaker for
+        # the nullable/non-unique sort columns, keeping pagination deterministic.
+        sort_column = getattr(Underwriting, sort_by.value)
+        primary = (
+            sort_column.desc() if sort_order == SortOrder.DESC else sort_column.asc()
+        )
+
         result = await self.db.execute(
             query.options(
                 selectinload(Underwriting.detail),
@@ -80,7 +92,7 @@ class UnderwritingRepository:
                 selectinload(Underwriting.operating_expenses),
                 selectinload(Underwriting.comp_set),
             )
-            .order_by(Underwriting.id.desc())
+            .order_by(primary, Underwriting.id.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         )

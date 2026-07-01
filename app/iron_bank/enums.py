@@ -13,3 +13,14 @@ class DealStatus(StrEnum):
     PRESENT_TO_CLIENTS = "present_to_clients"
     CLIENT_UNDER_CONTRACT = "client_under_contract"
     TRAINING_DEAL = "training_deal"
+
+
+class UnderwritingSortBy(StrEnum):
+    ID = "id"
+    PURCHASE_PRICE = "purchase_price"
+    TOTAL_OOP = "total_oop"
+
+
+class SortOrder(StrEnum):
+    ASC = "asc"
+    DESC = "desc"
