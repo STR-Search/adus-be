@@ -16,6 +16,7 @@ class PrepareUwDataService:
         "pool_hot_tub_low",
         "pool_hot_tub_high",
         "furnishings_low",
+        "furnishings_mid",
         "furnishings_high",
     }
     _OPEX_CONFIG_FIELDS = {"land_value", "appreciation"}
@@ -100,7 +101,9 @@ class PrepareUwDataService:
             "price_tier_1": (
                 opex_by_bedrooms.furnishings_low if opex_by_bedrooms else None
             ),
-            "price_tier_2": None,
+            "price_tier_2": (
+                opex_by_bedrooms.furnishings_mid if opex_by_bedrooms else None
+            ),
             "price_tier_3": (
                 opex_by_bedrooms.furnishings_high if opex_by_bedrooms else None
             ),

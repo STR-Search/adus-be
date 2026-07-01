@@ -77,6 +77,7 @@ def upgrade() -> None:
         sa.Column("appreciation", sa.Numeric(), nullable=True),
         sa.Column("hoa_fees", sa.Numeric(), nullable=True),
         sa.Column("furnishings_low", sa.Numeric(), nullable=True),
+        sa.Column("furnishings_mid", sa.Numeric(), nullable=True),
         sa.Column("furnishings_high", sa.Numeric(), nullable=True),
         sa.Column("consolidated_shipping", sa.Numeric(), nullable=True),
         sa.ForeignKeyConstraint(
