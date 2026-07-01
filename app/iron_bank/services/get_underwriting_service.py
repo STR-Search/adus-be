@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import Any
 
 from app.core.logger import logger
+from app.iron_bank.enums import SortOrder, UnderwritingSortBy
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
 from app.iron_bank.schemas.get_underwriting import (
     ConstructionAmenityOption,
@@ -118,6 +119,8 @@ class GetUnderwritingService:
         max_purchase_price: Decimal | None = None,
         min_total_oop: Decimal | None = None,
         max_total_oop: Decimal | None = None,
+        sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
+        sort_order: SortOrder = SortOrder.DESC,
     ) -> GetUnderwritingsResult:
         items, total, pages = await self.repository.get_all_paginated(
             page=page,
@@ -130,6 +133,8 @@ class GetUnderwritingService:
             max_purchase_price=max_purchase_price,
             min_total_oop=min_total_oop,
             max_total_oop=max_total_oop,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
         results = [self._to_result(underwriting) for underwriting in items]
         await self._hydrate_automated_zillow(items, results)

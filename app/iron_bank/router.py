@@ -1,4 +1,4 @@
-from decimal import Decimal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,7 @@ from app.iron_bank.schemas.deal_status import (
 )
 from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingEditContextResult,
+    GetUnderwritingsQuery,
     GetUnderwritingsResult,
 )
 from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
@@ -305,30 +306,10 @@ async def update_underwriting_deal_status(
 
 @router.get("/underwritings", response_model=GetUnderwritingsResult, tags=["iron_bank"])
 async def get_underwritings(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=20),
-    zpid: str | None = Query(None),
-    market_id: int | None = Query(None),
-    deal_status: DealStatus | None = Query(None),
-    analyst_id: int | None = Query(None),
-    min_purchase_price: Decimal | None = Query(None, ge=0),
-    max_purchase_price: Decimal | None = Query(None, ge=0),
-    min_total_oop: Decimal | None = Query(None, ge=0),
-    max_total_oop: Decimal | None = Query(None, ge=0),
+    filters: Annotated[GetUnderwritingsQuery, Query()],
     controller: GetUnderwritingController = Depends(get_get_underwriting_controller),
 ):
-    return await controller.get_underwritings(
-        page=page,
-        page_size=page_size,
-        zpid=zpid,
-        market_id=market_id,
-        deal_status=deal_status,
-        analyst_id=analyst_id,
-        min_purchase_price=min_purchase_price,
-        max_purchase_price=max_purchase_price,
-        min_total_oop=min_total_oop,
-        max_total_oop=max_total_oop,
-    )
+    return await controller.get_underwritings(**filters.model_dump())
 
 
 @router.get(
