@@ -35,7 +35,9 @@ def _opex_by_bedrooms():
         pool_hot_tub_low=1200,
         pool_hot_tub_high=2400,
         furnishings_low=25000,
+        furnishings_mid=None,
         furnishings_high=60000,
+        consolidated_shipping=18225,
         internet=100,
     )
 
@@ -154,7 +156,23 @@ class TestPrepare:
             "price_tier_2": None,
             "price_tier_3": 60000,
         }
-        assert amenities[1]["amenity_name"] == "Hot Tub"
+        assert amenities[2]["amenity_name"] == "Hot Tub"
+
+    def test_prepends_consolidated_shipping_amenity_from_opex(self):
+        amenities = self._prepare().model_dump()["construction_amenities"]
+        assert amenities[1] == {
+            "amenity_name": "Consolidated Shipping",
+            "id": -1,
+            "location": None,
+            "notes": None,
+            "price_tier_1": 18225,
+            "price_tier_2": None,
+            "price_tier_3": None,
+        }
+
+    def test_consolidated_shipping_is_not_an_absolute_opex(self):
+        opex = self._prepare().model_dump()["opex"]
+        assert "consolidated_shipping" not in opex["absolute"]
 
     def test_config_includes_fred_rate_as_fraction(self):
         config = self._prepare().model_dump()["config"]

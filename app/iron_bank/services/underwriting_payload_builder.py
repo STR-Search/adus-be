@@ -15,10 +15,6 @@ class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
     It does not fetch data or persist anything.
     """
 
-    # Absolute opex keys that are not monthly operating expenses and must not
-    # be saved as such.
-    _EXCLUDED_ABSOLUTE_EXPENSES = frozenset({"consolidated_shipping"})
-
     def build(self, prepared: dict[str, Any] | BaseModel) -> SaveUnderwritingPayload:
         if isinstance(prepared, BaseModel):
             prepared = prepared.model_dump()
@@ -80,7 +76,7 @@ class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         expenses.extend(
             {"expense": self._humanize_expense_name(name), "monthly": amount}
             for name, amount in absolute.items()
-            if amount is not None and name not in self._EXCLUDED_ABSOLUTE_EXPENSES
+            if amount is not None
         )
         return expenses
 

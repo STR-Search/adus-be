@@ -25,7 +25,6 @@ def test_builds_save_payload_from_prepared_uw_data():
                 "utilities": 350,
                 "pest_control": 60,
                 "property_taxes": None,
-                "consolidated_shipping": 18225,
             },
         },
         "config": {
