@@ -187,6 +187,7 @@ class GetUnderwritingService:
             sort_order=sort_order,
         )
         results = [self._to_result(underwriting) for underwriting in items]
+        await self._attach_user_names(results)
         await self._hydrate_automated_zillow(items, results)
         await self._enrich(results)
         return GetUnderwritingsResult(
@@ -245,9 +246,7 @@ class GetUnderwritingService:
         await self._populate_user_refs(results)
         await self._populate_realtor_details(results)
 
-    async def _populate_user_refs(
-        self, results: list[GetUnderwritingResult]
-    ) -> None:
+    async def _populate_user_refs(self, results: list[GetUnderwritingResult]) -> None:
         """Resolve ``analyst`` / ``approver`` from analyst_id / approver_id.
 
         One batched query for the distinct user ids across the page; no-op when
@@ -295,9 +294,7 @@ class GetUnderwritingService:
                 market.realtor_ids or [] if market is not None else []
             )
         realtor_ids = {
-            realtor_id
-            for ids in realtor_ids_by_market.values()
-            for realtor_id in ids
+            realtor_id for ids in realtor_ids_by_market.values() for realtor_id in ids
         }
         if not realtor_ids:
             return
@@ -328,9 +325,7 @@ class GetUnderwritingService:
         """
         if self.reference_data_service is None or not results:
             return
-        label_map = await self.reference_data_service.get_label_map(
-            domain="iron_bank"
-        )
+        label_map = await self.reference_data_service.get_label_map(domain="iron_bank")
         for result in results:
             for field in SINGLE_SELECT_TAG_FIELDS:
                 slug = getattr(result, field, None)

@@ -346,9 +346,7 @@ class UnderwritingRepository:
         keeps this repository from importing the ``zillow`` domain's model.
         """
         try:
-            result = await self.db.execute(
-                text(
-                    """
+            result = await self.db.execute(text("""
                     UPDATE iron_bank.underwritings AS uw
                     SET property_pending = (sl.home_status IS DISTINCT FROM 'FOR_SALE')
                     FROM zillow.scheduled_listings AS sl
@@ -356,9 +354,7 @@ class UnderwritingRepository:
                       AND uw.property_pending IS DISTINCT FROM (
                           sl.home_status IS DISTINCT FROM 'FOR_SALE'
                       )
-                    """
-                )
-            )
+                    """))
             await self.db.commit()
             return result.rowcount
         except Exception:
