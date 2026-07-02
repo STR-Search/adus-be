@@ -40,7 +40,24 @@ class GetUnderwritingService:
         underwriting = await self.repository.get_by_id(underwriting_id)
         if underwriting is None:
             raise LookupError(f"Underwriting {underwriting_id} not found")
-        return self._to_result(underwriting)
+        result = self._to_result(underwriting)
+        await self._attach_user_names([result])
+        return result
+
+    async def _attach_user_names(self, results) -> None:
+        """Resolves analyst_id/approver_id to display names in one batch."""
+        ids = {
+            user_id
+            for result in results
+            for user_id in (result.analyst_id, result.approver_id)
+            if user_id is not None
+        }
+        if not ids:
+            return
+        names = await self.repository.get_user_names(ids)
+        for result in results:
+            result.analyst_name = names.get(result.analyst_id)
+            result.approver_name = names.get(result.approver_id)
 
     async def get_edit_context(
         self, underwriting_id: int
@@ -139,6 +156,7 @@ class GetUnderwritingService:
             sort_order=sort_order,
         )
         results = [self._to_result(underwriting) for underwriting in items]
+        await self._attach_user_names(results)
         await self._hydrate_automated_zillow(items, results)
         return GetUnderwritingsResult(
             data=results,

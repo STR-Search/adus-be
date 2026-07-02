@@ -2,7 +2,7 @@ import math
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import bindparam, delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -101,6 +101,24 @@ class UnderwritingRepository:
         )
         items = list(result.scalars().all())
         return items, total, pages
+
+    async def get_user_names(self, user_ids: set[int]) -> dict[int, str]:
+        """Display names for analyst/approver ids. Textual query on users.users
+        keeps the iron_bank domain from importing the users domain's models."""
+        if not user_ids:
+            return {}
+        result = await self.db.execute(
+            text(
+                "SELECT id, first_name, last_name FROM users.users "
+                "WHERE id IN :ids"
+            ).bindparams(bindparam("ids", expanding=True)),
+            {"ids": list(user_ids)},
+        )
+        return {
+            row.id: name
+            for row in result
+            if (name := f"{row.first_name or ''} {row.last_name or ''}".strip())
+        }
 
     async def get_by_listing_url(self, listing_url: str) -> Underwriting | None:
         result = await self.db.execute(
