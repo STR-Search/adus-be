@@ -30,6 +30,7 @@ class OpexByBedrooms(Base):
     appreciation: Mapped[Decimal | None] = mapped_column(Numeric)
     hoa_fees: Mapped[Decimal | None] = mapped_column(Numeric)
     furnishings_low: Mapped[Decimal | None] = mapped_column(Numeric)
+    furnishings_mid: Mapped[Decimal | None] = mapped_column(Numeric)
     furnishings_high: Mapped[Decimal | None] = mapped_column(Numeric)
     consolidated_shipping: Mapped[Decimal | None] = mapped_column(Numeric)
 

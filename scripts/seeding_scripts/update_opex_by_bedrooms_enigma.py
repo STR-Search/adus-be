@@ -1,3 +1,14 @@
+"""Temporary script: update a subset of opex_by_bedrooms columns from
+enigma_master_sheet11.csv.
+
+Uses (Market, Bedrooms) to locate the unique existing row and updates only:
+    property_taxes, furnishings_low, furnishings_mid, furnishings_high,
+    consolidated_shipping
+
+Rows whose market/bedrooms combination does not already exist are skipped
+(this script updates only — it does not insert).
+"""
+
 import asyncio
 import csv
 import json
@@ -5,21 +16,26 @@ import sys
 from decimal import Decimal
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
 from app.markets.models import MarketKeysMaster
 from app.markets.models import OpexByBedrooms
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
-CSV_FILE = DATA_DIR / "f-opex_by_bedrooms.csv"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+CSV_FILE = DATA_DIR / "enigma_master_sheet11.csv"
 SLUG_MAP_FILE = DATA_DIR / "slug_mapping.json"
 
 
 def _currency(val: str) -> Decimal | None:
-    v = val.strip().lstrip("$").replace(",", "")
-    return Decimal(v) if v else None
+    # Handles a leading sign and "$"/"," anywhere (e.g. "-$5,000").
+    v = val.strip().replace("$", "").replace(",", "")
+    if not v:
+        return None
+    d = Decimal(v)
+    # Negative currency values are treated as 0.
+    return d if d > 0 else Decimal(0)
 
 
 def _percent(val: str) -> Decimal | None:
@@ -51,25 +67,9 @@ def load_rows():
                         if row["Bedrooms"].strip()
                         else None
                     ),
-                    "pool_hot_tub_low": _currency(row["Pool_HotTub_Low"]),
-                    "pool_hot_tub_high": _currency(row["Pool_HotTub_High"]),
-                    "outdoor_landscaping": _currency(row["Outdoor/Landscaping"]),
-                    "software": _currency(row["Software"]),
-                    "insurance_hoi": _currency(row["Insurance HOI"]),
-                    "supplies": _currency(row["Supplies"]),
-                    "capex_reserve": _currency(row["CapEx Reserve"]),
-                    "cleaning_fee": _currency(row["Cleaning Fee"]),
-                    "num_of_turns": (
-                        Decimal(row["# of Turns"].strip())
-                        if row["# of Turns"].strip()
-                        else None
-                    ),
                     "property_taxes": _percent(row["Property Taxes"]),
-                    "land_value": _percent(row["Land_Value"]),
-                    "appreciation": _percent(row["Appreciation"]),
-                    "hoa_fees": _currency(row["HOA fees"]),
                     "furnishings_low": _currency(row["Furnishings_Low"]),
-                    "furnishings_mid": _currency(row.get("Furnishings_Mid", "")),
+                    "furnishings_mid": _currency(row["Furnishings_Mid"]),
                     "furnishings_high": _currency(row["Furnishings_High"]),
                     "consolidated_shipping": _currency(row["Consolidated_Shipping"]),
                 }
@@ -77,7 +77,17 @@ def load_rows():
     return rows
 
 
-async def seed():
+# Columns this script is allowed to update.
+UPDATE_FIELDS = (
+    "property_taxes",
+    "furnishings_low",
+    "furnishings_mid",
+    "furnishings_high",
+    "consolidated_shipping",
+)
+
+
+async def update():
     rows = load_rows()
     if not rows:
         print("No rows loaded from CSV.")
@@ -95,28 +105,38 @@ async def seed():
                     f"  WARNING: slug '{slug}' not found in market_keys_master — rows for this market will be skipped"
                 )
 
+        # (market_id, bedrooms) → OpexByBedrooms instance
         existing = (await session.execute(select(OpexByBedrooms))).scalars().all()
-        existing_keys = {(r.market_id, r.bedrooms) for r in existing}
+        by_key = {(r.market_id, r.bedrooms): r for r in existing}
 
-        to_insert = []
+        updated = 0
+        skipped = 0
         for row in rows:
             market_id = slug_to_id.get(row["_slug"])
             if market_id is None:
+                skipped += 1
                 continue
-            if (market_id, row["bedrooms"]) in existing_keys:
-                continue
-            data = {k: v for k, v in row.items() if k != "_slug"}
-            data["market_id"] = market_id
-            to_insert.append(OpexByBedrooms(**data))
 
-        if not to_insert:
-            print("Nothing to seed — all opex_by_bedrooms records already exist.")
+            record = by_key.get((market_id, row["bedrooms"]))
+            if record is None:
+                print(
+                    f"  WARNING: no opex_by_bedrooms row for slug '{row['_slug']}' "
+                    f"(market_id={market_id}), bedrooms={row['bedrooms']} — skipping"
+                )
+                skipped += 1
+                continue
+
+            for field in UPDATE_FIELDS:
+                setattr(record, field, row[field])
+            updated += 1
+
+        if not updated:
+            print(f"Nothing to update ({skipped} row(s) skipped).")
             return
 
-        session.add_all(to_insert)
         await session.commit()
-        print(f"Seeded {len(to_insert)} opex_by_bedrooms record(s).")
+        print(f"Updated {updated} opex_by_bedrooms record(s); {skipped} skipped.")
 
 
 if __name__ == "__main__":
-    asyncio.run(seed())
+    asyncio.run(update())

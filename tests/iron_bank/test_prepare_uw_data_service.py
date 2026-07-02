@@ -1,3 +1,4 @@
+from decimal import Decimal
 from types import SimpleNamespace
 
 from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
@@ -35,7 +36,10 @@ def _opex_by_bedrooms():
         pool_hot_tub_low=1200,
         pool_hot_tub_high=2400,
         furnishings_low=25000,
+        furnishings_mid=None,
         furnishings_high=60000,
+        consolidated_shipping=18225,
+        property_taxes=0.012,
         internet=100,
     )
 
@@ -135,6 +139,17 @@ class TestPrepare:
         assert opex["ranged"] == {"pool_hot_tub": {"low": 1200, "high": 2400}}
         assert opex["absolute"] == {"internet": 100, "utilities": 350}
 
+    def test_surfaces_property_taxes_as_pct_not_absolute(self):
+        opex = self._prepare().model_dump()["opex"]
+
+        assert "property_taxes" not in opex["absolute"]
+        assert opex["property_tax_pct"] == Decimal("0.012")
+
+    def test_property_tax_pct_is_none_without_opex_by_bedrooms(self):
+        opex = self._prepare(opex_by_bedrooms=None).model_dump()["opex"]
+
+        assert opex["property_tax_pct"] is None
+
     def test_moves_land_value_and_appreciation_from_opex_to_config(self):
         result = self._prepare().model_dump()
 
@@ -154,7 +169,23 @@ class TestPrepare:
             "price_tier_2": None,
             "price_tier_3": 60000,
         }
-        assert amenities[1]["amenity_name"] == "Hot Tub"
+        assert amenities[2]["amenity_name"] == "Hot Tub"
+
+    def test_prepends_consolidated_shipping_amenity_from_opex(self):
+        amenities = self._prepare().model_dump()["construction_amenities"]
+        assert amenities[1] == {
+            "amenity_name": "Consolidated Shipping",
+            "id": -1,
+            "location": None,
+            "notes": None,
+            "price_tier_1": 18225,
+            "price_tier_2": None,
+            "price_tier_3": None,
+        }
+
+    def test_consolidated_shipping_is_not_an_absolute_opex(self):
+        opex = self._prepare().model_dump()["opex"]
+        assert "consolidated_shipping" not in opex["absolute"]
 
     def test_config_includes_fred_rate_as_fraction(self):
         config = self._prepare().model_dump()["config"]

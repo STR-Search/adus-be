@@ -24,6 +24,7 @@ class OpexByBedroomsSchema(BaseResponse):
     appreciation: Decimal | None = None
     hoa_fees: Decimal | None = None
     furnishings_low: Decimal | None = None
+    furnishings_mid: Decimal | None = None
     furnishings_high: Decimal | None = None
     consolidated_shipping: Decimal | None = None
 
@@ -46,6 +47,7 @@ class OpexByBedroomsCreateSchema(BaseModel):
     appreciation: Decimal | None = None
     hoa_fees: Decimal | None = None
     furnishings_low: Decimal | None = None
+    furnishings_mid: Decimal | None = None
     furnishings_high: Decimal | None = None
     consolidated_shipping: Decimal | None = None
 
@@ -74,6 +76,7 @@ class OpexByBedroomsUpdateSchema(BaseModel):
     appreciation: Decimal | None = None
     hoa_fees: Decimal | None = None
     furnishings_low: Decimal | None = None
+    furnishings_mid: Decimal | None = None
     furnishings_high: Decimal | None = None
     consolidated_shipping: Decimal | None = None
 

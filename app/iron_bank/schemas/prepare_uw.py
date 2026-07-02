@@ -29,6 +29,9 @@ class PreparedOpex(BaseModel):
     cleaning: PreparedOpexCleaning = Field(default_factory=PreparedOpexCleaning)
     ranged: PreparedOpexRanged = Field(default_factory=PreparedOpexRanged)
     absolute: dict[str, Any] = Field(default_factory=dict)
+    # Annual property tax rate as a fraction of purchase price. Kept raw here;
+    # the payload builder applies purchase price to derive the monthly amount.
+    property_tax_pct: Decimal | None = None
 
 
 class PrepareUwDataResult(BaseModel):

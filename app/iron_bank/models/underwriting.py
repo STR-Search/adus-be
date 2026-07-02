@@ -165,6 +165,7 @@ class UnderwritingDetail(Base):
     y1_coc_incl_tax_savings = Column(JSONB, nullable=True)
     forecasted_revenue = Column(JSONB, nullable=True)
     cleaning_cost = Column(JSONB, nullable=True)
+    property_taxes = Column(JSONB, nullable=True)
     zillow_property = Column(JSONB, nullable=True)
     analyst_notes = Column(Text, nullable=True)
 

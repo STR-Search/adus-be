@@ -16,9 +16,16 @@ class PrepareUwDataService:
         "pool_hot_tub_low",
         "pool_hot_tub_high",
         "furnishings_low",
+        "furnishings_mid",
         "furnishings_high",
     }
     _OPEX_CONFIG_FIELDS = {"land_value", "appreciation"}
+    # Opex columns that are percentages of purchase price, not monthly dollar
+    # amounts; the payload builder resolves them against the listing price.
+    _OPEX_PCT_OF_PURCHASE_FIELDS = {"property_taxes"}
+    # Opex columns that are surfaced as amenity options (see
+    # build_amenities_options) rather than monthly operating expenses.
+    _OPEX_AMENITY_FIELDS = {"consolidated_shipping"}
 
     def normalize_sqft(self, area: int | None) -> int | None:
         if area is None:
@@ -55,6 +62,8 @@ class PrepareUwDataService:
             | self._OPEX_CLEANING_FIELDS
             | self._OPEX_RANGED_FIELDS
             | self._OPEX_CONFIG_FIELDS
+            | self._OPEX_AMENITY_FIELDS
+            | self._OPEX_PCT_OF_PURCHASE_FIELDS
         )
         absolute = {
             k: v for k, v in {**bedrooms_data, **size_data}.items() if k not in exclude
@@ -72,6 +81,7 @@ class PrepareUwDataService:
                 },
             },
             "absolute": absolute,
+            "property_tax_pct": bedrooms_data.get("property_taxes"),
         }
 
     def _apply_opex_config_values(
@@ -100,12 +110,27 @@ class PrepareUwDataService:
             "price_tier_1": (
                 opex_by_bedrooms.furnishings_low if opex_by_bedrooms else None
             ),
-            "price_tier_2": None,
+            "price_tier_2": (
+                opex_by_bedrooms.furnishings_mid if opex_by_bedrooms else None
+            ),
             "price_tier_3": (
                 opex_by_bedrooms.furnishings_high if opex_by_bedrooms else None
             ),
         }
-        return [furnishings] + [a.model_dump() for a in construction_amenities]
+        consolidated_shipping = {
+            "amenity_name": "Consolidated Shipping",
+            "id": -1,
+            "location": None,
+            "notes": None,
+            "price_tier_1": (
+                opex_by_bedrooms.consolidated_shipping if opex_by_bedrooms else None
+            ),
+            "price_tier_2": None,
+            "price_tier_3": None,
+        }
+        return [furnishings, consolidated_shipping] + [
+            a.model_dump() for a in construction_amenities
+        ]
 
     def prepare(
         self,
