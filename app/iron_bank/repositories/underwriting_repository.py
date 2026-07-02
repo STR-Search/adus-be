@@ -44,6 +44,7 @@ class UnderwritingRepository:
         market_id: int | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        source: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
         min_total_oop: Decimal | None = None,
@@ -59,6 +60,8 @@ class UnderwritingRepository:
             query = query.where(Underwriting.market_id == market_id)
         if deal_status is not None:
             query = query.where(Underwriting.deal_status == deal_status)
+        if source is not None:
+            query = query.where(Underwriting.source == source)
         if analyst_id is not None:
             query = query.where(Underwriting.analyst_id == analyst_id)
         if min_purchase_price is not None:
