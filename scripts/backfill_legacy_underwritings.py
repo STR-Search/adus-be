@@ -190,8 +190,9 @@ def index_summary_rows(ws, header_row: int) -> dict[int, dict[str, Any]]:
     col_for = {
         name: idx for idx, name in enumerate(headers) if name in SUMMARY_FIELDS
     }
+    address_col = col_for.get("Property Address")
     result: dict[int, dict[str, Any]] = {}
-    for row in rows:
+    for row_number, row in enumerate(rows, start=header_row + 1):
         # read-only mode trims trailing empty cells, so rows vary in length
         raw = {
             SUMMARY_FIELDS[name]: row[idx] if idx < len(row) else None
@@ -199,8 +200,22 @@ def index_summary_rows(ws, header_row: int) -> dict[int, dict[str, Any]]:
         }
         link = to_int(raw.get("link"))
         if link is not None and _summary_has_content(raw):
+            # where this row's address cell sits, e.g. "I5" — the tracking tabs
+            # hyperlink the listing URL on the address text
+            if address_col is not None:
+                raw["_address_ref"] = f"{_column_letter(address_col)}{row_number}"
             result[link] = raw
     return result
+
+
+def _column_letter(index: int) -> str:
+    """0-based column index -> spreadsheet letters (0 -> A, 26 -> AA)."""
+    letters = ""
+    index += 1
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        letters = chr(ord("A") + remainder) + letters
+    return letters
 
 
 def _summary_has_content(raw: dict[str, Any]) -> bool:
@@ -528,6 +543,7 @@ def build_deal(
     sheet_number: int,
     summary: dict[str, Any] | None,
     tab: dict[str, Any] | None,
+    listing_url: str | None = None,
 ) -> dict[str, Any]:
     """Assembles the repository.create() inputs for one deal."""
     warnings: list[str] = []
@@ -537,6 +553,8 @@ def build_deal(
         "sheet_number": sheet_number,
         "is_automated": False,
     }
+    if listing_url:
+        underwriting["listing_url"] = listing_url
 
     if summary is None:
         warnings.append("no summary row in any tracking tab (deal tab only)")
@@ -603,7 +621,7 @@ def build_deal(
             )
         if tab["analyst_notes"]:
             detail["analyst_notes"] = tab["analyst_notes"]
-        if tab["listing_url"]:
+        if tab["listing_url"] and not underwriting.get("listing_url"):
             underwriting["listing_url"] = tab["listing_url"]
         taxes = tab["taxes"]
         optimization_items = tab["optimization_items"]
@@ -635,6 +653,80 @@ def build_deal(
 # ---------------------------------------------------------------------------
 
 
+def _sheet_targets(z) -> dict[str, str]:
+    """Tab name -> worksheet xml path inside the xlsx."""
+    workbook = z.read("xl/workbook.xml").decode()
+    wb_rels = z.read("xl/_rels/workbook.xml.rels").decode()
+    rel_target = {
+        m.group(1): m.group(2)
+        for m in re.finditer(r'Id="(rId\d+)"[^>]*Target="([^"]+)"', wb_rels)
+    }
+    return {
+        m.group(1): rel_target[m.group(2)]
+        for m in re.finditer(r'<sheet[^>]*name="([^"]+)"[^>]*r:id="(rId\d+)"', workbook)
+        if m.group(2) in rel_target
+    }
+
+
+def _external_hyperlinks(z, target: str) -> dict[str, str]:
+    """Cell ref -> external URL for one worksheet file."""
+    sheet_xml = z.read(f"xl/{target}").decode()
+    links = re.findall(r'<hyperlink r:id="(rId\d+)" ref="([A-Z]+\d+)"', sheet_xml)
+    if not links:
+        return {}
+    try:
+        sheet_rels = z.read(
+            f"xl/worksheets/_rels/{target.split('/')[-1]}.rels"
+        ).decode()
+    except KeyError:
+        return {}
+    targets = {
+        m.group(1): m.group(2)
+        for m in re.finditer(r'Id="(rId\d+)"[^>]*Target="([^"]+)"', sheet_rels)
+    }
+    return {
+        ref: targets[rid]
+        for rid, ref in links
+        if rid in targets and targets[rid].startswith("http")
+    }
+
+
+def extract_listing_urls(
+    path: Path, tracking_rows: dict[str, dict[int, dict[str, Any]]]
+) -> dict[int, str]:
+    """Listing links live as hyperlinks in two places, neither visible to
+    openpyxl's read-only mode, so they're pulled from the xlsx XML:
+    - the PROPERTY URL / address cell (E/F, top rows) of each deal tab
+    - the Property Address cell of each tracking-tab row (e.g. Main_Sheet I5)
+    Precedence: deal tab > Main_Sheet > ClientShown > Delete_Properties."""
+    import zipfile
+
+    urls: dict[int, str] = {}
+    with zipfile.ZipFile(path) as z:
+        sheet_target = _sheet_targets(z)
+
+        # lowest priority first; later writes win
+        for tab in (DELETE_SHEET, CLIENT_SHOWN_SHEET, MAIN_SHEET):
+            target = sheet_target.get(tab)
+            if target is None or tab not in tracking_rows:
+                continue
+            by_ref = _external_hyperlinks(z, target)
+            for link, raw in tracking_rows[tab].items():
+                url = by_ref.get(raw.get("_address_ref", ""))
+                if url:
+                    urls[link] = url
+
+        for name, target in sheet_target.items():
+            if not re.fullmatch(r"\d+", name.strip()):
+                continue
+            by_ref = _external_hyperlinks(z, target)
+            for ref, url in sorted(by_ref.items()):
+                if re.fullmatch(r"[EF][1-6]", ref):
+                    urls[int(name)] = url
+                    break
+    return urls
+
+
 def read_workbook(path: Path) -> dict[str, Any]:
     import openpyxl
 
@@ -660,7 +752,18 @@ def read_workbook(path: Path) -> dict[str, Any]:
     # When a link appears in several tracking tabs:
     # Main_Sheet > ClientShown_Properties > Delete_Properties.
     summaries = {**deleted_rows, **client_shown_rows, **main_rows}
-    return {"summaries": summaries, "tabs": tabs}
+    return {
+        "summaries": summaries,
+        "tabs": tabs,
+        "listing_urls": extract_listing_urls(
+            path,
+            {
+                MAIN_SHEET: main_rows,
+                CLIENT_SHOWN_SHEET: client_shown_rows,
+                DELETE_SHEET: deleted_rows,
+            },
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -865,7 +968,12 @@ def main() -> None:
         numbers = [n for n in numbers if bounds[0] <= n <= bounds[1]]
 
     deals = [
-        build_deal(n, data["summaries"].get(n), _parsed_tab(data["tabs"], n))
+        build_deal(
+            n,
+            data["summaries"].get(n),
+            _parsed_tab(data, n),
+            listing_url=data["listing_urls"].get(n),
+        )
         for n in numbers
     ]
 
@@ -904,8 +1012,8 @@ def main() -> None:
     )
 
 
-def _parsed_tab(tabs: dict[int, list[tuple]], number: int) -> dict[str, Any] | None:
-    grid = tabs.get(number)
+def _parsed_tab(data: dict[str, Any], number: int) -> dict[str, Any] | None:
+    grid = data["tabs"].get(number)
     return parse_deal_tab(grid) if grid is not None else None
 
 
