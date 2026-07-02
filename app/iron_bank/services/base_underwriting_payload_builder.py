@@ -26,6 +26,7 @@ class BaseUnderwritingPayloadBuilder:
         purchase_price: Decimal | None,
         config: dict[str, Any],
         cleaning_cost: dict[str, Any] | None,
+        property_taxes: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         detail: dict[str, Any] = {}
         if purchase_price is not None:
@@ -44,6 +45,8 @@ class BaseUnderwritingPayloadBuilder:
             }
         if cleaning_cost is not None:
             detail["cleaning_cost"] = cleaning_cost
+        if property_taxes is not None:
+            detail["property_taxes"] = property_taxes
         return detail or None
 
     def _build_taxes(self, config: dict[str, Any]) -> dict[str, Any]:

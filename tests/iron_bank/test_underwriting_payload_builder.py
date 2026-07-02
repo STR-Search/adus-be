@@ -24,8 +24,8 @@ def test_builds_save_payload_from_prepared_uw_data():
                 "internet": 100,
                 "utilities": 350,
                 "pest_control": 60,
-                "property_taxes": None,
             },
+            "property_tax_pct": 0.012,
         },
         "config": {
             "interest_rate": 0.065,
@@ -52,6 +52,15 @@ def test_builds_save_payload_from_prepared_uw_data():
         "turns_per_year": 38,
         "annual_cleaning_cost": 10450,
     }
+    assert payload.details.property_taxes == {
+        "source": "opex_property_tax_pct",
+        "annual_amount": Decimal("5820"),
+        "monthly_amount": Decimal("485"),
+        "inputs": {
+            "opex_property_tax_pct": Decimal("0.012"),
+            "purchase_price": Decimal("485000"),
+        },
+    }
     assert payload.taxes.land_assumptions_pct == Decimal("0.2")
     assert payload.taxes.tax_rate_pct == Decimal("0.37")
     assert [
@@ -59,6 +68,7 @@ def test_builds_save_payload_from_prepared_uw_data():
         for expense in payload.operating_expenses
     ] == [
         {"expense": "Cleaning", "monthly": Decimal("10450")},
+        {"expense": "Property Taxes", "monthly": Decimal("485")},
         {"expense": "Pool/Hot Tub Maintenance", "monthly": Decimal("125")},
         {"expense": "Internet", "monthly": Decimal("100")},
         {"expense": "Utilities", "monthly": Decimal("350")},
@@ -86,7 +96,52 @@ def test_builds_draft_payload_when_optional_prepared_fields_are_missing():
     assert payload.purchase_price is None
     assert payload.details is None
     assert payload.taxes is None
-    assert payload.operating_expenses == []
+    assert [
+        expense.model_dump(by_alias=True)
+        for expense in payload.operating_expenses
+    ] == [{"expense": "Property Taxes", "monthly": None}]
+
+
+def test_property_taxes_hierarchy():
+    builder = UnderwritingPayloadBuilder()
+
+    from_pct = builder.build_opex_property_taxes(
+        property_tax_pct=Decimal("0.012"),
+        purchase_price=Decimal("485000"),
+        zillow_annual_tax=Decimal("9000"),
+    )
+    assert from_pct["source"] == "opex_property_tax_pct"
+    assert from_pct["annual_amount"] == Decimal("5820")
+    assert from_pct["monthly_amount"] == Decimal("485")
+    assert from_pct["inputs"] == {
+        "opex_property_tax_pct": Decimal("0.012"),
+        "purchase_price": Decimal("485000"),
+    }
+
+    from_zillow = builder.build_opex_property_taxes(
+        property_tax_pct=None,
+        purchase_price=Decimal("485000"),
+        zillow_annual_tax=Decimal("9000"),
+    )
+    assert from_zillow == {
+        "source": "zillow_annual_tax",
+        "annual_amount": Decimal("9000"),
+        "monthly_amount": Decimal("750"),
+        "inputs": {},
+    }
+
+    assert (
+        builder.build_opex_property_taxes(
+            property_tax_pct=Decimal("0.012"), purchase_price=None
+        )
+        is None
+    )
+    assert (
+        builder.build_opex_property_taxes(
+            property_tax_pct=None, purchase_price=Decimal("485000")
+        )
+        is None
+    )
 
 
 def test_treats_zero_purchase_price_as_missing():

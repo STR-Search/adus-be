@@ -31,6 +31,7 @@ class GetUnderwritingDetails(BaseModel):
     y1_coc_incl_tax_savings: dict[str, Any] | None = None
     forecasted_revenue: dict[str, Any] | None = None
     cleaning_cost: dict[str, Any] | None = None
+    property_taxes: dict[str, Any] | None = None
     zillow_property: ZillowProperty | None = None
     analyst_notes: str | None = None
 

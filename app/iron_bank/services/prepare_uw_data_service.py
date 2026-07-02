@@ -20,6 +20,9 @@ class PrepareUwDataService:
         "furnishings_high",
     }
     _OPEX_CONFIG_FIELDS = {"land_value", "appreciation"}
+    # Opex columns that are percentages of purchase price, not monthly dollar
+    # amounts; the payload builder resolves them against the listing price.
+    _OPEX_PCT_OF_PURCHASE_FIELDS = {"property_taxes"}
     # Opex columns that are surfaced as amenity options (see
     # build_amenities_options) rather than monthly operating expenses.
     _OPEX_AMENITY_FIELDS = {"consolidated_shipping"}
@@ -60,6 +63,7 @@ class PrepareUwDataService:
             | self._OPEX_RANGED_FIELDS
             | self._OPEX_CONFIG_FIELDS
             | self._OPEX_AMENITY_FIELDS
+            | self._OPEX_PCT_OF_PURCHASE_FIELDS
         )
         absolute = {
             k: v for k, v in {**bedrooms_data, **size_data}.items() if k not in exclude
@@ -77,6 +81,7 @@ class PrepareUwDataService:
                 },
             },
             "absolute": absolute,
+            "property_tax_pct": bedrooms_data.get("property_taxes"),
         }
 
     def _apply_opex_config_values(

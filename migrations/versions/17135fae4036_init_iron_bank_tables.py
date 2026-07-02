@@ -107,6 +107,7 @@ def upgrade() -> None:
     sa.Column('purchase_details', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('y1_coc_incl_tax_savings', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('forecasted_revenue', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.Column('property_taxes', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('cleaning_cost', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('zillow_property', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('analyst_notes', sa.Text(), nullable=True),
