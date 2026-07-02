@@ -5,6 +5,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     SmallInteger,
     String,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Numeric,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -35,12 +37,18 @@ class Underwriting(Base):
             "'present_to_clients', "
             "'client_under_contract', "
             "'training_deal'"
-            ")",
+            ") OR deal_status LIKE 'Previously Underwritten - %'",
             name="ck_underwritings_deal_status",
         ),
         CheckConstraint(
             "deal_score IS NULL OR (deal_score >= 1 AND deal_score <= 100)",
             name="ck_underwritings_deal_score",
+        ),
+        Index(
+            "uq_underwritings_sheet_number",
+            "sheet_number",
+            unique=True,
+            postgresql_where=text("sheet_number IS NOT NULL"),
         ),
         {"schema": "iron_bank"},
     )
@@ -62,7 +70,9 @@ class Underwriting(Base):
     analyst_id = Column(Integer, nullable=True)
     approver_id = Column(Integer, nullable=True)
 
-    deal_status = Column(String(50), nullable=True)
+    # Enum keys for app rows; legacy backfilled rows may hold a dynamic
+    # "Previously Underwritten - <sheet status>" string (see CHECK constraint).
+    deal_status = Column(String(100), nullable=True)
     deal_added = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=True
     )
@@ -125,6 +135,12 @@ class Underwriting(Base):
     property_uniqueness = Column(Text, nullable=True)
 
     deal_score = Column(Integer, nullable=True)
+
+    # Provenance: 'adus' for rows created through the API/automation,
+    # 'legacy_sheet' for rows backfilled from the underwriting Google Sheet.
+    source = Column(String(50), nullable=True, server_default="adus")
+    # The deal's tab/link number in the legacy Google Sheet (NULL for adus rows).
+    sheet_number = Column(Integer, nullable=True)
 
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
