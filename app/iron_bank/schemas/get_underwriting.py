@@ -11,7 +11,12 @@ from pydantic import (
 )
 
 from app.core.reference_data.schemas import ReferenceDataOption
-from app.iron_bank.enums import DealStatus, SortOrder, UnderwritingSortBy
+from app.iron_bank.enums import (
+    DealStatus,
+    SortOrder,
+    UnderwritingSortBy,
+    UnderwritingSource,
+)
 from app.iron_bank.schemas.underwriting import UnderwritingRead
 
 
@@ -166,8 +171,10 @@ class GetUnderwritingsQuery(BaseModel):
     page_size: int = Field(20, ge=1, le=20)
     zpid: str | None = None
     market_id: int | None = None
-    deal_status: DealStatus | None = None
+    # accepts enum keys or the dynamic "Previously Underwritten - ..." strings
+    deal_status: DealStatus | str | None = None
     analyst_id: int | None = None
+    source: UnderwritingSource | None = None
     min_purchase_price: Decimal | None = Field(None, ge=0)
     max_purchase_price: Decimal | None = Field(None, ge=0)
     min_total_oop: Decimal | None = Field(None, ge=0)
@@ -287,9 +294,7 @@ class EditContextualData(BaseModel):
     )
     # iron_bank domain reference data, grouped by set_code — the same payload
     # served by GET /reference-data?domain=iron_bank.
-    deal_tag_options: dict[str, list[ReferenceDataOption]] = Field(
-        default_factory=dict
-    )
+    deal_tag_options: dict[str, list[ReferenceDataOption]] = Field(default_factory=dict)
 
 
 class EditContextData(BaseModel):
