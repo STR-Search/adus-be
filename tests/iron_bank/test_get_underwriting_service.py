@@ -25,14 +25,12 @@ class FakeUnderwritingRepository:
         *,
         page: int,
         page_size: int,
-        zpid: str | None = None,
-        market_id: int | None = None,
+        **filters,
     ):
         self.requested_page = {
             "page": page,
             "page_size": page_size,
-            "zpid": zpid,
-            "market_id": market_id,
+            **filters,
         }
         items = [self.underwriting] if self.underwriting is not None else []
         return items, len(items), 1 if items else 0
@@ -158,12 +156,10 @@ async def test_get_all_returns_paginated_results():
 
     result = await service.get_all(page=1, page_size=50)
 
-    assert repository.requested_page == {
-        "page": 1,
-        "page_size": 50,
-        "zpid": None,
-        "market_id": None,
-    }
+    assert repository.requested_page["page"] == 1
+    assert repository.requested_page["page_size"] == 50
+    assert repository.requested_page["zpid"] is None
+    assert repository.requested_page["market_id"] is None
     assert result.total == 1
     assert result.page == 1
     assert result.page_size == 50
@@ -177,7 +173,7 @@ class FakeListRepository:
     def __init__(self, items):
         self.items = items
 
-    async def get_all_paginated(self, *, page, page_size, zpid=None, market_id=None):
+    async def get_all_paginated(self, *, page, page_size, **filters):
         return self.items, len(self.items), 1
 
 
@@ -254,14 +250,19 @@ async def test_get_all_passes_filters_to_repository():
     repository = FakeUnderwritingRepository(_underwriting())
     service = GetUnderwritingService(repository)
 
-    await service.get_all(page=1, page_size=20, zpid="12345", market_id=3)
+    await service.get_all(
+        page=1, page_size=20, zpid="12345", market_id=3, source="legacy_sheet"
+    )
 
-    assert repository.requested_page == {
+    expected = {
         "page": 1,
         "page_size": 20,
         "zpid": "12345",
         "market_id": 3,
+        "source": "legacy_sheet",
     }
+    for key, value in expected.items():
+        assert repository.requested_page[key] == value
 
 
 @pytest.mark.asyncio

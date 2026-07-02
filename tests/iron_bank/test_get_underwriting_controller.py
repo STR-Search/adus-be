@@ -28,7 +28,7 @@ class StubService:
             raise self._edit_context
         return self._edit_context
 
-    async def get_all(self, *, page, page_size, zpid=None, market_id=None):
+    async def get_all(self, *, page, page_size, **filters):
         if isinstance(self._get_all_result, Exception):
             raise self._get_all_result
         return self._get_all_result
