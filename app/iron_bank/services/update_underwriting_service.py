@@ -162,10 +162,23 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         *,
         underwriting_id: int,
         deal_status: DealStatus,
+        actor_user_id: int,
     ) -> UpdateDealStatusResult:
+        existing = await self.repository.get_by_id(underwriting_id)
+        if existing is None:
+            raise LookupError(f"Underwriting {underwriting_id} not found")
+
+        underwriting_data: dict = {"deal_status": deal_status}
+        # Assign the analyst on first touch only; never overwrite an existing one.
+        if existing.analyst_id is None:
+            underwriting_data["analyst_id"] = actor_user_id
+        # The approver is whoever moves the deal to "present to clients".
+        if deal_status == DealStatus.PRESENT_TO_CLIENTS:
+            underwriting_data["approver_id"] = actor_user_id
+
         underwriting = await self.repository.update(
             underwriting_id=underwriting_id,
-            underwriting_data={"deal_status": deal_status},
+            underwriting_data=underwriting_data,
         )
         if underwriting is None:
             raise LookupError(f"Underwriting {underwriting_id} not found")

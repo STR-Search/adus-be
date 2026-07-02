@@ -1,9 +1,10 @@
 import app.core.logger  # noqa: F401 — triggers logging config at startup
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_config
+from app.dependencies import get_current_user
 from app.external_api.router import router as external_api_router
 from app.iron_bank.router import router as iron_bank_router
 from app.markets.router import router as markets_router
@@ -20,6 +21,10 @@ def create_app() -> FastAPI:
         version="0.1.0",
         docs_url=None if config.is_production else "/docs",
         redoc_url=None if config.is_production else "/redoc",
+        # Global Clerk JWT enforcement. Does not apply to /docs, /redoc,
+        # /openapi.json. FastAPI caches the dependency per request, so handlers
+        # that also declare get_current_user reuse this result.
+        dependencies=[Depends(get_current_user)],
     )
 
     application.add_middleware(

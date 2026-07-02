@@ -9,7 +9,9 @@ from app.iron_bank.schemas.deal_status import UpdateDealStatusResult
 
 
 class FakeUpdateUnderwritingService:
-    async def update_deal_status(self, *, underwriting_id: int, deal_status: DealStatus):
+    async def update_deal_status(
+        self, *, underwriting_id: int, deal_status: DealStatus, actor_user_id: int
+    ):
         return UpdateDealStatusResult(
             underwriting_id=underwriting_id,
             deal_status=deal_status,
@@ -17,7 +19,9 @@ class FakeUpdateUnderwritingService:
 
 
 class MissingUnderwritingService:
-    async def update_deal_status(self, *, underwriting_id: int, deal_status: DealStatus):
+    async def update_deal_status(
+        self, *, underwriting_id: int, deal_status: DealStatus, actor_user_id: int
+    ):
         raise LookupError(f"Underwriting {underwriting_id} not found")
 
 
@@ -28,6 +32,7 @@ async def test_update_deal_status_returns_updated_status():
     result = await controller.update_deal_status(
         underwriting_id=42,
         deal_status=DealStatus.ANALYST_COMPLETED,
+        actor_user_id=99,
     )
 
     assert result.model_dump() == {
@@ -44,6 +49,7 @@ async def test_update_deal_status_returns_404_when_underwriting_is_missing():
         await controller.update_deal_status(
             underwriting_id=42,
             deal_status=DealStatus.ANALYST_COMPLETED,
+            actor_user_id=99,
         )
 
     assert exc_info.value.status_code == 404
