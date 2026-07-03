@@ -2,7 +2,7 @@ import math
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import bindparam, delete, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -44,6 +44,8 @@ class UnderwritingRepository:
         market_id: int | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        source: str | None = None,
+        search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
         min_total_oop: Decimal | None = None,
@@ -59,6 +61,19 @@ class UnderwritingRepository:
             query = query.where(Underwriting.market_id == market_id)
         if deal_status is not None:
             query = query.where(Underwriting.deal_status == deal_status)
+        if source is not None:
+            query = query.where(Underwriting.source == source)
+        if search is not None and search.strip():
+            term = search.strip()
+            conditions = [
+                Underwriting.property_address.ilike(f"%{term}%"),
+                Underwriting.city.ilike(f"%{term}%"),
+                Underwriting.state.ilike(f"%{term}%"),
+            ]
+            # a numeric term also matches the legacy sheet number exactly
+            if term.isdigit():
+                conditions.append(Underwriting.sheet_number == int(term))
+            query = query.where(or_(*conditions))
         if analyst_id is not None:
             query = query.where(Underwriting.analyst_id == analyst_id)
         if min_purchase_price is not None:
@@ -98,6 +113,24 @@ class UnderwritingRepository:
         )
         items = list(result.scalars().all())
         return items, total, pages
+
+    async def get_user_names(self, user_ids: set[int]) -> dict[int, str]:
+        """Display names for analyst/approver ids. Textual query on users.users
+        keeps the iron_bank domain from importing the users domain's models."""
+        if not user_ids:
+            return {}
+        result = await self.db.execute(
+            text(
+                "SELECT id, first_name, last_name FROM users.users "
+                "WHERE id IN :ids"
+            ).bindparams(bindparam("ids", expanding=True)),
+            {"ids": list(user_ids)},
+        )
+        return {
+            row.id: name
+            for row in result
+            if (name := f"{row.first_name or ''} {row.last_name or ''}".strip())
+        }
 
     async def get_by_listing_url(self, listing_url: str) -> Underwriting | None:
         result = await self.db.execute(
