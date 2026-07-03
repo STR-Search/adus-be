@@ -104,6 +104,8 @@ class GetUnderwritingsQuery(BaseModel):
     deal_status: DealStatus | str | None = None
     analyst_id: int | None = None
     source: UnderwritingSource | None = None
+    # free-text match on address/city/state; numeric terms also match sheet_number
+    search: str | None = Field(None, max_length=100)
     min_purchase_price: Decimal | None = Field(None, ge=0)
     max_purchase_price: Decimal | None = Field(None, ge=0)
     min_total_oop: Decimal | None = Field(None, ge=0)

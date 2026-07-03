@@ -251,7 +251,12 @@ async def test_get_all_passes_filters_to_repository():
     service = GetUnderwritingService(repository)
 
     await service.get_all(
-        page=1, page_size=20, zpid="12345", market_id=3, source="legacy_sheet"
+        page=1,
+        page_size=20,
+        zpid="12345",
+        market_id=3,
+        source="legacy_sheet",
+        search="fort lauderdale",
     )
 
     expected = {
@@ -260,6 +265,7 @@ async def test_get_all_passes_filters_to_repository():
         "zpid": "12345",
         "market_id": 3,
         "source": "legacy_sheet",
+        "search": "fort lauderdale",
     }
     for key, value in expected.items():
         assert repository.requested_page[key] == value
