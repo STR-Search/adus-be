@@ -139,6 +139,40 @@ class ScheduledListingsRepository:
         )
         return items
 
+    async def get_active_since_by_preset(
+        self,
+        *,
+        preset_id: uuid.UUID,
+        since_hours: int,
+        limit: int | None = None,
+    ) -> list[ScheduledListing]:
+        """Returns active listings created in the last since_hours for a preset."""
+        server_now = datetime.now(timezone.utc)
+        cutoff = server_now - timedelta(hours=since_hours)
+        query = (
+            select(ScheduledListing)
+            .where(ScheduledListing.preset_id == preset_id)
+            .where(ScheduledListing.keep_updated.is_(True))
+            .where(ScheduledListing.remove_listing.is_(False))
+            .where(ScheduledListing.created_at >= cutoff)
+            .order_by(ScheduledListing.created_at.desc(), ScheduledListing.zpid)
+        )
+        if limit is not None:
+            query = query.limit(limit)
+
+        result = await self.db.execute(query)
+        items = list(result.scalars().all())
+        logger.debug(
+            "zillow.scheduled_listings.get_active_since_by_preset",
+            preset_id=preset_id,
+            since_hours=since_hours,
+            limit=limit,
+            server_now_utc=server_now.isoformat(),
+            cutoff_utc=cutoff.isoformat(),
+            count=len(items),
+        )
+        return items
+
     async def get_passing_filters(self, preset_id: uuid.UUID) -> list[ScheduledListing]:
         result = await self.db.execute(
             select(ScheduledListing)

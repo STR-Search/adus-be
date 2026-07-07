@@ -1,3 +1,4 @@
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -24,7 +25,10 @@ from app.iron_bank.controllers.workflow_trigger_controller import (
 )
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
-from app.iron_bank.schemas.batch_prepare_uw import BatchPrepareUwByMarketResult
+from app.iron_bank.schemas.batch_prepare_uw import (
+    BatchPrepareUwByMarketResult,
+    BatchPrepareUwByPresetResult,
+)
 from app.iron_bank.schemas.create_underwriting_from_url import (
     CreateUnderwritingFromUrlPayload,
 )
@@ -58,6 +62,9 @@ from app.iron_bank.services.update_underwriting_service import UpdateUnderwritin
 from app.workflows.batch_prepare_and_save_underwritings_by_market_job import (
     BatchPrepareAndSaveUnderwritingsByMarketJob,
 )
+from app.workflows.batch_prepare_and_save_underwritings_by_preset_job import (
+    BatchPrepareAndSaveUnderwritingsByPresetJob,
+)
 from app.workflows.prepare_uw_data_job import PrepareUwDataJob
 import app.iron_bank.models  # noqa: F401 — ensures all models are registered with SQLAlchemy
 
@@ -79,6 +86,9 @@ def get_workflow_trigger_controller(
 ) -> WorkflowTriggerController:
     return WorkflowTriggerController(
         batch_prepare_by_market_job=BatchPrepareAndSaveUnderwritingsByMarketJob.from_session(
+            db
+        ),
+        batch_prepare_by_preset_job=BatchPrepareAndSaveUnderwritingsByPresetJob.from_session(
             db
         ),
     )
@@ -216,6 +226,24 @@ async def batch_prepare_underwritings_by_market(
 ):
     return await controller.batch_prepare_by_market(
         market_id=market_id,
+        since_hours=since_hours,
+        limit=limit,
+    )
+
+
+@router.post(
+    "/underwritings/batch-prepare-by-preset",
+    response_model=BatchPrepareUwByPresetResult,
+    tags=["iron_bank"],
+)
+async def batch_prepare_underwritings_by_preset(
+    preset_id: uuid.UUID = Query(...),
+    since_hours: int = Query(..., ge=1),
+    limit: int | None = Query(None, ge=1),
+    controller: WorkflowTriggerController = Depends(get_workflow_trigger_controller),
+):
+    return await controller.batch_prepare_by_preset(
+        preset_id=preset_id,
         since_hours=since_hours,
         limit=limit,
     )
