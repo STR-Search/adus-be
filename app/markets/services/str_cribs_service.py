@@ -20,6 +20,12 @@ class StrCribsFeeDetailsService:
         records = await self.repository.get_all()
         return [StrCribsFeeDetailsSchema.model_validate(r) for r in records]
 
+    async def get_by_area(self, area: int) -> StrCribsFeeDetailsSchema | None:
+        record = await self.repository.get_by_area(area)
+        if record is None:
+            return None
+        return StrCribsFeeDetailsSchema.model_validate(record)
+
     async def create(self, data: StrCribsFeeDetailsCreateSchema) -> StrCribsFeeDetailsSchema:
         record = await self.repository.create(data.model_dump())
         return StrCribsFeeDetailsSchema.model_validate(record)
