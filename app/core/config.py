@@ -22,6 +22,10 @@ class Config(BaseSettings):
     CLERK_ISSUER: str = ""  # e.g. https://intent-snapper-24.clerk.accounts.dev
     CLERK_JWKS_URL: str = ""  # e.g. {issuer}/.well-known/jwks.json
 
+    # Sentry error monitoring
+    SENTRY_ENABLED: bool = False
+    SENTRY_DSN: str = ""
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"
