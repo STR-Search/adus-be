@@ -28,6 +28,7 @@ class GetUnderwritingService:
         opex_by_bedrooms_service: Any = None,
         construction_amenities_service: Any = None,
         construction_remodeling_service: Any = None,
+        str_cribs_service: Any = None,
     ):
         self.repository = repository
         self.listings_service = listings_service
@@ -35,6 +36,7 @@ class GetUnderwritingService:
         self.opex_by_bedrooms_service = opex_by_bedrooms_service
         self.construction_amenities_service = construction_amenities_service
         self.construction_remodeling_service = construction_remodeling_service
+        self.str_cribs_service = str_cribs_service
 
     async def get(self, underwriting_id: int) -> GetUnderwritingResult:
         underwriting = await self.repository.get_by_id(underwriting_id)
@@ -66,8 +68,22 @@ class GetUnderwritingService:
 
         amenities = await self.construction_amenities_service.get_all()
         remodeling = await self.construction_remodeling_service.get_all()
+
+        # zillow_property was just coerced onto details, so its area is the
+        # single source for the cribs fee tier (both automated and stored
+        # paths funnel through it).
+        area = (
+            underwriting.details.zillow_property.area
+            if underwriting.details and underwriting.details.zillow_property
+            else None
+        )
+        str_cribs_fee = (
+            await self.str_cribs_service.get_by_area(area)
+            if self.str_cribs_service is not None and area is not None
+            else None
+        )
         amenity_options = PrepareUwDataService.build_amenities_options(
-            opex_by_bedrooms, amenities
+            opex_by_bedrooms, amenities, str_cribs_fee
         )
 
         return GetUnderwritingEditContextResult(

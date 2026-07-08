@@ -9,9 +9,11 @@ from app.markets.repositories.construction_repository import (
 )
 from app.markets.repositories.market_repository import MarketRepository
 from app.markets.repositories.opex_repository import OpexByBedroomsRepository, OpexBySizeRepository
+from app.markets.repositories.str_cribs_repository import StrCribsFeeDetailsRepository
 from app.markets.services.construction_service import ConstructionAmenitiesService, ConstructionRemodelingService
 from app.markets.services.market_service import MarketService
 from app.markets.services.opex_service import OpexByBedroomsService, OpexBySizeService
+from app.markets.services.str_cribs_service import StrCribsFeeDetailsService
 from app.zillow.repositories.scheduled_listing_details_repository import ScheduledListingDetailsRepository
 from app.zillow.repositories.scheduled_listings_repository import ScheduledListingsRepository
 from app.zillow.services.scheduled_listing_details_service import ScheduledListingDetailsService
@@ -36,6 +38,7 @@ class PrepareUwDataJob:
         opex_by_size_service,
         construction_amenities_service,
         construction_remodeling_service,
+        str_cribs_service,
         external_api_service,
         uw_data_service,
     ):
@@ -46,6 +49,7 @@ class PrepareUwDataJob:
         self.opex_by_size_service = opex_by_size_service
         self.construction_amenities_service = construction_amenities_service
         self.construction_remodeling_service = construction_remodeling_service
+        self.str_cribs_service = str_cribs_service
         self.external_api_service = external_api_service
         self.uw_data_service = uw_data_service
 
@@ -60,6 +64,7 @@ class PrepareUwDataJob:
             opex_by_size_service=OpexBySizeService(OpexBySizeRepository(db), market_repo),
             construction_amenities_service=ConstructionAmenitiesService(ConstructionAmenitiesRepository(db)),
             construction_remodeling_service=ConstructionRemodelingService(ConstructionRemodelingRepository(db)),
+            str_cribs_service=StrCribsFeeDetailsService(StrCribsFeeDetailsRepository(db)),
             external_api_service=ExternalApiService(),
             uw_data_service=PrepareUwDataService(),
         )
@@ -80,6 +85,11 @@ class PrepareUwDataJob:
         opex_by_size = await self.opex_by_size_service.get_by_market_and_sqft(sqft=sqft, market_id=market_id)
         construction_amenities = await self.construction_amenities_service.get_all()
         construction_remodeling = await self.construction_remodeling_service.get_all()
+        str_cribs_fee = (
+            await self.str_cribs_service.get_by_area(listing.area)
+            if listing.area is not None
+            else None
+        )
         fred = await self.external_api_service.get_30y_fixed_rate()
 
         return self.uw_data_service.prepare(
@@ -92,4 +102,5 @@ class PrepareUwDataJob:
             construction_amenities=construction_amenities,
             construction_remodeling=construction_remodeling,
             fred=fred,
+            str_cribs_fee=str_cribs_fee,
         )

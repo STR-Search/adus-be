@@ -168,10 +168,14 @@ def get_get_underwriting_controller(
     )
     from app.markets.repositories.market_repository import MarketRepository
     from app.markets.repositories.opex_repository import OpexByBedroomsRepository
+    from app.markets.repositories.str_cribs_repository import (
+        StrCribsFeeDetailsRepository,
+    )
     from app.markets.services.construction_service import (
         ConstructionAmenitiesService,
         ConstructionRemodelingService,
     )
+    from app.markets.services.str_cribs_service import StrCribsFeeDetailsService
     from app.markets.services.opex_service import OpexByBedroomsService
     from app.zillow.repositories.scheduled_listing_details_repository import (
         ScheduledListingDetailsRepository,
@@ -200,6 +204,9 @@ def get_get_underwriting_controller(
             ),
             construction_remodeling_service=ConstructionRemodelingService(
                 ConstructionRemodelingRepository(db)
+            ),
+            str_cribs_service=StrCribsFeeDetailsService(
+                StrCribsFeeDetailsRepository(db)
             ),
         )
     )

@@ -100,7 +100,7 @@ class PrepareUwDataService:
 
     @staticmethod
     def build_amenities_options(
-        opex_by_bedrooms, construction_amenities: list
+        opex_by_bedrooms, construction_amenities: list, str_cribs_fee=None
     ) -> list[dict]:
         furnishings = {
             "amenity_name": "Furnishings",
@@ -128,7 +128,16 @@ class PrepareUwDataService:
             "price_tier_2": None,
             "price_tier_3": None,
         }
-        return [furnishings, consolidated_shipping] + [
+        str_cribs_project_management = {
+            "amenity_name": "STR Cribs - Project Management",
+            "id": -2,
+            "location": None,
+            "notes": None,
+            "price_tier_1": (str_cribs_fee.fee if str_cribs_fee else None),
+            "price_tier_2": None,
+            "price_tier_3": None,
+        }
+        return [furnishings, consolidated_shipping, str_cribs_project_management] + [
             a.model_dump() for a in construction_amenities
         ]
 
@@ -144,9 +153,10 @@ class PrepareUwDataService:
         construction_amenities: list,
         construction_remodeling: list,
         fred,
+        str_cribs_fee=None,
     ) -> PrepareUwDataResult:
         amenities = self.build_amenities_options(
-            opex_by_bedrooms, construction_amenities
+            opex_by_bedrooms, construction_amenities, str_cribs_fee
         )
 
         config = UW_CONFIG_DEFAULTS.model_dump()

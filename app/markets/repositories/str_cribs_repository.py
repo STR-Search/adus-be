@@ -22,6 +22,21 @@ class StrCribsFeeDetailsRepository:
         logger.debug("str_cribs.fee_details.get_all", count=len(items))
         return items
 
+    async def get_by_area(self, area: int) -> StrCribsFeeDetails | None:
+        """Resolve the fee tier for a property's raw sqft.
+
+        ``sqft`` is the inclusive upper bound of each tier, so the first row
+        whose ``sqft >= area`` is the matching tier. The open-ended top tier
+        uses a max-int32 sentinel, so any area resolves to a row.
+        """
+        result = await self.db.execute(
+            select(StrCribsFeeDetails)
+            .where(StrCribsFeeDetails.sqft >= area)
+            .order_by(StrCribsFeeDetails.sqft)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def create(self, data: dict) -> StrCribsFeeDetails:
         record = StrCribsFeeDetails(**data)
         self.db.add(record)
