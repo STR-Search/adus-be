@@ -8,12 +8,14 @@ from app.markets.controllers.construction_controller import (
 )
 from app.markets.controllers.market_controller import MarketController
 from app.markets.controllers.opex_controller import OpexByBedroomsController, OpexBySizeController
+from app.markets.controllers.str_cribs_controller import StrCribsFeeDetailsController
 from app.markets.repositories.construction_repository import (
     ConstructionAmenitiesRepository,
     ConstructionRemodelingRepository,
 )
 from app.markets.repositories.market_repository import MarketRepository
 from app.markets.repositories.opex_repository import OpexByBedroomsRepository, OpexBySizeRepository
+from app.markets.repositories.str_cribs_repository import StrCribsFeeDetailsRepository
 from app.markets.schemas.construction import (
     ConstructionCostsAmenitiesCreateSchema,
     ConstructionCostsAmenitiesUpdateSchema,
@@ -27,9 +29,14 @@ from app.markets.schemas.opex import (
     OpexBySizeCreateSchema,
     OpexBySizeUpdateSchema,
 )
+from app.markets.schemas.str_cribs import (
+    StrCribsFeeDetailsCreateSchema,
+    StrCribsFeeDetailsUpdateSchema,
+)
 from app.markets.services.construction_service import ConstructionAmenitiesService, ConstructionRemodelingService
 from app.markets.services.market_service import MarketService
 from app.markets.services.opex_service import OpexByBedroomsService, OpexBySizeService
+from app.markets.services.str_cribs_service import StrCribsFeeDetailsService
 
 router = APIRouter()
 
@@ -56,6 +63,10 @@ def get_bedrooms_controller(db: AsyncSession = Depends(get_db)) -> OpexByBedroom
 def get_size_controller(db: AsyncSession = Depends(get_db)) -> OpexBySizeController:
     market_repo = MarketRepository(db)
     return OpexBySizeController(OpexBySizeService(OpexBySizeRepository(db), market_repo))
+
+
+def get_str_cribs_controller(db: AsyncSession = Depends(get_db)) -> StrCribsFeeDetailsController:
+    return StrCribsFeeDetailsController(StrCribsFeeDetailsService(StrCribsFeeDetailsRepository(db)))
 
 
 # --- Health ---
@@ -323,6 +334,48 @@ async def update_size(
 async def delete_size(
     record_id: int,
     controller: OpexBySizeController = Depends(get_size_controller),
+):
+    return await controller.delete(record_id)
+
+
+# --- STR Cribs: Fee Details ---
+
+@router.get("/str-cribs/fee-details/", tags=["str-cribs"])
+async def get_str_cribs_fee_details(
+    controller: StrCribsFeeDetailsController = Depends(get_str_cribs_controller),
+):
+    return await controller.get_all()
+
+
+@router.get("/str-cribs/fee-details/{record_id}", tags=["str-cribs"])
+async def get_str_cribs_fee_detail_by_id(
+    record_id: int,
+    controller: StrCribsFeeDetailsController = Depends(get_str_cribs_controller),
+):
+    return await controller.get_by_id(record_id)
+
+
+@router.post("/str-cribs/fee-details/", status_code=201, tags=["str-cribs"])
+async def create_str_cribs_fee_detail(
+    data: StrCribsFeeDetailsCreateSchema,
+    controller: StrCribsFeeDetailsController = Depends(get_str_cribs_controller),
+):
+    return await controller.create(data)
+
+
+@router.patch("/str-cribs/fee-details/{record_id}", tags=["str-cribs"])
+async def update_str_cribs_fee_detail(
+    record_id: int,
+    data: StrCribsFeeDetailsUpdateSchema,
+    controller: StrCribsFeeDetailsController = Depends(get_str_cribs_controller),
+):
+    return await controller.update(record_id, data)
+
+
+@router.delete("/str-cribs/fee-details/{record_id}", tags=["str-cribs"])
+async def delete_str_cribs_fee_detail(
+    record_id: int,
+    controller: StrCribsFeeDetailsController = Depends(get_str_cribs_controller),
 ):
     return await controller.delete(record_id)
 
