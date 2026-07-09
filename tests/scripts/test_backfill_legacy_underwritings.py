@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+import pytest
+
 from scripts import backfill_legacy_underwritings as backfill
 
 
@@ -139,25 +141,25 @@ def test_parse_old_format_tab():
 
 
 def test_map_deal_status():
-    warnings: list[str] = []
-    assert (
-        backfill.map_deal_status("Present to Clients", warnings)
-        == "present_to_clients"
-    )
-    assert backfill.map_deal_status("Maybe (Save for Later)", warnings) == "maybe"
-    assert warnings == []
+    assert backfill.map_deal_status("Present to Clients") == "present_to_clients"
+    assert backfill.map_deal_status("Maybe (Save for Later)") == "maybe"
 
     assert (
-        backfill.map_deal_status(None, warnings)
-        == "Previously Underwritten - No Status"
+        backfill.map_deal_status(None) == "Previously Underwritten - No Status"
     )
-    assert warnings == []
 
     assert (
-        backfill.map_deal_status("Taylor Review Needed", warnings)
-        == "Previously Underwritten - Taylor Review Needed"
+        backfill.map_deal_status("Taylor Review Needed") == "analyst_completed"
     )
-    assert len(warnings) == 1
+    assert (
+        backfill.map_deal_status("Floorplan/ Video needed")
+        == "awaiting_realtor_details"
+    )
+
+
+def test_map_deal_status_raises_for_unmapped_label():
+    with pytest.raises(ValueError, match="unmapped sheet deal status"):
+        backfill.map_deal_status("Some Brand New Sheet Status")
 
 
 def test_build_deal_from_summary_row():

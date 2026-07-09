@@ -37,8 +37,9 @@ class Underwriting(Base):
             "'awaiting_realtor_details', "
             "'present_to_clients', "
             "'client_under_contract', "
-            "'training_deal'"
-            ") OR deal_status LIKE 'Previously Underwritten - %'",
+            "'training_deal', "
+            "'Previously Underwritten - No Status'"
+            ")",
             name="ck_underwritings_deal_status",
         ),
         CheckConstraint(
@@ -79,9 +80,7 @@ class Underwriting(Base):
         nullable=True,
     )
 
-    # Enum keys for app rows; legacy backfilled rows may hold a dynamic
-    # "Previously Underwritten - <sheet status>" string (see CHECK constraint).
-    deal_status = Column(String(100), nullable=True)
+    deal_status = Column(String(50), nullable=True)
     deal_added = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=True
     )

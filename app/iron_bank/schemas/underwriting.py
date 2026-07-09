@@ -41,7 +41,6 @@ class UnderwritingBase(BaseModel):
     # DealStatus keys for app rows; legacy sheet imports may carry a dynamic
     # "Previously Underwritten - <sheet status>" string instead.
     deal_status: DealStatus | str | None = None
-
     deal_added: datetime | None = None
     deal_submitted: datetime | None = None
     deal_approved: datetime | None = None
@@ -122,7 +121,7 @@ class DealStatusLabelMixin(BaseModel):
     @computed_field
     @property
     def deal_status_label(self) -> str | None:
-        deal_status: DealStatus | str | None = getattr(self, "deal_status", None)
+        deal_status: DealStatus | None = getattr(self, "deal_status", None)
         if deal_status is None:
             return None
         value = (
