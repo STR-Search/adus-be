@@ -1,7 +1,7 @@
 from enum import Enum
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import BaseModel, Field, computed_field
 
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.services.deal_status_service import STATUS_OPTIONS
@@ -53,23 +53,7 @@ class UnderwritingBase(BaseModel):
     market_id: int | None = None
     analyst_id: int | None = None
     approver_id: int | None = None
-    # DealStatus keys for app rows; legacy sheet imports may carry a dynamic
-    # "Previously Underwritten - <sheet status>" string instead.
-    deal_status: DealStatus | str | None = None
-
-    @field_validator("deal_status")
-    @classmethod
-    def check_deal_status(cls, value):
-        if isinstance(value, str) and not isinstance(value, DealStatus):
-            try:
-                return DealStatus(value)
-            except ValueError:
-                if not value.startswith("Previously Underwritten - "):
-                    raise ValueError(
-                        "deal_status must be a DealStatus key or a "
-                        "'Previously Underwritten - ...' legacy value"
-                    )
-        return value
+    deal_status: DealStatus | None = None
     deal_added: datetime | None = None
     deal_submitted: datetime | None = None
     deal_approved: datetime | None = None
@@ -136,17 +120,10 @@ class DealStatusLabelMixin(BaseModel):
     @computed_field
     @property
     def deal_status_label(self) -> str | None:
-        deal_status: DealStatus | str | None = getattr(self, "deal_status", None)
+        deal_status: DealStatus | None = getattr(self, "deal_status", None)
         if deal_status is None:
             return None
-        value = (
-            deal_status.value
-            if isinstance(deal_status, DealStatus)
-            else deal_status
-        )
-        # Dynamic legacy statuses ("Previously Underwritten - ...") are already
-        # display-formatted, so they fall through as their own label.
-        return _STATUS_LABEL.get(value, value)
+        return _STATUS_LABEL.get(deal_status.value)
 
 
 class UnderwritingRead(UnderwritingBase, DealStatusLabelMixin):

@@ -13,6 +13,7 @@ class DealStatus(StrEnum):
     PRESENT_TO_CLIENTS = "present_to_clients"
     CLIENT_UNDER_CONTRACT = "client_under_contract"
     TRAINING_DEAL = "training_deal"
+    PREVIOUSLY_UNDERWRITTEN_NO_STATUS = "Previously Underwritten - No Status"
 
 
 class UnderwritingSource(StrEnum):

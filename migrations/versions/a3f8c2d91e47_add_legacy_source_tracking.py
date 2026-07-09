@@ -4,10 +4,11 @@ Adds provenance for the legacy Google Sheet backfill:
 - underwritings.source ('adus' | 'legacy_sheet')
 - underwritings.sheet_number (the deal's tab/link number in the sheet),
   partial-unique so re-running the backfill can never duplicate a deal
-- widens deal_status to 100 chars and extends its CHECK so legacy rows can
-  hold a dynamic "Previously Underwritten - <sheet status>" string alongside
-  the fixed enum keys. A CHECK's expression cannot be modified once created,
-  so each direction drops the constraint and recreates its own version.
+- extends the deal_status CHECK to allow the fixed
+  'Previously Underwritten - No Status' value for legacy rows with no
+  recorded sheet status, alongside the existing enum keys. A CHECK's
+  expression cannot be modified once created, so each direction drops the
+  constraint and recreates its own version.
 
 Revision ID: a3f8c2d91e47
 Revises: 5b1e7a4c3d2f
@@ -43,9 +44,9 @@ OLD_DEAL_STATUS_CHECK = (
     ")"
 )
 
-# Same enum keys, plus the dynamic legacy-status pattern, applied on upgrade.
+# Same enum keys, plus the fixed legacy no-status marker, applied on upgrade.
 NEW_DEAL_STATUS_CHECK = (
-    OLD_DEAL_STATUS_CHECK + " OR deal_status LIKE 'Previously Underwritten - %'"
+    OLD_DEAL_STATUS_CHECK[:-1] + ", 'Previously Underwritten - No Status')"
 )
 
 
@@ -68,13 +69,6 @@ def upgrade() -> None:
         unique=True,
         schema="iron_bank",
         postgresql_where=sa.text("sheet_number IS NOT NULL"),
-    )
-    op.alter_column(
-        "underwritings",
-        "deal_status",
-        type_=sa.String(100),
-        existing_type=sa.String(50),
-        schema="iron_bank",
     )
     op.drop_constraint(
         "ck_underwritings_deal_status",
@@ -102,13 +96,6 @@ def downgrade() -> None:
         "ck_underwritings_deal_status",
         "underwritings",
         OLD_DEAL_STATUS_CHECK,
-        schema="iron_bank",
-    )
-    op.alter_column(
-        "underwritings",
-        "deal_status",
-        type_=sa.String(50),
-        existing_type=sa.String(100),
         schema="iron_bank",
     )
     op.drop_index(

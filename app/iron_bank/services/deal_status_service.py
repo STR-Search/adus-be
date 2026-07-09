@@ -22,6 +22,7 @@ STATUS_OPTIONS: tuple[tuple[DealStatus, str, int], ...] = (
     (DealStatus.PRESENT_TO_CLIENTS, "Present To Clients", 9),
     (DealStatus.CLIENT_UNDER_CONTRACT, "Client Under Contract", 10),
     (DealStatus.TRAINING_DEAL, "Training Deal", 11),
+    (DealStatus.PREVIOUSLY_UNDERWRITTEN_NO_STATUS, "Previously Underwritten - No Status", 12),
 )
 
 DEAL_STATUS_TRANSITIONS: dict[DealStatus, set[DealStatus]] = {
@@ -71,6 +72,7 @@ DEAL_STATUS_TRANSITIONS: dict[DealStatus, set[DealStatus]] = {
     DealStatus.TRAINING_DEAL: set(),
     DealStatus.DELETE_ZILLOW: set(),
     DealStatus.DELETE_DEAL: set(),
+    DealStatus.PREVIOUSLY_UNDERWRITTEN_NO_STATUS: set(),
 }
 
 ROLE_ALLOWED_TARGETS: dict[str, set[DealStatus]] = {

@@ -100,8 +100,7 @@ class GetUnderwritingsQuery(BaseModel):
     page_size: int = Field(20, ge=1, le=20)
     zpid: str | None = None
     market_id: int | None = None
-    # accepts enum keys or the dynamic "Previously Underwritten - ..." strings
-    deal_status: DealStatus | str | None = None
+    deal_status: DealStatus | None = None
     analyst_id: int | None = None
     source: UnderwritingSource | None = None
     # free-text match on address/city/state; numeric terms also match sheet_number

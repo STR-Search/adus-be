@@ -44,11 +44,9 @@ CLIENT_SHOWN_SHEET = "ClientShown_Properties"
 # UnderwritingSource) so --dry-run never imports app.* — the app package pulls
 # in config/DB at import time, which requires DATABASE_URL.
 LEGACY_SOURCE = "legacy_sheet"
-# Blank sheet statuses become this; unmappable ones become
-# "Previously Underwritten - <exact sheet status>" (dynamic, allowed by the
-# CHECK constraint's LIKE pattern).
-LEGACY_STATUS_PREFIX = "Previously Underwritten - "
-NO_STATUS = LEGACY_STATUS_PREFIX + "No Status"
+# Blank sheet statuses (no summary row, or an empty status cell) become this
+# fixed DealStatus value.
+NO_STATUS = "Previously Underwritten - No Status"
 
 # Sheet status label -> deal_status enum value.
 STATUS_MAP: dict[str, str] = {
@@ -70,6 +68,8 @@ STATUS_MAP: dict[str, str] = {
     "client under contract": "client_under_contract",
     "training deal": "training_deal",
     "training deal for onboarding": "training_deal",
+    "floorplan/ video needed": "awaiting_realtor_details",
+    "taylor review needed": "analyst_completed",
 }
 
 # Sheet analyst labels that don't match "First LastInitial" against users.users.
@@ -528,14 +528,13 @@ def parse_deal_tab(grid: list[tuple]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def map_deal_status(raw_status: Any, warnings: list[str]) -> str:
+def map_deal_status(raw_status: Any) -> str:
     label = clean_text(raw_status)
     if label is None:
         return NO_STATUS
     status = STATUS_MAP.get(label.lower())
     if status is None:
-        warnings.append(f"sheet-only deal status kept dynamically: {label!r}")
-        return LEGACY_STATUS_PREFIX + label
+        raise ValueError(f"unmapped sheet deal status: {label!r}")
     return status
 
 
@@ -560,9 +559,7 @@ def build_deal(
         warnings.append("no summary row in any tracking tab (deal tab only)")
         underwriting["deal_status"] = NO_STATUS
     else:
-        underwriting["deal_status"] = map_deal_status(
-            summary.get("raw_status"), warnings
-        )
+        underwriting["deal_status"] = map_deal_status(summary.get("raw_status"))
         address = clean_text(summary.get("property_address"))
         underwriting.update(
             property_address=address,
