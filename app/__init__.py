@@ -36,7 +36,7 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="ADUS BE",
         version="0.1.0",
-        docs_url=None if config.is_production else "/docs",
+        # docs_url=None if config.is_production else "/docs",
         redoc_url=None if config.is_production else "/redoc",
         # Global Clerk JWT enforcement. Does not apply to /docs, /redoc,
         # /openapi.json. FastAPI caches the dependency per request, so handlers
