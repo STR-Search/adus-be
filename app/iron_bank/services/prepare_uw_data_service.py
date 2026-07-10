@@ -125,8 +125,12 @@ class PrepareUwDataService:
             "price_tier_1": (
                 opex_by_bedrooms.consolidated_shipping if opex_by_bedrooms else None
             ),
-            "price_tier_2": None,
-            "price_tier_3": None,
+            "price_tier_2": (
+                opex_by_bedrooms.consolidated_shipping if opex_by_bedrooms else None
+            ),
+            "price_tier_3": (
+                opex_by_bedrooms.consolidated_shipping if opex_by_bedrooms else None
+            ),
         }
         str_cribs_project_management = {
             "amenity_name": "STR Cribs - Project Management",
@@ -134,8 +138,8 @@ class PrepareUwDataService:
             "location": None,
             "notes": None,
             "price_tier_1": (str_cribs_fee.fee if str_cribs_fee else None),
-            "price_tier_2": None,
-            "price_tier_3": None,
+            "price_tier_2": (str_cribs_fee.fee if str_cribs_fee else None),
+            "price_tier_3": (str_cribs_fee.fee if str_cribs_fee else None),
         }
         return [furnishings, consolidated_shipping, str_cribs_project_management] + [
             a.model_dump() for a in construction_amenities
