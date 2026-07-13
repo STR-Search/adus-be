@@ -1,6 +1,7 @@
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Integer, Numeric, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -9,7 +10,14 @@ from app.core.database import Base
 class OpexByBedrooms(Base):
     __tablename__ = "opex_by_bedrooms"
     __table_args__ = (
-        UniqueConstraint("market_id", "bedrooms", name="uq_opex_by_bedrooms_market_bedrooms"),
+        # (market_id, bedrooms) uniqueness only among active (non-soft-deleted) rows.
+        Index(
+            "uq_opex_by_bedrooms_market_bedrooms_active",
+            "market_id",
+            "bedrooms",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
         {"schema": "markets"},
     )
 
@@ -33,6 +41,7 @@ class OpexByBedrooms(Base):
     furnishings_mid: Mapped[Decimal | None] = mapped_column(Numeric)
     furnishings_high: Mapped[Decimal | None] = mapped_column(Numeric)
     consolidated_shipping: Mapped[Decimal | None] = mapped_column(Numeric)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class OpexBySize(Base):
@@ -45,3 +54,4 @@ class OpexBySize(Base):
     internet: Mapped[Decimal | None] = mapped_column(Numeric)
     pest_control: Mapped[Decimal | None] = mapped_column(Numeric)
     utilities: Mapped[Decimal | None] = mapped_column(Numeric)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
