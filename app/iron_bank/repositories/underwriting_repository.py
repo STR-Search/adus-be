@@ -48,6 +48,8 @@ class UnderwritingRepository:
         max_purchase_price: Decimal | None = None,
         min_total_oop: Decimal | None = None,
         max_total_oop: Decimal | None = None,
+        min_l_cash_on_cash: Decimal | None = None,
+        max_l_cash_on_cash: Decimal | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
     ) -> tuple[list[Underwriting], int, int]:
@@ -69,6 +71,10 @@ class UnderwritingRepository:
             query = query.where(Underwriting.total_oop >= min_total_oop)
         if max_total_oop is not None:
             query = query.where(Underwriting.total_oop <= max_total_oop)
+        if min_l_cash_on_cash is not None:
+            query = query.where(Underwriting.l_cash_on_cash >= min_l_cash_on_cash)
+        if max_l_cash_on_cash is not None:
+            query = query.where(Underwriting.l_cash_on_cash <= max_l_cash_on_cash)
 
         total: int = (
             await self.db.execute(select(func.count()).select_from(query.subquery()))

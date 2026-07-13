@@ -101,6 +101,8 @@ class GetUnderwritingsQuery(BaseModel):
     max_purchase_price: Decimal | None = Field(None, ge=0)
     min_total_oop: Decimal | None = Field(None, ge=0)
     max_total_oop: Decimal | None = Field(None, ge=0)
+    min_l_cash_on_cash: Decimal | None = None
+    max_l_cash_on_cash: Decimal | None = None
     sort_by: UnderwritingSortBy = UnderwritingSortBy.ID
     sort_order: SortOrder = SortOrder.DESC
 
@@ -121,6 +123,14 @@ class GetUnderwritingsQuery(BaseModel):
         ):
             raise ValueError(
                 "min_total_oop must be less than or equal to max_total_oop"
+            )
+        if (
+            self.min_l_cash_on_cash is not None
+            and self.max_l_cash_on_cash is not None
+            and self.min_l_cash_on_cash > self.max_l_cash_on_cash
+        ):
+            raise ValueError(
+                "min_l_cash_on_cash must be less than or equal to max_l_cash_on_cash"
             )
         return self
 
