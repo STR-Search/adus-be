@@ -1,81 +1,73 @@
 import uuid
 
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
-from app.core.logger import logger
-from app.iron_bank.schemas.batch_prepare_uw import (
-    BatchPrepareUwByMarketResult,
-    BatchPrepareUwByPresetResult,
-)
-from app.workflows.batch_prepare_and_save_underwritings_by_market_job import (
-    BatchPrepareAndSaveUnderwritingsByMarketJob,
-)
-from app.workflows.batch_prepare_and_save_underwritings_by_preset_job import (
-    BatchPrepareAndSaveUnderwritingsByPresetJob,
+from app.iron_bank.repositories.job_repository import JobRepository
+from app.iron_bank.schemas.job import JobCreatedResponse, JobStatusResponse
+from app.workflows.job_runner import (
+    JOB_TYPE_BATCH_BY_MARKET,
+    JOB_TYPE_BATCH_BY_PRESET,
+    run_batch_job,
 )
 
 
 class WorkflowTriggerController:
-    """Exposes workflow jobs as HTTP-triggerable endpoints."""
+    """Accepts batch workflow requests, persists them as jobs, runs them async."""
 
-    def __init__(
+    def __init__(self, job_repository: JobRepository):
+        self.job_repository = job_repository
+
+    async def _enqueue(
         self,
-        batch_prepare_by_market_job: BatchPrepareAndSaveUnderwritingsByMarketJob,
-        batch_prepare_by_preset_job: BatchPrepareAndSaveUnderwritingsByPresetJob,
-    ):
-        self.batch_prepare_by_market_job = batch_prepare_by_market_job
-        self.batch_prepare_by_preset_job = batch_prepare_by_preset_job
+        *,
+        job_type: str,
+        params: dict,
+        background: BackgroundTasks,
+    ) -> JobCreatedResponse:
+        job = await self.job_repository.create(job_type=job_type, params=params)
+        # Commit so the row is durable and visible before the task runs / caller polls.
+        await self.job_repository.db.commit()
+        background.add_task(run_batch_job, job.id, job_type, params)
+        return JobCreatedResponse(id=job.id, status=job.status)
 
     async def batch_prepare_by_market(
         self,
         *,
         market_id: int,
         since_hours: int,
-        limit: int | None = None,
-    ) -> BatchPrepareUwByMarketResult:
-        try:
-            result = await self.batch_prepare_by_market_job.run(
-                market_id=market_id,
-                since_hours=since_hours,
-                limit=limit,
-            )
-            return BatchPrepareUwByMarketResult.model_validate(result)
-        except Exception as e:
-            logger.error(
-                "iron_bank.workflow_trigger.batch_prepare_by_market.error",
-                market_id=market_id,
-                since_hours=since_hours,
-                limit=limit,
-                error=str(e),
-            )
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to prepare and save underwritings for market",
-            )
+        limit: int | None,
+        background: BackgroundTasks,
+    ) -> JobCreatedResponse:
+        return await self._enqueue(
+            job_type=JOB_TYPE_BATCH_BY_MARKET,
+            params={
+                "market_id": market_id,
+                "since_hours": since_hours,
+                "limit": limit,
+            },
+            background=background,
+        )
 
     async def batch_prepare_by_preset(
         self,
         *,
         preset_id: uuid.UUID,
         since_hours: int,
-        limit: int | None = None,
-    ) -> BatchPrepareUwByPresetResult:
-        try:
-            result = await self.batch_prepare_by_preset_job.run(
-                preset_id=preset_id,
-                since_hours=since_hours,
-                limit=limit,
-            )
-            return BatchPrepareUwByPresetResult.model_validate(result)
-        except Exception as e:
-            logger.error(
-                "iron_bank.workflow_trigger.batch_prepare_by_preset.error",
-                preset_id=preset_id,
-                since_hours=since_hours,
-                limit=limit,
-                error=str(e),
-            )
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to prepare and save underwritings for preset",
-            )
+        limit: int | None,
+        background: BackgroundTasks,
+    ) -> JobCreatedResponse:
+        return await self._enqueue(
+            job_type=JOB_TYPE_BATCH_BY_PRESET,
+            params={
+                "preset_id": str(preset_id),
+                "since_hours": since_hours,
+                "limit": limit,
+            },
+            background=background,
+        )
+
+    async def get_job(self, job_id: uuid.UUID) -> JobStatusResponse:
+        job = await self.job_repository.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return JobStatusResponse.model_validate(job)
