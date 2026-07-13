@@ -1,6 +1,9 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, Integer, String, text
+from datetime import datetime
+
+from sqlalchemy import DateTime, Index, DateTime, Integer, String, text, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -26,3 +29,13 @@ class MarketKeysMaster(Base):
     market_status: Mapped[str | None] = mapped_column(String)
     analyst_owner: Mapped[str | None] = mapped_column(String)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    map_config: Mapped[dict | None] = mapped_column(JSONB)
+    filters: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
+    )
+    # updated_at is stamped on INSERT by the default and kept fresh on UPDATE by a
+    # DB trigger (see migration) — the ORM does not maintain it.
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
+    )

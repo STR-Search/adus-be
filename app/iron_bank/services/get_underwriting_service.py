@@ -135,6 +135,8 @@ class GetUnderwritingService:
         max_purchase_price: Decimal | None = None,
         min_total_oop: Decimal | None = None,
         max_total_oop: Decimal | None = None,
+        min_l_cash_on_cash: Decimal | None = None,
+        max_l_cash_on_cash: Decimal | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
     ) -> GetUnderwritingsResult:
@@ -149,6 +151,8 @@ class GetUnderwritingService:
             max_purchase_price=max_purchase_price,
             min_total_oop=min_total_oop,
             max_total_oop=max_total_oop,
+            min_l_cash_on_cash=min_l_cash_on_cash,
+            max_l_cash_on_cash=max_l_cash_on_cash,
             sort_by=sort_by,
             sort_order=sort_order,
         )
