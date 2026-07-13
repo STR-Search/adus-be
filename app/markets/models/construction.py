@@ -1,6 +1,7 @@
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Integer, Numeric, String
+from sqlalchemy import DateTime, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -17,6 +18,7 @@ class ConstructionCostsAmenities(Base):
     price_tier_2: Mapped[Decimal | None] = mapped_column(Numeric)
     price_tier_3: Mapped[Decimal | None] = mapped_column(Numeric)
     notes: Mapped[str | None] = mapped_column(String)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ConstructionCostsRemodeling(Base):
@@ -31,3 +33,4 @@ class ConstructionCostsRemodeling(Base):
     price_tier_2: Mapped[Decimal | None] = mapped_column(Numeric)
     price_tier_3: Mapped[Decimal | None] = mapped_column(Numeric)
     notes: Mapped[str | None] = mapped_column(String)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

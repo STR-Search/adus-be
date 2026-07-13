@@ -30,6 +30,7 @@ def upgrade() -> None:
         sa.Column("price_tier_2", sa.Numeric(), nullable=True),
         sa.Column("price_tier_3", sa.Numeric(), nullable=True),
         sa.Column("notes", sa.String(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         schema="markets",
     )
@@ -43,6 +44,7 @@ def upgrade() -> None:
         sa.Column("price_tier_2", sa.Numeric(), nullable=True),
         sa.Column("price_tier_3", sa.Numeric(), nullable=True),
         sa.Column("notes", sa.String(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         schema="markets",
     )
@@ -54,9 +56,19 @@ def upgrade() -> None:
         sa.Column("market_name_current", sa.String(), nullable=True),
         sa.Column("market_status", sa.String(), nullable=True),
         sa.Column("analyst_owner", sa.String(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("market_slug"),
         schema="markets",
+    )
+    # Partial unique index: slug uniqueness is only enforced among active
+    # (non-soft-deleted) rows, so a deleted slug can be re-created.
+    op.create_index(
+        "uq_market_keys_master_market_slug_active",
+        "market_keys_master",
+        ["market_slug"],
+        unique=True,
+        schema="markets",
+        postgresql_where=sa.text("deleted_at IS NULL"),
     )
     op.create_table(
         "opex_by_bedrooms",
@@ -80,15 +92,21 @@ def upgrade() -> None:
         sa.Column("furnishings_mid", sa.Numeric(), nullable=True),
         sa.Column("furnishings_high", sa.Numeric(), nullable=True),
         sa.Column("consolidated_shipping", sa.Numeric(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["market_id"],
             ["markets.market_keys_master.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "market_id", "bedrooms", name="uq_opex_by_bedrooms_market_bedrooms"
-        ),
         schema="markets",
+    )
+    op.create_index(
+        "uq_opex_by_bedrooms_market_bedrooms_active",
+        "opex_by_bedrooms",
+        ["market_id", "bedrooms"],
+        unique=True,
+        schema="markets",
+        postgresql_where=sa.text("deleted_at IS NULL"),
     )
     op.create_table(
         "opex_by_size",
@@ -98,6 +116,7 @@ def upgrade() -> None:
         sa.Column("internet", sa.Numeric(), nullable=True),
         sa.Column("pest_control", sa.Numeric(), nullable=True),
         sa.Column("utilities", sa.Numeric(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["market_id"],
             ["markets.market_keys_master.id"],
@@ -113,6 +132,7 @@ def upgrade() -> None:
         # resolves to a row.
         sa.Column("sqft", sa.Integer(), nullable=True),
         sa.Column("fee", sa.Numeric(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         schema="markets",
     )

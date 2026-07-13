@@ -1,6 +1,7 @@
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Integer, Numeric
+from sqlalchemy import DateTime, Integer, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -16,3 +17,4 @@ class StrCribsFeeDetails(Base):
     # lookup always resolves to a row.
     sqft: Mapped[int | None] = mapped_column(Integer)
     fee: Mapped[Decimal | None] = mapped_column(Numeric)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

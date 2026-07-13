@@ -1,4 +1,5 @@
 import math
+from datetime import datetime, timezone
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,13 +14,19 @@ class MarketRepository:
 
     async def get_by_id(self, market_id: int) -> MarketKeysMaster | None:
         result = await self.db.execute(
-            select(MarketKeysMaster).where(MarketKeysMaster.id == market_id)
+            select(MarketKeysMaster).where(
+                MarketKeysMaster.id == market_id,
+                MarketKeysMaster.deleted_at.is_(None),
+            )
         )
         return result.scalar_one_or_none()
 
     async def get_by_market_slug(self, market_slug: str) -> MarketKeysMaster | None:
         result = await self.db.execute(
-            select(MarketKeysMaster).where(MarketKeysMaster.market_slug == market_slug)
+            select(MarketKeysMaster).where(
+                MarketKeysMaster.market_slug == market_slug,
+                MarketKeysMaster.deleted_at.is_(None),
+            )
         )
         return result.scalar_one_or_none()
 
@@ -58,7 +65,7 @@ class MarketRepository:
         analyst_owner: str | None = None,
         search: str | None = None,
     ) -> tuple[list[MarketKeysMaster], int, int]:
-        query = select(MarketKeysMaster)
+        query = select(MarketKeysMaster).where(MarketKeysMaster.deleted_at.is_(None))
 
         if market_status is not None:
             query = query.where(MarketKeysMaster.market_status == market_status)
@@ -97,7 +104,9 @@ class MarketRepository:
 
     async def get_all_summary(self) -> list[MarketKeysMaster]:
         result = await self.db.execute(
-            select(MarketKeysMaster).order_by(MarketKeysMaster.id)
+            select(MarketKeysMaster)
+            .where(MarketKeysMaster.deleted_at.is_(None))
+            .order_by(MarketKeysMaster.id)
         )
         return list(result.scalars().all())
 
@@ -105,6 +114,6 @@ class MarketRepository:
         market = await self.get_by_id(market_id)
         if market is None:
             return False
-        await self.db.delete(market)
+        market.deleted_at = datetime.now(timezone.utc)
         await self.db.commit()
         return True

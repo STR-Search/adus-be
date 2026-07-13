@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,12 +13,19 @@ class StrCribsFeeDetailsRepository:
 
     async def get_by_id(self, record_id: int) -> StrCribsFeeDetails | None:
         result = await self.db.execute(
-            select(StrCribsFeeDetails).where(StrCribsFeeDetails.id == record_id)
+            select(StrCribsFeeDetails).where(
+                StrCribsFeeDetails.id == record_id,
+                StrCribsFeeDetails.deleted_at.is_(None),
+            )
         )
         return result.scalar_one_or_none()
 
     async def get_all(self) -> list[StrCribsFeeDetails]:
-        query = select(StrCribsFeeDetails).order_by(StrCribsFeeDetails.sqft)
+        query = (
+            select(StrCribsFeeDetails)
+            .where(StrCribsFeeDetails.deleted_at.is_(None))
+            .order_by(StrCribsFeeDetails.sqft)
+        )
         result = await self.db.execute(query)
         items = list(result.scalars().all())
         logger.debug("str_cribs.fee_details.get_all", count=len(items))
@@ -31,7 +40,10 @@ class StrCribsFeeDetailsRepository:
         """
         result = await self.db.execute(
             select(StrCribsFeeDetails)
-            .where(StrCribsFeeDetails.sqft >= area)
+            .where(
+                StrCribsFeeDetails.sqft >= area,
+                StrCribsFeeDetails.deleted_at.is_(None),
+            )
             .order_by(StrCribsFeeDetails.sqft)
             .limit(1)
         )
@@ -58,6 +70,6 @@ class StrCribsFeeDetailsRepository:
         record = await self.get_by_id(record_id)
         if record is None:
             return False
-        await self.db.delete(record)
+        record.deleted_at = datetime.now(timezone.utc)
         await self.db.commit()
         return True

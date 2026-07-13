@@ -1,4 +1,5 @@
 import math
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,10 @@ class OpexByBedroomsRepository:
 
     async def get_by_id(self, record_id: int) -> OpexByBedrooms | None:
         result = await self.db.execute(
-            select(OpexByBedrooms).where(OpexByBedrooms.id == record_id)
+            select(OpexByBedrooms).where(
+                OpexByBedrooms.id == record_id,
+                OpexByBedrooms.deleted_at.is_(None),
+            )
         )
         return result.scalar_one_or_none()
 
@@ -24,7 +28,7 @@ class OpexByBedroomsRepository:
         market_id: int | None = None,
         bedrooms: int | None = None,
     ) -> tuple[list[OpexByBedrooms], int, int]:
-        query = select(OpexByBedrooms)
+        query = select(OpexByBedrooms).where(OpexByBedrooms.deleted_at.is_(None))
         if market_id is not None:
             query = query.where(OpexByBedrooms.market_id == market_id)
         if bedrooms is not None:
@@ -56,6 +60,7 @@ class OpexByBedroomsRepository:
             select(OpexByBedrooms).where(
                 OpexByBedrooms.market_id == market_id,
                 OpexByBedrooms.bedrooms == bedrooms,
+                OpexByBedrooms.deleted_at.is_(None),
             )
         )
         return result.scalar_one_or_none()
@@ -81,7 +86,7 @@ class OpexByBedroomsRepository:
         record = await self.get_by_id(record_id)
         if record is None:
             return False
-        await self.db.delete(record)
+        record.deleted_at = datetime.now(timezone.utc)
         await self.db.commit()
         return True
 
@@ -92,7 +97,10 @@ class OpexBySizeRepository:
 
     async def get_by_id(self, record_id: int) -> OpexBySize | None:
         result = await self.db.execute(
-            select(OpexBySize).where(OpexBySize.id == record_id)
+            select(OpexBySize).where(
+                OpexBySize.id == record_id,
+                OpexBySize.deleted_at.is_(None),
+            )
         )
         return result.scalar_one_or_none()
 
@@ -103,7 +111,7 @@ class OpexBySizeRepository:
         market_id: int | None = None,
         sqft: int | None = None,
     ) -> tuple[list[OpexBySize], int, int]:
-        query = select(OpexBySize)
+        query = select(OpexBySize).where(OpexBySize.deleted_at.is_(None))
         if market_id is not None:
             query = query.where(OpexBySize.market_id == market_id)
         if sqft is not None:
@@ -135,6 +143,7 @@ class OpexBySizeRepository:
             select(OpexBySize).where(
                 OpexBySize.market_id == market_id,
                 OpexBySize.sqft == sqft,
+                OpexBySize.deleted_at.is_(None),
             )
         )
         return result.scalar_one_or_none()
@@ -160,6 +169,6 @@ class OpexBySizeRepository:
         record = await self.get_by_id(record_id)
         if record is None:
             return False
-        await self.db.delete(record)
+        record.deleted_at = datetime.now(timezone.utc)
         await self.db.commit()
         return True
