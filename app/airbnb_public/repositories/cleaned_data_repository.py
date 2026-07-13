@@ -22,13 +22,13 @@ class CleanedDataRepository:
     ) -> tuple[float | None, float | None, float | None]:
         result = await self.db.execute(
             select(
-                func.percentile_cont(0.7)
-                .within_group(CleanedData.revenue_potential)
-                .label("low"),
                 func.percentile_cont(0.8)
                 .within_group(CleanedData.revenue_potential)
+                .label("low"),
+                func.percentile_cont(0.87)
+                .within_group(CleanedData.revenue_potential)
                 .label("mid"),
-                func.percentile_cont(0.9)
+                func.percentile_cont(0.94)
                 .within_group(CleanedData.revenue_potential)
                 .label("high"),
             )
