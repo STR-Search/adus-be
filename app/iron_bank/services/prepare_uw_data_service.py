@@ -9,6 +9,8 @@ class PrepareUwDataService:
     service must not import from other domains.
     """
 
+    # Spread applied over the FRED 30y fixed rate to derive the UW interest rate.
+    _INTEREST_RATE_SPREAD_OVER_FRED = 0.0035
     _SQFT_CHECKPOINTS = [1000, 1500, 2000, 2750, 3500, 4500]
     _OPEX_METADATA_FIELDS = {"id", "market_id", "market_slug", "bedrooms", "sqft"}
     _OPEX_CLEANING_FIELDS = {"cleaning_fee", "num_of_turns"}
@@ -165,7 +167,10 @@ class PrepareUwDataService:
 
         config = UW_CONFIG_DEFAULTS.model_dump()
         if fred is not None:
-            config["fred"] = {"value": fred.value / 100, "date": fred.date}
+            fred_rate = fred.value / 100
+            config["fred"] = {"value": fred_rate, "date": fred.date}
+            # Underwrite at 0.35% above the current FRED 30y fixed rate.
+            config["interest_rate"] = fred_rate + self._INTEREST_RATE_SPREAD_OVER_FRED
         self._apply_opex_config_values(config, opex_by_bedrooms, opex_by_size)
 
         return PrepareUwDataResult.model_validate(

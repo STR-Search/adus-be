@@ -191,6 +191,15 @@ class TestPrepare:
         config = self._prepare().model_dump()["config"]
         assert config["fred"] == {"value": 0.065, "date": "2026-06-01"}
 
+    def test_interest_rate_is_fred_rate_plus_spread(self):
+        config = self._prepare().model_dump()["config"]
+        # fred 6.5% -> 0.065 + 0.0035 spread
+        assert config["interest_rate"] == 0.0685
+
+    def test_interest_rate_falls_back_to_default_without_fred(self):
+        config = self._prepare(fred=None).model_dump()["config"]
+        assert config["interest_rate"] == 0.0688
+
     def test_handles_all_optional_inputs_missing(self):
         result = self._prepare(
             listing_details=None,
