@@ -99,10 +99,10 @@ class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
 
         result = {
             "cost_per_clean": fee,
-            "turns_per_year": turns,
+            "turns_per_month": turns,
         }
         if fee is not None and turns is not None:
-            result["annual_cleaning_cost"] = fee * turns
+            result["monthly_cleaning_cost"] = fee * turns
         return result
 
     def _build_operating_expenses(

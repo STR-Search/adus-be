@@ -49,8 +49,8 @@ def test_builds_save_payload_from_prepared_uw_data():
     assert payload.details.purchase_details.interest_rate == Decimal("0.065")
     assert payload.details.cleaning_cost == {
         "cost_per_clean": 275,
-        "turns_per_year": 38,
-        "annual_cleaning_cost": 10450,
+        "turns_per_month": 38,
+        "monthly_cleaning_cost": 10450,
     }
     assert payload.details.property_taxes == {
         "source": "opex_property_tax_pct",
