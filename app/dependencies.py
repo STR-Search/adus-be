@@ -19,12 +19,17 @@ API_KEY_HEADER = "x-adus-api-key"
 # real resolution below (and the Clerk fallback) unchanged — this is docs-only.
 api_key_scheme = APIKeyHeader(name="X-ADUS-API-KEY", auto_error=False)
 
+# Paths served without authentication. The app-level get_current_user
+# dependency runs for every route (FastAPI only exempts /docs, /redoc,
+# /openapi.json), so public routes must be allow-listed here. Exact match.
+PUBLIC_PATHS = frozenset({"/health"})
+
 
 async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
     _api_key: str | None = Depends(api_key_scheme),
-) -> User:
+) -> User | None:
     """Resolve the calling user from either auth credential.
 
     Two independent, Clerk-optional paths, checked in this order:
@@ -32,8 +37,12 @@ async def get_current_user(
       2. ``Authorization: Bearer``  -> Clerk JWT auth (app / browser users)
 
     Both resolve to the same ``User``. Lives in this shared module so domain
-    routers can depend on it without importing one another.
+    routers can depend on it without importing one another. Returns ``None``
+    for allow-listed public paths (see ``PUBLIC_PATHS``).
     """
+    if request.url.path in PUBLIC_PATHS:
+        return None
+
     api_key = request.headers.get(API_KEY_HEADER)
     if api_key:
         return await _user_from_api_key(api_key, db)

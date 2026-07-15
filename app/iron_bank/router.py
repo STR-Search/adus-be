@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -25,9 +25,9 @@ from app.iron_bank.controllers.workflow_trigger_controller import (
 )
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
-from app.iron_bank.schemas.batch_prepare_uw import (
-    BatchPrepareUwByMarketResult,
-    BatchPrepareUwByPresetResult,
+from app.iron_bank.schemas.job import (
+    JobCreatedResponse,
+    JobStatusResponse,
 )
 from app.iron_bank.schemas.create_underwriting_from_url import (
     CreateUnderwritingFromUrlPayload,
@@ -59,12 +59,7 @@ from app.iron_bank.services.get_underwriting_service import GetUnderwritingServi
 from app.iron_bank.services.deal_status_service import DealStatusService
 from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
 from app.iron_bank.services.update_underwriting_service import UpdateUnderwritingService
-from app.workflows.batch_prepare_and_save_underwritings_by_market_job import (
-    BatchPrepareAndSaveUnderwritingsByMarketJob,
-)
-from app.workflows.batch_prepare_and_save_underwritings_by_preset_job import (
-    BatchPrepareAndSaveUnderwritingsByPresetJob,
-)
+from app.iron_bank.repositories.job_repository import JobRepository
 from app.workflows.prepare_uw_data_job import PrepareUwDataJob
 import app.iron_bank.models  # noqa: F401 — ensures all models are registered with SQLAlchemy
 
@@ -84,14 +79,7 @@ def get_prepare_uw_data_controller(
 def get_workflow_trigger_controller(
     db: AsyncSession = Depends(get_db),
 ) -> WorkflowTriggerController:
-    return WorkflowTriggerController(
-        batch_prepare_by_market_job=BatchPrepareAndSaveUnderwritingsByMarketJob.from_session(
-            db
-        ),
-        batch_prepare_by_preset_job=BatchPrepareAndSaveUnderwritingsByPresetJob.from_session(
-            db
-        ),
-    )
+    return WorkflowTriggerController(job_repository=JobRepository(db))
 
 
 def get_save_underwriting_controller(
@@ -222,10 +210,12 @@ async def get_prepare_uw_data(
 
 @router.post(
     "/underwritings/batch-prepare-by-market",
-    response_model=BatchPrepareUwByMarketResult,
+    response_model=JobCreatedResponse,
+    status_code=202,
     tags=["iron_bank"],
 )
 async def batch_prepare_underwritings_by_market(
+    background: BackgroundTasks,
     market_id: int = Query(...),
     since_hours: int = Query(..., ge=1),
     limit: int | None = Query(None, ge=1),
@@ -235,15 +225,18 @@ async def batch_prepare_underwritings_by_market(
         market_id=market_id,
         since_hours=since_hours,
         limit=limit,
+        background=background,
     )
 
 
 @router.post(
     "/underwritings/batch-prepare-by-preset",
-    response_model=BatchPrepareUwByPresetResult,
+    response_model=JobCreatedResponse,
+    status_code=202,
     tags=["iron_bank"],
 )
 async def batch_prepare_underwritings_by_preset(
+    background: BackgroundTasks,
     preset_id: uuid.UUID = Query(...),
     since_hours: int = Query(..., ge=1),
     limit: int | None = Query(None, ge=1),
@@ -253,7 +246,20 @@ async def batch_prepare_underwritings_by_preset(
         preset_id=preset_id,
         since_hours=since_hours,
         limit=limit,
+        background=background,
     )
+
+
+@router.get(
+    "/jobs/{job_id}",
+    response_model=JobStatusResponse,
+    tags=["iron_bank"],
+)
+async def get_job(
+    job_id: uuid.UUID,
+    controller: WorkflowTriggerController = Depends(get_workflow_trigger_controller),
+):
+    return await controller.get_job(job_id)
 
 
 @router.get(
