@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_config
+from app.core.reference_data.router import router as reference_data_router
 from app.dependencies import get_current_user
 from app.external_api.router import router as external_api_router
 from app.iron_bank.router import router as iron_bank_router
@@ -59,5 +60,6 @@ def create_app() -> FastAPI:
     application.include_router(external_api_router)
     application.include_router(zillow_router)
     application.include_router(users_router)
+    application.include_router(reference_data_router)
 
     return application
