@@ -30,6 +30,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         market_service=None,
         listings_service=None,
         cleaned_data_service=None,
+        reference_data_service=None,
     ):
         super().__init__(
             repository=repository,
@@ -37,6 +38,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
             market_service=market_service,
             listings_service=listings_service,
             cleaned_data_service=cleaned_data_service,
+            reference_data_service=reference_data_service,
         )
 
     async def update(
@@ -49,6 +51,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         underwriting_data = {
             key: value for key, value in data.items() if key not in self._CHILD_FIELDS
         }
+        await self._validate_reference_data_fields(underwriting_data)
         tax_data = self._build_tax_data(payload) if "taxes" in data else None
         detail_data = None
         if "details" in data:

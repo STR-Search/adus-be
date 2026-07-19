@@ -5,6 +5,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.reference_data.repository import ReferenceDataRepository
+from app.core.reference_data.service import ReferenceDataService
 from app.dependencies import get_current_user
 from app.iron_bank.controllers.create_underwriting_from_url_controller import (
     CreateUnderwritingFromUrlController,
@@ -102,6 +104,7 @@ def get_save_underwriting_controller(
             market_service=MarketService(MarketRepository(db)),
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
             cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
+            reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
         )
     )
 
@@ -143,6 +146,7 @@ def get_update_underwriting_controller(
             market_service=MarketService(MarketRepository(db)),
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
             cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
+            reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
         )
     )
 
@@ -196,6 +200,7 @@ def get_get_underwriting_controller(
             str_cribs_service=StrCribsFeeDetailsService(
                 StrCribsFeeDetailsRepository(db)
             ),
+            reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
         )
     )
 
