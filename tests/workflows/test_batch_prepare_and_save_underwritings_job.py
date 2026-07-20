@@ -30,6 +30,14 @@ class FakePrepareAndSaveJob:
         return result
 
 
+class FakeSession:
+    def __init__(self):
+        self.rollback_count = 0
+
+    async def rollback(self):
+        self.rollback_count += 1
+
+
 @pytest.mark.asyncio
 async def test_processes_recent_listings_and_returns_summary():
     listings_service = FakeListingsService(
@@ -49,13 +57,18 @@ async def test_processes_recent_listings_and_returns_summary():
         }
     )
 
+    db = FakeSession()
     summary = await BatchPrepareAndSaveUnderwritingsJob(
+        db=db,
         listings_service=listings_service,
         prepare_and_save_job=prepare_and_save_job,
     ).run(since_hours=24, limit=500)
 
     assert listings_service.called_with == {"since_hours": 24, "limit": 500}
     assert prepare_and_save_job.requested_zpids == ["1", "2", "3", "4"]
+    # The one failing listing ("3") must roll the session back so the rest
+    # of the batch runs on a clean transaction.
+    assert db.rollback_count == 1
     assert summary == {
         "found": 4,
         "processed": 4,

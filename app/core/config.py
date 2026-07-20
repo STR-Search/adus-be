@@ -26,6 +26,11 @@ class Config(BaseSettings):
     SENTRY_ENABLED: bool = False
     SENTRY_DSN: str = ""
 
+    # Log the original DBAPI error (message + SQL + params) at the engine
+    # boundary. Server-side only; never reaches clients. Safe to leave on in
+    # every environment — kept as a flag purely so verbosity is toggleable.
+    DB_ERROR_LOGGING: bool = True
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"
