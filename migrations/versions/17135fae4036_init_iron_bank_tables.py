@@ -89,6 +89,8 @@ def upgrade() -> None:
     sa.CheckConstraint('deal_score IS NULL OR (deal_score >= 1 AND deal_score <= 100)', name='ck_underwritings_deal_score'),
     sa.ForeignKeyConstraint(['market_id'], ['markets.market_keys_master.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['zpid'], ['zillow.scheduled_listings.zpid'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['analyst_id'], ['users.users.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['approver_id'], ['users.users.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id'),
     schema='iron_bank'
     )
