@@ -15,7 +15,11 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingsResult,
     ZillowProperty,
 )
-from app.iron_bank.schemas.underwriting import UnderwritingRead
+from app.iron_bank.schemas.underwriting import (
+    MULTI_SELECT_TAG_FIELDS,
+    SINGLE_SELECT_TAG_FIELDS,
+    UnderwritingRead,
+)
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 
 
@@ -29,6 +33,7 @@ class GetUnderwritingService:
         construction_amenities_service: Any = None,
         construction_remodeling_service: Any = None,
         str_cribs_service: Any = None,
+        reference_data_service: Any = None,
     ):
         self.repository = repository
         self.listings_service = listings_service
@@ -37,12 +42,15 @@ class GetUnderwritingService:
         self.construction_amenities_service = construction_amenities_service
         self.construction_remodeling_service = construction_remodeling_service
         self.str_cribs_service = str_cribs_service
+        self.reference_data_service = reference_data_service
 
     async def get(self, underwriting_id: int) -> GetUnderwritingResult:
         underwriting = await self.repository.get_by_id(underwriting_id)
         if underwriting is None:
             raise LookupError(f"Underwriting {underwriting_id} not found")
-        return self._to_result(underwriting)
+        result = self._to_result(underwriting)
+        await self._populate_reference_labels([result])
+        return result
 
     async def get_edit_context(
         self, underwriting_id: int
@@ -158,6 +166,7 @@ class GetUnderwritingService:
         )
         results = [self._to_result(underwriting) for underwriting in items]
         await self._hydrate_automated_zillow(items, results)
+        await self._populate_reference_labels(results)
         return GetUnderwritingsResult(
             data=results,
             total=total,
@@ -205,6 +214,40 @@ class GetUnderwritingService:
                 listing, listing_details.get(underwriting.zpid)
             )
             self._apply_zillow_to_details(result, zillow_property)
+
+    async def _populate_reference_labels(
+        self, results: list[GetUnderwritingResult]
+    ) -> None:
+        """Resolve ``<field>_label`` for each tag slug from reference data.
+
+        Fetches the ``(set_code, slug) → label`` map once for the whole batch;
+        no-op when no reference-data service is configured. Single-select fields
+        resolve to one label, multi-select fields to a list of labels (one per
+        slug). Unknown/retired slugs simply leave the label ``None`` (single) or
+        drop out of the list (multi).
+        """
+        if self.reference_data_service is None or not results:
+            return
+        label_map = await self.reference_data_service.get_label_map(
+            domain="iron_bank"
+        )
+        for result in results:
+            for field in SINGLE_SELECT_TAG_FIELDS:
+                slug = getattr(result, field, None)
+                if slug is not None:
+                    setattr(result, f"{field}_label", label_map.get((field, slug)))
+            for field in MULTI_SELECT_TAG_FIELDS:
+                slugs = getattr(result, field, None)
+                if slugs:
+                    setattr(
+                        result,
+                        f"{field}_label",
+                        [
+                            label_map[(field, slug)]
+                            for slug in slugs
+                            if (field, slug) in label_map
+                        ],
+                    )
 
     def _to_result(self, underwriting) -> GetUnderwritingResult:
         return GetUnderwritingResult.model_validate(

@@ -1,4 +1,3 @@
-from enum import Enum
 from datetime import datetime
 from decimal import Decimal
 from pydantic import BaseModel, Field, computed_field
@@ -8,44 +7,30 @@ from app.iron_bank.services.deal_status_service import STATUS_OPTIONS
 
 _STATUS_LABEL: dict[str, str] = {s.value: label for s, label, _ in STATUS_OPTIONS}
 
-
-class MarketType(str, Enum):
-    mountain = "Mountain"
-    beach = "Beach"
-    urban = "Urban"
-
-
-class ExecutionType(str, Enum):
-    turnkey = "Turnkey"
-
-
-class Seasonality(str, Enum):
-    year_round = "Year Round"
-
-
-class RegularityClarity(str, Enum):
-    clear = "Clear"
-
-
-class OfferCompetitiveness(str, Enum):
-    moderate = "Moderate"
-
-
-class CoreValueDriver(str, Enum):
-    cash_flow = "Cash Flow"
-
-
-class ViewQuality(str, Enum):
-    excellent = "Excellent"
-
-
-class PoolType(str, Enum):
-    none = "None"
-    inground = "Inground"
-
-
-class PrimaryGuestAvatar(str, Enum):
-    families = "Families"
+# The categorical "deal tag" columns backed by the shared reference-data system.
+# Each name is both the underwriting field and the reference ``set_code``; values
+# are stored as slugs and validated/enriched against ``domain = "iron_bank"``.
+#
+# Multi-select tags store a list of slugs (``text[]`` column, ``list[str]``
+# field); single-select tags store one slug (``varchar`` column, ``str`` field).
+MULTI_SELECT_TAG_FIELDS: tuple[str, ...] = (
+    "market_type",
+    "seasonality",
+    "core_value_driver",
+)
+SINGLE_SELECT_TAG_FIELDS: tuple[str, ...] = (
+    "execution_type",
+    "regulatory_clarity",
+    "offer_competitiveness",
+    "cash_flow_quality",
+    "view_quality",
+    "pool_type",
+    "primary_guest_avatar",
+)
+REFERENCE_TAG_FIELDS: tuple[str, ...] = (
+    *MULTI_SELECT_TAG_FIELDS,
+    *SINGLE_SELECT_TAG_FIELDS,
+)
 
 
 class UnderwritingBase(BaseModel):
@@ -90,16 +75,16 @@ class UnderwritingBase(BaseModel):
     waterfront: bool = False
     remote: bool = False
     can_support_cohost: bool = False
-    market_type: MarketType | None = None
-    execution_type: ExecutionType | None = None
-    seasonality: Seasonality | None = None
-    regulatory_clarity: RegularityClarity | None = None
-    offer_competitiveness: OfferCompetitiveness | None = None
-    core_value_driver: CoreValueDriver | None = None
+    market_type: list[str] | None = None
+    execution_type: str | None = None
+    seasonality: list[str] | None = None
+    regulatory_clarity: str | None = None
+    offer_competitiveness: str | None = None
+    core_value_driver: list[str] | None = None
     cash_flow_quality: str | None = None
-    view_quality: ViewQuality | None = None
-    pool_type: PoolType | None = None
-    primary_guest_avatar: PrimaryGuestAvatar | None = None
+    view_quality: str | None = None
+    pool_type: str | None = None
+    primary_guest_avatar: str | None = None
     listing_url: str | None = None
     loom_vid: str | None = None
     video_walkthrough: str | None = None
@@ -131,5 +116,19 @@ class UnderwritingRead(UnderwritingBase, DealStatusLabelMixin):
     display_id: str | None = None  # e.g. "UW-001" — generated at API layer
     optimization_total: Decimal | None = None
     operating_expense_total: Decimal | None = None
+
+    # Resolved reference-data labels for each tag slug. Populated by the read
+    # service from ``ReferenceDataService.get_label_map`` — NOT computed, since
+    # labels live in the DB (reference.enum_options), not in code.
+    market_type_label: list[str] | None = None
+    execution_type_label: str | None = None
+    seasonality_label: list[str] | None = None
+    regulatory_clarity_label: str | None = None
+    offer_competitiveness_label: str | None = None
+    core_value_driver_label: list[str] | None = None
+    cash_flow_quality_label: str | None = None
+    view_quality_label: str | None = None
+    pool_type_label: str | None = None
+    primary_guest_avatar_label: str | None = None
 
     model_config = {"from_attributes": True}

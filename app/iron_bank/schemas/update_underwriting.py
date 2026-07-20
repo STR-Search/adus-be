@@ -11,17 +11,6 @@ from app.iron_bank.schemas.save_underwriting import (
     UnderwritingDetailsInput,
     UnderwritingTaxInput,
 )
-from app.iron_bank.schemas.underwriting import (
-    CoreValueDriver,
-    ExecutionType,
-    MarketType,
-    OfferCompetitiveness,
-    PoolType,
-    PrimaryGuestAvatar,
-    RegularityClarity,
-    Seasonality,
-    ViewQuality,
-)
 
 
 class UpdateUnderwritingPayload(BaseModel):
@@ -66,16 +55,16 @@ class UpdateUnderwritingPayload(BaseModel):
     waterfront: bool = False
     remote: bool = False
     can_support_cohost: bool = False
-    market_type: MarketType | None = None
-    execution_type: ExecutionType | None = None
-    seasonality: Seasonality | None = None
-    regulatory_clarity: RegularityClarity | None = None
-    offer_competitiveness: OfferCompetitiveness | None = None
-    core_value_driver: CoreValueDriver | None = None
+    market_type: list[str] | None = None
+    execution_type: str | None = None
+    seasonality: list[str] | None = None
+    regulatory_clarity: str | None = None
+    offer_competitiveness: str | None = None
+    core_value_driver: list[str] | None = None
     cash_flow_quality: str | None = None
-    view_quality: ViewQuality | None = None
-    pool_type: PoolType | None = None
-    primary_guest_avatar: PrimaryGuestAvatar | None = None
+    view_quality: str | None = None
+    pool_type: str | None = None
+    primary_guest_avatar: str | None = None
     listing_url: str | None = None
     loom_vid: str | None = None
     video_walkthrough: str | None = None

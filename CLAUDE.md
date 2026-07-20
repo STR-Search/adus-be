@@ -16,14 +16,18 @@ repositories, controllers, and router.
 
 ### Shared
 - `app/core/` — config, DB engine, logger. Do not reorganize.
+- `app/core/reference_data/` — shared, DB-backed enum/reference-data system
+  (`reference.enum_options` table). Any domain stores a stable **slug** on its
+  tag columns and resolves labels via `ReferenceDataService`. Full layered CRUD
+  (repository/service/controller/router) plus `GET/POST/PATCH /reference-data`.
 - `app/middleware/` — auth. Do not reorganize.
 - `app/dependencies.py` — shared FastAPI dependencies (DB session, auth guards)
 
 ## Database Rules
-- Managed schemas: `markets`, `iron_bank`, and `users`
+- Managed schemas: `markets`, `iron_bank`, `users`, and `reference`
 - `public` schema is owned by another org — never touch it
 - Alembic version table lives in `markets` schema
-- Three Alembic branches: `markets`, `iron_bank`, and `users`
+- Four Alembic branches: `markets`, `iron_bank`, `users`, and `reference`
 
 ## Auth
 - Global guard: `dependencies=[Depends(get_current_user)]` in `app/__init__.py`

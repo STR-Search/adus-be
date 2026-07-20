@@ -10,6 +10,10 @@ from app.iron_bank.schemas.save_underwriting import (
     SaveUnderwritingPayload,
     SaveUnderwritingResult,
 )
+from app.iron_bank.schemas.underwriting import (
+    MULTI_SELECT_TAG_FIELDS,
+    SINGLE_SELECT_TAG_FIELDS,
+)
 from app.iron_bank.services.underwriting_calculator import UnderwritingCalculator
 from app.markets.schemas.market import MarketKeysMasterSchema
 from app.zillow.models.scheduled_listings import ScheduledListing
@@ -23,6 +27,12 @@ class MarketReader(Protocol):
 
 class ListingReader(Protocol):
     async def get_by_zpid(self, zpid: str) -> ScheduledListing | None: ...
+
+
+class ReferenceDataValidator(Protocol):
+    async def validate_active_option(
+        self, domain: str | None, set_code: str, key: str | None
+    ) -> None: ...
 
 
 class CleanedDataRevenueReader(Protocol):
@@ -50,12 +60,14 @@ class SaveUnderwritingService:
         market_service: MarketReader | None = None,
         listings_service: ListingReader | None = None,
         cleaned_data_service: CleanedDataRevenueReader | None = None,
+        reference_data_service: ReferenceDataValidator | None = None,
     ):
         self.repository = repository
         self.calculator = calculator or UnderwritingCalculator()
         self.market_service = market_service
         self.listings_service = listings_service
         self.cleaned_data_service = cleaned_data_service
+        self.reference_data_service = reference_data_service
 
     async def save(self, payload: SaveUnderwritingPayload) -> SaveUnderwritingResult:
         data = payload.model_dump(exclude_unset=True)
@@ -63,6 +75,7 @@ class SaveUnderwritingService:
         underwriting_data = {
             key: value for key, value in data.items() if key not in self._CHILD_FIELDS
         }
+        await self._validate_reference_data_fields(underwriting_data)
         await self._apply_listing_boolean_fields(underwriting_data, payload)
         tax_data = self._build_tax_data(payload)
         bedrooms = await self._resolve_bedrooms_for_save(payload)
@@ -104,6 +117,31 @@ class SaveUnderwritingService:
             underwriting_id=underwriting.id,
         )
         return SaveUnderwritingResult(underwriting_id=underwriting.id)
+
+    async def _validate_reference_data_fields(
+        self, underwriting_data: dict[str, Any]
+    ) -> None:
+        """Reject any tag slug that isn't an active option in its reference set.
+
+        No-op when no reference-data service is configured (e.g. internal
+        builders that bypass user input). Each tag field name doubles as its
+        reference ``set_code`` under ``domain = "iron_bank"``. Single-select
+        fields hold one slug; multi-select fields hold a list of slugs, each
+        validated individually.
+        """
+        if self.reference_data_service is None:
+            return
+        for field in SINGLE_SELECT_TAG_FIELDS:
+            if field in underwriting_data:
+                await self.reference_data_service.validate_active_option(
+                    "iron_bank", field, underwriting_data[field]
+                )
+        for field in MULTI_SELECT_TAG_FIELDS:
+            if field in underwriting_data:
+                for slug in underwriting_data[field] or []:
+                    await self.reference_data_service.validate_active_option(
+                        "iron_bank", field, slug
+                    )
 
     def _without_empty_values(self, data: dict[str, Any]) -> dict[str, Any]:
         return {key: value for key, value in data.items() if value is not None}

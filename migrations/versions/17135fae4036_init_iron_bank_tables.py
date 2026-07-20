@@ -64,12 +64,14 @@ def upgrade() -> None:
     sa.Column('waterfront', sa.Boolean(), nullable=True),
     sa.Column('remote', sa.Boolean(), nullable=True),
     sa.Column('can_support_cohost', sa.Boolean(), nullable=True),
-    sa.Column('market_type', sa.String(length=50), nullable=True),
+    # Multi-select deal tags store a list of reference slugs (text[]); the rest
+    # are single-select varchar. GIN indexes for the arrays are created below.
+    sa.Column('market_type', postgresql.ARRAY(sa.Text()), nullable=True),
     sa.Column('execution_type', sa.String(length=50), nullable=True),
-    sa.Column('seasonality', sa.String(length=50), nullable=True),
+    sa.Column('seasonality', postgresql.ARRAY(sa.Text()), nullable=True),
     sa.Column('regulatory_clarity', sa.String(length=50), nullable=True),
     sa.Column('offer_competitiveness', sa.String(length=50), nullable=True),
-    sa.Column('core_value_driver', sa.String(length=50), nullable=True),
+    sa.Column('core_value_driver', postgresql.ARRAY(sa.Text()), nullable=True),
     sa.Column('cash_flow_quality', sa.String(length=50), nullable=True),
     sa.Column('view_quality', sa.String(length=50), nullable=True),
     sa.Column('pool_type', sa.String(length=50), nullable=True),
@@ -90,6 +92,9 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id'),
     schema='iron_bank'
     )
+    op.create_index('ix_underwritings_market_type', 'underwritings', ['market_type'], unique=False, schema='iron_bank', postgresql_using='gin')
+    op.create_index('ix_underwritings_seasonality', 'underwritings', ['seasonality'], unique=False, schema='iron_bank', postgresql_using='gin')
+    op.create_index('ix_underwritings_core_value_driver', 'underwritings', ['core_value_driver'], unique=False, schema='iron_bank', postgresql_using='gin')
     op.create_table('uw_comp_sets',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('underwriting_id', sa.Integer(), nullable=False),
@@ -164,5 +169,8 @@ def downgrade() -> None:
     op.drop_table('uw_operating_expenses', schema='iron_bank')
     op.drop_table('uw_details', schema='iron_bank')
     op.drop_table('uw_comp_sets', schema='iron_bank')
+    op.drop_index('ix_underwritings_core_value_driver', table_name='underwritings', schema='iron_bank')
+    op.drop_index('ix_underwritings_seasonality', table_name='underwritings', schema='iron_bank')
+    op.drop_index('ix_underwritings_market_type', table_name='underwritings', schema='iron_bank')
     op.drop_table('underwritings', schema='iron_bank')
     # ### end Alembic commands ###
