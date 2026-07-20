@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import Row, func, select
+from sqlalchemy import Row, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -21,6 +21,16 @@ class ScheduledListingsRepository:
             select(ScheduledListing).where(ScheduledListing.zpid == zpid)
         )
         return result.scalar_one_or_none()
+
+    async def set_remove_listing(self, zpid: str, remove: bool) -> bool:
+        """Flag/unflag a listing for removal. No commit — the caller's
+        transaction owns the write. Returns whether a row matched."""
+        result = await self.db.execute(
+            update(ScheduledListing)
+            .where(ScheduledListing.zpid == zpid)
+            .values(remove_listing=remove)
+        )
+        return result.rowcount > 0
 
     async def get_all(self, skip: int = 0, limit: int = 100) -> list[ScheduledListing]:
         result = await self.db.execute(

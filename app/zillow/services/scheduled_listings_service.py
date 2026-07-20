@@ -20,6 +20,9 @@ class ScheduledListingsService:
     async def get_by_zpid(self, zpid: str) -> ScheduledListing | None:
         return await self.repository.get_by_zpid(zpid)
 
+    async def set_remove_listing(self, zpid: str, remove: bool) -> bool:
+        return await self.repository.set_remove_listing(zpid, remove)
+
     async def get_by_detail_url(self, detail_url: str) -> ScheduledListing | None:
         return await self.repository.get_by_detail_url(detail_url)
 

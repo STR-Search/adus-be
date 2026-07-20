@@ -186,6 +186,9 @@ class UpdateUnderwritingService(SaveUnderwritingService):
             underwriting_data["approver_id"] = actor_user_id
             underwriting_data["deal_approved"] = datetime.now(timezone.utc)
 
+        # Before repository.update so its commit covers both writes atomically.
+        await self._sync_listing_removal(existing, deal_status)
+
         underwriting = await self.repository.update(
             underwriting_id=underwriting_id,
             underwriting_data=underwriting_data,
@@ -197,6 +200,22 @@ class UpdateUnderwritingService(SaveUnderwritingService):
             underwriting_id=underwriting.id,
             deal_status=underwriting.deal_status,
         )
+
+    async def _sync_listing_removal(self, existing, deal_status: DealStatus) -> None:
+        """Mirror the delete_zillow status onto the linked scheduled listing.
+
+        Entering delete_zillow flags the listing for removal; leaving it
+        clears the flag. Skips silently when there is no linked listing.
+        """
+        if self.listings_service is None or existing.zpid is None:
+            return
+        if deal_status == DealStatus.DELETE_ZILLOW:
+            remove = True
+        elif existing.deal_status == DealStatus.DELETE_ZILLOW:
+            remove = False
+        else:
+            return
+        await self.listings_service.set_remove_listing(existing.zpid, remove)
 
     async def reconcile_purchase_price(
         self,
