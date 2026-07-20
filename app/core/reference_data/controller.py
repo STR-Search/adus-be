@@ -7,6 +7,7 @@ from app.core.reference_data.schemas import (
     CreateEnumOptionPayload,
     EnumOptionRead,
     ReferenceDataResult,
+    SetCodesResult,
     UpdateEnumOptionPayload,
 )
 from app.core.reference_data.service import ReferenceDataService
@@ -29,6 +30,16 @@ class ReferenceDataController:
             logger.error("reference_data.get.error", error=str(e))
             raise HTTPException(
                 status_code=500, detail="Failed to fetch reference data"
+            )
+
+    async def get_set_codes(self, domain: str | None = None) -> SetCodesResult:
+        try:
+            sets = await self.service.get_set_codes(domain=domain)
+            return SetCodesResult(sets=sets)
+        except Exception as e:
+            logger.error("reference_data.sets.error", error=str(e))
+            raise HTTPException(
+                status_code=500, detail="Failed to fetch reference data sets"
             )
 
     async def create_option(

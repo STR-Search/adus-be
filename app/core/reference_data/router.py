@@ -8,6 +8,7 @@ from app.core.reference_data.schemas import (
     CreateEnumOptionPayload,
     EnumOptionRead,
     ReferenceDataResult,
+    SetCodesResult,
     UpdateEnumOptionPayload,
 )
 from app.core.reference_data.service import ReferenceDataService
@@ -37,6 +38,14 @@ async def get_reference_data(
         else None
     )
     return await controller.get_reference_data(domain=domain, set_codes=set_codes)
+
+
+@router.get("/reference-data/sets", response_model=SetCodesResult)
+async def get_reference_data_sets(
+    domain: str | None = Query(None),
+    controller: ReferenceDataController = Depends(get_reference_data_controller),
+):
+    return await controller.get_set_codes(domain=domain)
 
 
 @router.post("/reference-data/options", response_model=EnumOptionRead, status_code=201)

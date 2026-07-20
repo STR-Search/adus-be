@@ -27,6 +27,12 @@ class ReferenceDataResult(BaseModel):
     options: dict[str, list[ReferenceDataOption]]
 
 
+class SetCodesResult(BaseModel):
+    """Distinct ``set_code`` values available for the requested scope."""
+
+    sets: list[str]
+
+
 class CreateEnumOptionPayload(BaseModel):
     domain: str
     set_code: str

@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import distinct, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.reference_data.models import EnumOption
@@ -24,6 +24,20 @@ class ReferenceDataRepository:
         if not include_inactive:
             query = query.where(EnumOption.is_active.is_(True))
         query = query.order_by(EnumOption.set_code, EnumOption.sort_order)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def list_set_codes(
+        self,
+        domain: str | None = None,
+        include_inactive: bool = False,
+    ) -> list[str]:
+        query = select(distinct(EnumOption.set_code))
+        if domain is not None:
+            query = query.where(EnumOption.domain == domain)
+        if not include_inactive:
+            query = query.where(EnumOption.is_active.is_(True))
+        query = query.order_by(EnumOption.set_code)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

@@ -79,6 +79,13 @@ class ReferenceDataService:
             grouped.setdefault(option.set_code, []).append(self._to_option(option))
         return ReferenceDataResult(options=grouped)
 
+    async def get_set_codes(
+        self,
+        domain: str | None = None,
+    ) -> list[str]:
+        """List the distinct ``set_code`` values available for a domain."""
+        return await self.repository.list_set_codes(domain=domain)
+
     async def get_label_map(
         self,
         domain: str | None = None,
