@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # Usage (run from the repository root):
-#   export SOURCE_DATABASE_URL='postgresql://postgres.<source-ref>:<password>@<pooler-host>:5432/postgres'
-#   export DEV_DATABASE_URL='postgresql://postgres.<dev-ref>:<password>@<pooler-host>:5432/postgres'
+#   export SOURCE_DATABASE_URL=postgresql://postgres.<source-ref>:<password>@<pooler-host>:5432/postgres
+#   export DEV_DATABASE_URL=postgresql://postgres.<dev-ref>:<password>@<pooler-host>:5432/postgres
 #   PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH" \
 #     ./scripts/seeding_scripts/table_transfer.sh
 
