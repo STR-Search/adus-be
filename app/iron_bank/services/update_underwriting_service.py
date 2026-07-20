@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi.encoders import jsonable_encoder
 
 from app.iron_bank.enums import DealStatus
@@ -149,7 +151,11 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         ):
             return payload.details.zillow_property.bedrooms
 
-        stored = getattr(existing.detail, "zillow_property", None) if existing.detail else None
+        stored = (
+            getattr(existing.detail, "zillow_property", None)
+            if existing.detail
+            else None
+        )
         if isinstance(stored, dict) and stored.get("bedrooms") is not None:
             return stored["bedrooms"]
 
@@ -178,6 +184,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         # The approver is whoever moves the deal to "present to clients".
         if deal_status == DealStatus.PRESENT_TO_CLIENTS:
             underwriting_data["approver_id"] = actor_user_id
+            underwriting_data["deal_approved"] = datetime.now(timezone.utc)
 
         underwriting = await self.repository.update(
             underwriting_id=underwriting_id,
