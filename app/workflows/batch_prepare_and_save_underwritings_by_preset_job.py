@@ -2,6 +2,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logger import logger
 from app.zillow.repositories.scheduled_listings_repository import (
     ScheduledListingsRepository,
 )
@@ -14,7 +15,8 @@ from app.workflows.prepare_and_save_underwriting_job import (
 class BatchPrepareAndSaveUnderwritingsByPresetJob:
     """Runs the automated UW save workflow for recent active Zillow listings in a preset."""
 
-    def __init__(self, *, listings_service, prepare_and_save_job):
+    def __init__(self, *, db, listings_service, prepare_and_save_job):
+        self.db = db
         self.listings_service = listings_service
         self.prepare_and_save_job = prepare_and_save_job
 
@@ -23,6 +25,7 @@ class BatchPrepareAndSaveUnderwritingsByPresetJob:
         cls, db: AsyncSession
     ) -> "BatchPrepareAndSaveUnderwritingsByPresetJob":
         return cls(
+            db=db,
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
             prepare_and_save_job=PrepareAndSaveUnderwritingJob.from_session(db),
         )
@@ -50,6 +53,14 @@ class BatchPrepareAndSaveUnderwritingsByPresetJob:
             try:
                 result = await self.prepare_and_save_job.run(listing.zpid)
             except Exception as exc:
+                logger.exception(
+                    "iron_bank.batch_prepare.listing_failed",
+                    zpid=listing.zpid,
+                    preset_id=str(preset_id),
+                )
+                # A failed listing may have aborted the transaction; roll back
+                # so the remaining listings run on a clean session.
+                await self.db.rollback()
                 failed += 1
                 results.append(
                     {

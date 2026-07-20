@@ -68,4 +68,8 @@ async def run_batch_job(job_id: uuid.UUID, job_type: str, params: dict) -> None:
                 job_id=str(job_id),
                 job_type=job_type,
             )
+            # The job body may have left the transaction aborted; roll back so
+            # the terminal status write lands and the row never sticks in
+            # "running".
+            await db.rollback()
             await repo.mark_failed(job_id, str(exc))
