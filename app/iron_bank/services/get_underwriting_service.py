@@ -77,6 +77,17 @@ class GetUnderwritingService:
         amenities = await self.construction_amenities_service.get_all()
         remodeling = await self.construction_remodeling_service.get_all()
 
+        # iron_bank reference data (deal tag options), grouped by set_code. The
+        # (domain="iron_bank") options were already fetched into the service's
+        # per-request cache by _populate_reference_labels, so this is a cache
+        # hit rather than a second query.
+        deal_tag_options: dict = {}
+        if self.reference_data_service is not None:
+            reference_data = await self.reference_data_service.get_reference_data(
+                domain="iron_bank"
+            )
+            deal_tag_options = reference_data.options
+
         # zillow_property was just coerced onto details, so its area is the
         # single source for the cribs fee tier (both automated and stored
         # paths funnel through it).
@@ -106,6 +117,7 @@ class GetUnderwritingService:
                         ConstructionRemodelingOption.model_validate(r.model_dump())
                         for r in remodeling
                     ],
+                    deal_tag_options=deal_tag_options,
                 ),
             )
         )

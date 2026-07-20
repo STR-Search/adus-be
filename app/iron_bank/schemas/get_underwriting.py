@@ -3,6 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
+from app.core.reference_data.schemas import ReferenceDataOption
 from app.iron_bank.enums import DealStatus, SortOrder, UnderwritingSortBy
 from app.iron_bank.schemas.underwriting import UnderwritingRead
 
@@ -199,6 +200,11 @@ class EditContextualData(BaseModel):
     )
     construction_remodeling: list[ConstructionRemodelingOption] = Field(
         default_factory=list
+    )
+    # iron_bank domain reference data, grouped by set_code — the same payload
+    # served by GET /reference-data?domain=iron_bank.
+    deal_tag_options: dict[str, list[ReferenceDataOption]] = Field(
+        default_factory=dict
     )
 
 
