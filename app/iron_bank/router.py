@@ -133,6 +133,7 @@ def get_update_underwriting_controller(
         CleanedDataRepository,
     )
     from app.airbnb_public.services.cleaned_data_service import CleanedDataService
+    from app.external_api.services.n8n_webhook_service import N8nWebhookService
     from app.markets.repositories.market_repository import MarketRepository
     from app.markets.services.market_service import MarketService
     from app.zillow.repositories.scheduled_listings_repository import (
@@ -147,6 +148,7 @@ def get_update_underwriting_controller(
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
             cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
             reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
+            n8n_webhook_service=N8nWebhookService(),
         )
     )
 
