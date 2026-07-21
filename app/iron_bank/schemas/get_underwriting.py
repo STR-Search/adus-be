@@ -1,7 +1,14 @@
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    model_serializer,
+    model_validator,
+)
 
 from app.core.reference_data.schemas import ReferenceDataOption
 from app.iron_bank.enums import DealStatus, SortOrder, UnderwritingSortBy
@@ -73,6 +80,11 @@ class GetUnderwritingCompSet(BaseModel):
 
 
 class GetUnderwritingResult(UnderwritingRead):
+    # Only populated in simulation mode (interest_rate / down_payment_pct
+    # overrides): True when the row's metrics were recalculated, False when the
+    # row lacked the inputs to simulate (stored values shown instead). Stays
+    # None — and out of the payload — on the normal list path.
+    simulated: bool | None = None
     details: GetUnderwritingDetails | None = None
     taxes: GetUnderwritingTaxes | None = None
     optimization_list: list[GetUnderwritingOptimizationItem] = Field(
@@ -82,6 +94,22 @@ class GetUnderwritingResult(UnderwritingRead):
         default_factory=list
     )
     comp_set: list[GetUnderwritingCompSet] = Field(default_factory=list)
+
+    @model_serializer(mode="wrap")
+    def _drop_null_simulated(self, handler):
+        # Keep the non-simulation response contract unchanged: the `simulated`
+        # key only appears when the row went through simulation mode.
+        data = handler(self)
+        if isinstance(data, dict) and data.get("simulated") is None:
+            data.pop("simulated", None)
+        return data
+
+
+class SimulationParams(BaseModel):
+    """Echo of the financing overrides a simulated list was computed with."""
+
+    interest_rate: Decimal | None = None
+    down_payment_pct: Decimal | None = None
 
 
 class GetUnderwritingsQuery(BaseModel):
@@ -106,6 +134,11 @@ class GetUnderwritingsQuery(BaseModel):
     max_l_cash_on_cash: Decimal | None = None
     sort_by: UnderwritingSortBy = UnderwritingSortBy.ID
     sort_order: SortOrder = SortOrder.DESC
+    # Simulation mode: when either override is present, list metrics are
+    # recalculated with it (nothing is persisted) and filtering/sorting run on
+    # the simulated values. Fractional values, e.g. 0.069 and 0.1.
+    interest_rate: Decimal | None = Field(None, ge=0, lt=1)
+    down_payment_pct: Decimal | None = Field(None, ge=0, le=1)
 
     @model_validator(mode="after")
     def check_ranges(self):
@@ -142,6 +175,15 @@ class GetUnderwritingsResult(BaseModel):
     page: int
     page_size: int
     pages: int
+    # Present only in simulation mode; echoes the overrides applied.
+    simulation: SimulationParams | None = None
+
+    @model_serializer(mode="wrap")
+    def _drop_null_simulation(self, handler):
+        data = handler(self)
+        if isinstance(data, dict) and data.get("simulation") is None:
+            data.pop("simulation", None)
+        return data
 
 
 class ConstructionAmenityOption(BaseModel):

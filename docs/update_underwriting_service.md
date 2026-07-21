@@ -397,6 +397,21 @@ The collection defaults are especially important:
 Therefore, a list can be **empty for calculation purposes** while the existing
 database collection is **preserved for persistence purposes**.
 
+### Payload guard: purchase details require explicit collections
+
+`UpdateUnderwritingPayload` rejects (HTTP 422) any request that sends
+`details.purchase_details` without **explicitly** sending both
+`optimization_list` and `operating_expenses`. This closes the worst variant of
+the caveats above: recalculating OOP, returns, and scenario economics against
+empty default lists while non-empty stored rows are silently preserved.
+
+- Explicit empty lists are accepted — that is a deliberate "there are none"
+  (and, per the replacement semantics, clears the stored rows).
+- Detail updates without `purchase_details` (e.g. `analyst_notes`) are not
+  affected.
+- Internal paths built on `SaveUnderwritingPayload` (e.g. purchase-price
+  reconciliation) are not affected.
+
 ## 11. Deal-status update path
 
 The dedicated route is:

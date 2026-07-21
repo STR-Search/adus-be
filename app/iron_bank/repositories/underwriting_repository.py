@@ -105,6 +105,87 @@ class UnderwritingRepository:
         items = list(result.scalars().all())
         return items, total, pages
 
+    async def get_simulation_inputs(
+        self,
+        *,
+        zpid: str | None = None,
+        market_id: int | None = None,
+        deal_status: str | None = None,
+        analyst_id: int | None = None,
+        min_purchase_price: Decimal | None = None,
+        max_purchase_price: Decimal | None = None,
+    ) -> list[Any]:
+        """Lean full-set fetch of per-row simulation inputs.
+
+        Simulation must recalculate financing-derived metrics for the *whole*
+        filtered set before it can filter/sort/paginate on them, so this
+        deliberately returns thin rows (no child selectinloads, no pagination):
+        stored fallback values for sort/filter, the detail JSON calculation
+        inputs, and the child-collection totals the calculator sums over.
+
+        Only filters that simulation does NOT change are applied here; the
+        total_oop / l_cash_on_cash bounds are applied by the service in Python
+        against the simulated values (filtering them in SQL would compare
+        stored values and wrongly include/exclude rows).
+        """
+        query = (
+            select(
+                Underwriting.id,
+                Underwriting.purchase_price,
+                Underwriting.total_oop,
+                Underwriting.l_cash_on_cash,
+                Underwriting.optimization_total,
+                Underwriting.operating_expense_total,
+                UnderwritingDetail.purchase_details,
+                UnderwritingDetail.forecasted_revenue,
+                UnderwritingTax.tax_savings,
+            )
+            .outerjoin(
+                UnderwritingDetail,
+                UnderwritingDetail.underwriting_id == Underwriting.id,
+            )
+            .outerjoin(
+                UnderwritingTax,
+                UnderwritingTax.underwriting_id == Underwriting.id,
+            )
+        )
+        if zpid is not None:
+            query = query.where(Underwriting.zpid == zpid)
+        if market_id is not None:
+            query = query.where(Underwriting.market_id == market_id)
+        if deal_status is not None:
+            query = query.where(Underwriting.deal_status == deal_status)
+        if analyst_id is not None:
+            query = query.where(Underwriting.analyst_id == analyst_id)
+        if min_purchase_price is not None:
+            query = query.where(Underwriting.purchase_price >= min_purchase_price)
+        if max_purchase_price is not None:
+            query = query.where(Underwriting.purchase_price <= max_purchase_price)
+
+        result = await self.db.execute(query)
+        return list(result.all())
+
+    async def get_by_ids(self, ids: list[int]) -> list[Underwriting]:
+        """Fully hydrated rows for one page of ids.
+
+        ``WHERE id IN (...)`` returns rows in DB order, not input order — the
+        caller (simulation service) restores its Python-computed ordering.
+        """
+        if not ids:
+            return []
+        result = await self.db.execute(
+            select(Underwriting)
+            .where(Underwriting.id.in_(ids))
+            .options(
+                selectinload(Underwriting.detail),
+                selectinload(Underwriting.taxes),
+                selectinload(Underwriting.optimization_items),
+                selectinload(Underwriting.operating_expenses),
+                selectinload(Underwriting.comp_set),
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_by_listing_url(self, listing_url: str) -> Underwriting | None:
         result = await self.db.execute(
             select(Underwriting)
