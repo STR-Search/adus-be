@@ -395,3 +395,125 @@ async def test_update_skips_revenue_when_no_bedrooms_source():
     underwriting_data = repository.update_kwargs["underwriting_data"]
     assert "mid_gross_revenue" not in underwriting_data
     assert "forecasted_revenue" not in repository.update_kwargs["detail_data"]
+
+
+# --- n8n automation webhook on present_to_clients -------------------------
+
+
+class FakeN8nWebhookService:
+    def __init__(self, fail: bool = False):
+        self.payloads = []
+        self.fail = fail
+
+    async def send(self, *, payload: dict) -> bool:
+        if self.fail:
+            raise RuntimeError("n8n unreachable")
+        self.payloads.append(payload)
+        return True
+
+
+def _webhook_underwriting(**overrides):
+    base = dict(
+        id=42,
+        zpid="2078451",
+        market_id=7,
+        analyst_id=3,
+        approver_id=None,
+        deal_status=DealStatus.ANALYST_COMPLETED,
+        property_address="1 Main St, Austin, TX",
+        listing_url="https://zillow.com/x",
+        purchase_price=Decimal("525000.00"),
+        total_oop=Decimal("182500.00"),
+        luxury=True,
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+@pytest.mark.asyncio
+async def test_update_deal_status_fires_webhook_on_present_to_clients():
+    webhook = FakeN8nWebhookService()
+    repository = FakeUnderwritingRepository(_webhook_underwriting())
+    service = UpdateUnderwritingService(repository, n8n_webhook_service=webhook)
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    assert len(webhook.payloads) == 1
+    payload = webhook.payloads[0]
+    assert payload["id"] == 42
+    assert payload["zpid"] == "2078451"
+    assert payload["market_id"] == 7
+    assert payload["property_address"] == "1 Main St, Austin, TX"
+    # Decimals serialize as strings, not floats — no money rounding.
+    assert payload["purchase_price"] == "525000.00"
+    assert payload["luxury"] is True
+    # NULL-able booleans fall back to the schema default rather than blowing up.
+    assert payload["turnkey"] is False
+
+
+@pytest.mark.asyncio
+async def test_update_deal_status_does_not_fire_for_other_statuses():
+    webhook = FakeN8nWebhookService()
+    repository = FakeUnderwritingRepository(_webhook_underwriting())
+    service = UpdateUnderwritingService(repository, n8n_webhook_service=webhook)
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.MAYBE,
+        actor_user_id=9,
+    )
+
+    assert webhook.payloads == []
+
+
+@pytest.mark.asyncio
+async def test_update_deal_status_does_not_refire_when_already_present_to_clients():
+    webhook = FakeN8nWebhookService()
+    repository = FakeUnderwritingRepository(
+        _webhook_underwriting(deal_status=DealStatus.PRESENT_TO_CLIENTS)
+    )
+    service = UpdateUnderwritingService(repository, n8n_webhook_service=webhook)
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    assert webhook.payloads == []
+
+
+@pytest.mark.asyncio
+async def test_update_deal_status_succeeds_when_webhook_raises():
+    """An n8n outage must never break an approver's status change."""
+    repository = FakeUnderwritingRepository(_webhook_underwriting())
+    service = UpdateUnderwritingService(
+        repository, n8n_webhook_service=FakeN8nWebhookService(fail=True)
+    )
+
+    result = await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    assert result.underwriting_id == 42
+
+
+@pytest.mark.asyncio
+async def test_update_deal_status_is_a_noop_when_no_webhook_service_wired():
+    # Batch/job callers construct the service bare; nothing should fire.
+    repository = FakeUnderwritingRepository(_webhook_underwriting())
+    service = UpdateUnderwritingService(repository)
+
+    result = await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    assert result.underwriting_id == 42
