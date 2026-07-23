@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.save_underwriting import (
@@ -79,6 +79,33 @@ class UpdateUnderwritingPayload(BaseModel):
     optimization_list: list[OptimizationItemInput] = Field(default_factory=list)
     operating_expenses: list[OperatingExpenseInput] = Field(default_factory=list)
     comp_set: list[CompSetInput] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def require_collections_with_purchase_details(self):
+        """Guard against recalculating economics from empty default lists.
+
+        The update path calculates from the request payload only (stored rows
+        are never merged in), so sending ``details.purchase_details`` without
+        the collections would compute OOP/CoC as if the underwriting had no
+        optimization items or operating expenses — while the stored rows are
+        silently preserved. Require both keys to be explicit (empty lists are
+        fine: that's a deliberate "there are none").
+        """
+        if self.details is None or self.details.purchase_details is None:
+            return self
+        missing = [
+            field
+            for field in ("optimization_list", "operating_expenses")
+            if field not in self.model_fields_set
+        ]
+        if missing:
+            raise ValueError(
+                f"{' and '.join(missing)} must be sent explicitly when "
+                "details.purchase_details is provided; otherwise calculations "
+                "would run against empty collections while stored rows are "
+                "preserved"
+            )
+        return self
 
 
 class UpdateUnderwritingResult(BaseModel):

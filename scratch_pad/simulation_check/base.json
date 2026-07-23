@@ -1,0 +1,228 @@
+{
+    "data": [
+        {
+            "zpid": "26381758",
+            "market_id": 33,
+            "analyst_id": null,
+            "approver_id": null,
+            "deal_status": "template_generated",
+            "deal_added": "2026-07-05T10:43:19.798647Z",
+            "deal_submitted": null,
+            "deal_approved": null,
+            "property_pending": false,
+            "is_automated": true,
+            "property_address": "13014 LARKYORKE ST, San Antonio, TX 78233",
+            "street": null,
+            "city": null,
+            "state": null,
+            "days_on_market": null,
+            "sleep_capacity": null,
+            "purchase_price": "375000.00",
+            "total_oop": "48750.00",
+            "prr": "0.2863",
+            "budget_to_pp": "0.1300",
+            "low_gross_revenue": "92546.81",
+            "mid_gross_revenue": "107359.57",
+            "high_gross_revenue": "134313.94",
+            "l_cash_on_cash": "0.2199",
+            "m_cash_on_cash": "0.4765",
+            "h_cash_on_cash": "0.9822",
+            "turnkey": false,
+            "furnished": false,
+            "luxury": false,
+            "tax_efficient": false,
+            "new_construction": false,
+            "existing_airbnb": false,
+            "arv": false,
+            "high_cash_on_cash": false,
+            "low_cash_on_cash": false,
+            "add_inground_pool": false,
+            "renovation_level": null,
+            "deal_complexity": null,
+            "waterfront": false,
+            "remote": false,
+            "can_support_cohost": false,
+            "market_type": null,
+            "execution_type": null,
+            "seasonality": null,
+            "regulatory_clarity": null,
+            "offer_competitiveness": null,
+            "core_value_driver": null,
+            "cash_flow_quality": null,
+            "view_quality": null,
+            "pool_type": null,
+            "primary_guest_avatar": null,
+            "listing_url": "https://www.zillow.com/homedetails/13014-Larkyorke-St-San-Antonio-TX-78233/26381758_zpid/",
+            "loom_vid": null,
+            "video_walkthrough": null,
+            "survey": null,
+            "note": null,
+            "deal_benefits": null,
+            "property_uniqueness": null,
+            "deal_score": null,
+            "id": 438,
+            "display_id": null,
+            "optimization_total": null,
+            "operating_expense_total": "4792.50",
+            "market_type_label": null,
+            "execution_type_label": null,
+            "seasonality_label": null,
+            "regulatory_clarity_label": null,
+            "offer_competitiveness_label": null,
+            "core_value_driver_label": null,
+            "cash_flow_quality_label": null,
+            "view_quality_label": null,
+            "pool_type_label": null,
+            "primary_guest_avatar_label": null,
+            "details": {
+                "purchase_details": {
+                    "loan_amount": 337500,
+                    "interest_rate": 0.0688,
+                    "mortgage_years": 30,
+                    "purchase_price": 375000,
+                    "down_payment_pct": 0.1,
+                    "closing_costs_pct": 0.03,
+                    "down_payment_amount": 37500,
+                    "closing_costs_amount": 11250
+                },
+                "y1_coc_incl_tax_savings": {
+                    "low_pct": 1.04,
+                    "mid_pct": 1.296,
+                    "high_pct": 1.802
+                },
+                "forecasted_revenue": {
+                    "scenarios": {
+                        "low": {
+                            "co_hosting_fee": 0,
+                            "forecasted_revenue": 92546.81399999998,
+                            "principal_pay_down": 3508.41,
+                            "debt_service_annual": 26619.15,
+                            "net_operating_income": 37337.21,
+                            "annual_free_cash_flow": 10718.06,
+                            "annual_re_appreciation": 15937.5,
+                            "operating_expenses_annual": 55209.6,
+                            "annual_total_re_return_pct": 0.6187
+                        },
+                        "mid": {
+                            "co_hosting_fee": 0,
+                            "forecasted_revenue": 107359.57,
+                            "principal_pay_down": 3508.41,
+                            "debt_service_annual": 26619.15,
+                            "net_operating_income": 49849.57,
+                            "annual_free_cash_flow": 23230.42,
+                            "annual_re_appreciation": 15937.5,
+                            "operating_expenses_annual": 57510,
+                            "annual_total_re_return_pct": 0.8754
+                        },
+                        "high": {
+                            "co_hosting_fee": 0,
+                            "forecasted_revenue": 134313.944,
+                            "principal_pay_down": 3508.41,
+                            "debt_service_annual": 26619.15,
+                            "net_operating_income": 74503.54,
+                            "annual_free_cash_flow": 47884.39,
+                            "annual_re_appreciation": 15937.5,
+                            "operating_expenses_annual": 59810.4,
+                            "annual_total_re_return_pct": 1.3811
+                        }
+                    },
+                    "co_hosting_fee_pct": 0,
+                    "annual_re_appreciation_pct": 0.0425
+                },
+                "cleaning_cost": {
+                    "cost_per_clean": 285,
+                    "turns_per_month": 5.75,
+                    "monthly_cleaning_cost": 1638.75
+                },
+                "property_taxes": {
+                    "inputs": {
+                        "purchase_price": 375000,
+                        "opex_property_tax_pct": 0.027
+                    },
+                    "source": "opex_property_tax_pct",
+                    "annual_amount": 10125,
+                    "monthly_amount": 843.75
+                },
+                "zillow_property": {
+                    "id": "26381758",
+                    "url": "https://www.zillow.com/homedetails/13014-Larkyorke-St-San-Antonio-TX-78233/26381758_zpid/",
+                    "thumbnail": "https://photos.zillowstatic.com/fp/8de9005df795c41aad6d9b8ef5dad998-p_e.jpg",
+                    "price": "375000",
+                    "address": "13014 LARKYORKE ST, San Antonio, TX 78233",
+                    "bedrooms": 5,
+                    "bathrooms": "3.0",
+                    "area": 1714,
+                    "lot_size_sqft": "8407.0"
+                },
+                "analyst_notes": null
+            },
+            "taxes": {
+                "land_assumptions_pct": "0.2000",
+                "sla_multiplier_pct": "0.3600",
+                "improvement_basis": "300000.00",
+                "estimated_short_life_assets": "108000.00",
+                "bonus_amount_pct": "1.0000",
+                "tax_rate_pct": "0.3700",
+                "y1_loss_from_depreciation": "108000.00",
+                "tax_savings": "39960.00"
+            },
+            "optimization_list": [],
+            "operating_expenses": [
+                {
+                    "expense": "Cleaning",
+                    "monthly": "1638.75"
+                },
+                {
+                    "expense": "Property Taxes",
+                    "monthly": "843.75"
+                },
+                {
+                    "expense": "Pool/Hot Tub Maintenance",
+                    "monthly": "125.00"
+                },
+                {
+                    "expense": "Outdoor Landscaping",
+                    "monthly": "225.00"
+                },
+                {
+                    "expense": "Software",
+                    "monthly": "50.00"
+                },
+                {
+                    "expense": "Insurance Hoi",
+                    "monthly": "425.00"
+                },
+                {
+                    "expense": "Supplies",
+                    "monthly": "250.00"
+                },
+                {
+                    "expense": "Capex Reserve",
+                    "monthly": "500.00"
+                },
+                {
+                    "expense": "Hoa Fees",
+                    "monthly": "0.00"
+                },
+                {
+                    "expense": "Internet",
+                    "monthly": "100.00"
+                },
+                {
+                    "expense": "Pest Control",
+                    "monthly": "60.00"
+                },
+                {
+                    "expense": "Utilities",
+                    "monthly": "575.00"
+                }
+            ],
+            "comp_set": [],
+            "deal_status_label": "Template Generated"
+        }
+    ],
+    "total": 1,
+    "page": 1,
+    "page_size": 2,
+    "pages": 1
+}

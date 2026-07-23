@@ -58,6 +58,9 @@ from app.iron_bank.services.create_underwriting_from_url_service import (
     CreateUnderwritingFromUrlService,
 )
 from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
+from app.iron_bank.services.simulate_underwritings_service import (
+    SimulateUnderwritingsService,
+)
 from app.iron_bank.services.deal_status_service import DealStatusService
 from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
 from app.iron_bank.services.update_underwriting_service import UpdateUnderwritingService
@@ -183,27 +186,32 @@ def get_get_underwriting_controller(
     from app.zillow.services.scheduled_listings_service import ScheduledListingsService
 
     market_repo = MarketRepository(db)
+    # Shared dependency set so the normal list service and the simulation
+    # service can never drift apart: the simulation service is the read
+    # service plus a calculator, and the page it returns is enriched (zillow
+    # hydration, reference labels) identically to the normal list.
+    service_deps = dict(
+        listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
+        listing_details_service=ScheduledListingDetailsService(
+            ScheduledListingDetailsRepository(db)
+        ),
+        opex_by_bedrooms_service=OpexByBedroomsService(
+            OpexByBedroomsRepository(db), market_repo
+        ),
+        construction_amenities_service=ConstructionAmenitiesService(
+            ConstructionAmenitiesRepository(db)
+        ),
+        construction_remodeling_service=ConstructionRemodelingService(
+            ConstructionRemodelingRepository(db)
+        ),
+        str_cribs_service=StrCribsFeeDetailsService(StrCribsFeeDetailsRepository(db)),
+        reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
+    )
     return GetUnderwritingController(
-        GetUnderwritingService(
-            UnderwritingRepository(db),
-            listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
-            listing_details_service=ScheduledListingDetailsService(
-                ScheduledListingDetailsRepository(db)
-            ),
-            opex_by_bedrooms_service=OpexByBedroomsService(
-                OpexByBedroomsRepository(db), market_repo
-            ),
-            construction_amenities_service=ConstructionAmenitiesService(
-                ConstructionAmenitiesRepository(db)
-            ),
-            construction_remodeling_service=ConstructionRemodelingService(
-                ConstructionRemodelingRepository(db)
-            ),
-            str_cribs_service=StrCribsFeeDetailsService(
-                StrCribsFeeDetailsRepository(db)
-            ),
-            reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
-        )
+        GetUnderwritingService(UnderwritingRepository(db), **service_deps),
+        simulation_service=SimulateUnderwritingsService(
+            UnderwritingRepository(db), **service_deps
+        ),
     )
 
 

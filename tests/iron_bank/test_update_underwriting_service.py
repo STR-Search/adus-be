@@ -317,6 +317,12 @@ def _details_with_purchase_only():
                 "closing_costs_pct": Decimal("0.03"),
             }
         },
+        # purchase_details now requires the collections to be explicit so the
+        # calculation never runs against empty defaults unintentionally.
+        # Explicit empty lists keep the calculation inputs identical to the
+        # old implicit defaults.
+        "optimization_list": [],
+        "operating_expenses": [],
     }
 
 
