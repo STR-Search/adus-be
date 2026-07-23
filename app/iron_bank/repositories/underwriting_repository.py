@@ -2,7 +2,7 @@ import math
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -241,11 +241,14 @@ class UnderwritingRepository:
                     )
                 )
 
+            # id may be present on the shared input schema (used by update for
+            # in-place matching); on create there is nothing to match, so drop
+            # it and let the sequence assign a fresh primary key.
             for item in optimization_items or []:
                 self.db.add(
                     UnderwritingOptimizationItem(
                         underwriting_id=underwriting.id,
-                        **item,
+                        **{k: v for k, v in item.items() if k != "id"},
                     )
                 )
 
@@ -253,7 +256,7 @@ class UnderwritingRepository:
                 self.db.add(
                     UnderwritingOperatingExpense(
                         underwriting_id=underwriting.id,
-                        **expense,
+                        **{k: v for k, v in expense.items() if k != "id"},
                     )
                 )
 
@@ -261,7 +264,7 @@ class UnderwritingRepository:
                 self.db.add(
                     UnderwritingCompSet(
                         underwriting_id=underwriting.id,
-                        **comp,
+                        **{k: v for k, v in comp.items() if k != "id"},
                     )
                 )
 
@@ -293,15 +296,26 @@ class UnderwritingRepository:
             if tax_data is not None:
                 self._upsert_taxes(underwriting, tax_data)
             if optimization_items is not None:
-                await self._replace_optimization_items(
-                    underwriting_id, optimization_items
+                await self._upsert_children(
+                    model=UnderwritingOptimizationItem,
+                    underwriting_id=underwriting_id,
+                    existing_rows=underwriting.optimization_items,
+                    incoming=optimization_items,
                 )
             if operating_expenses is not None:
-                await self._replace_operating_expenses(
-                    underwriting_id, operating_expenses
+                await self._upsert_children(
+                    model=UnderwritingOperatingExpense,
+                    underwriting_id=underwriting_id,
+                    existing_rows=underwriting.operating_expenses,
+                    incoming=operating_expenses,
                 )
             if comp_set is not None:
-                await self._replace_comp_set(underwriting_id, comp_set)
+                await self._upsert_children(
+                    model=UnderwritingCompSet,
+                    underwriting_id=underwriting_id,
+                    existing_rows=underwriting.comp_set,
+                    incoming=comp_set,
+                )
 
             await self.db.commit()
             await self.db.refresh(underwriting)
@@ -346,56 +360,38 @@ class UnderwritingRepository:
 
         self._update_model_fields(underwriting.taxes, tax_data)
 
-    async def _replace_optimization_items(
+    async def _upsert_children(
         self,
+        *,
+        model,
         underwriting_id: int,
-        items: list[dict[str, Any]],
+        existing_rows,
+        incoming: list[dict[str, Any]],
     ) -> None:
-        await self.db.execute(
-            delete(UnderwritingOptimizationItem).where(
-                UnderwritingOptimizationItem.underwriting_id == underwriting_id
-            )
-        )
-        for item in items:
-            self.db.add(
-                UnderwritingOptimizationItem(
-                    underwriting_id=underwriting_id,
-                    **item,
-                )
-            )
+        """Diff a child collection against the incoming payload by primary key.
 
-    async def _replace_operating_expenses(
-        self,
-        underwriting_id: int,
-        expenses: list[dict[str, Any]],
-    ) -> None:
-        await self.db.execute(
-            delete(UnderwritingOperatingExpense).where(
-                UnderwritingOperatingExpense.underwriting_id == underwriting_id
-            )
-        )
-        for expense in expenses:
-            self.db.add(
-                UnderwritingOperatingExpense(
-                    underwriting_id=underwriting_id,
-                    **expense,
-                )
-            )
+        Preserves row ids across updates (so the autoincrement sequence isn't
+        churned on every edit): incoming items whose ``id`` matches an existing
+        row are updated in place; items without a matching ``id`` are inserted
+        with a fresh id; existing rows absent from the payload are deleted.
 
-    async def _replace_comp_set(
-        self,
-        underwriting_id: int,
-        comp_set: list[dict[str, Any]],
-    ) -> None:
-        await self.db.execute(
-            delete(UnderwritingCompSet).where(
-                UnderwritingCompSet.underwriting_id == underwriting_id
-            )
-        )
-        for comp in comp_set:
-            self.db.add(
-                UnderwritingCompSet(
-                    underwriting_id=underwriting_id,
-                    **comp,
-                )
-            )
+        A client-supplied ``id`` that does not belong to this underwriting is
+        treated as a new insert — we never trust an arbitrary primary key from
+        the request, we only reuse ids we already own for this row.
+        """
+        existing_by_id = {row.id: row for row in existing_rows}
+        seen_ids: set[int] = set()
+
+        for item in incoming:
+            fields = dict(item)
+            item_id = fields.pop("id", None)
+            existing = existing_by_id.get(item_id) if item_id is not None else None
+            if existing is not None:
+                self._update_model_fields(existing, fields)
+                seen_ids.add(item_id)
+            else:
+                self.db.add(model(underwriting_id=underwriting_id, **fields))
+
+        for row_id, row in existing_by_id.items():
+            if row_id not in seen_ids:
+                await self.db.delete(row)

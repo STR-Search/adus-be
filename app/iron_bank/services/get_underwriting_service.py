@@ -319,6 +319,7 @@ class GetUnderwritingService:
 
     def _optimization_item_data(self, item) -> dict[str, Any]:
         return {
+            "id": item.id,
             "category": item.category,
             "total_price": item.total_price,
             "metric": item.metric,
@@ -330,12 +331,14 @@ class GetUnderwritingService:
 
     def _operating_expense_data(self, expense) -> dict[str, Any]:
         return {
+            "id": expense.id,
             "expense_name": expense.expense_name,
             "monthly_amount": expense.monthly_amount,
         }
 
     def _comp_set_data(self, comp) -> dict[str, Any]:
         return {
+            "id": comp.id,
             "listing_url": comp.listing_url,
             "revenue": comp.revenue,
             "bedrooms": comp.bedrooms,
