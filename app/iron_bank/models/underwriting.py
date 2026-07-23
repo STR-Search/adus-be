@@ -153,13 +153,29 @@ class Underwriting(Base):
     taxes = relationship(
         "UnderwritingTax", back_populates="underwriting", uselist=False
     )
+    # Children are ordered by their payload position (sort_order), with id as
+    # a tiebreaker so pre-backfill rows (NULL sort_order) keep insertion order.
     optimization_items = relationship(
-        "UnderwritingOptimizationItem", back_populates="underwriting"
+        "UnderwritingOptimizationItem",
+        back_populates="underwriting",
+        order_by=(
+            "[UnderwritingOptimizationItem.sort_order,"
+            " UnderwritingOptimizationItem.id]"
+        ),
     )
     operating_expenses = relationship(
-        "UnderwritingOperatingExpense", back_populates="underwriting"
+        "UnderwritingOperatingExpense",
+        back_populates="underwriting",
+        order_by=(
+            "[UnderwritingOperatingExpense.sort_order,"
+            " UnderwritingOperatingExpense.id]"
+        ),
     )
-    comp_set = relationship("UnderwritingCompSet", back_populates="underwriting")
+    comp_set = relationship(
+        "UnderwritingCompSet",
+        back_populates="underwriting",
+        order_by="[UnderwritingCompSet.sort_order, UnderwritingCompSet.id]",
+    )
 
 
 class UnderwritingDetail(Base):

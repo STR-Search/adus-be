@@ -243,27 +243,31 @@ class UnderwritingRepository:
 
             # id may be present on the shared input schema (used by update for
             # in-place matching); on create there is nothing to match, so drop
-            # it and let the sequence assign a fresh primary key.
-            for item in optimization_items or []:
+            # it and let the sequence assign a fresh primary key. sort_order is
+            # server-assigned from payload position, never client-supplied.
+            for index, item in enumerate(optimization_items or []):
                 self.db.add(
                     UnderwritingOptimizationItem(
                         underwriting_id=underwriting.id,
+                        sort_order=index,
                         **{k: v for k, v in item.items() if k != "id"},
                     )
                 )
 
-            for expense in operating_expenses or []:
+            for index, expense in enumerate(operating_expenses or []):
                 self.db.add(
                     UnderwritingOperatingExpense(
                         underwriting_id=underwriting.id,
+                        sort_order=index,
                         **{k: v for k, v in expense.items() if k != "id"},
                     )
                 )
 
-            for comp in comp_set or []:
+            for index, comp in enumerate(comp_set or []):
                 self.db.add(
                     UnderwritingCompSet(
                         underwriting_id=underwriting.id,
+                        sort_order=index,
                         **{k: v for k, v in comp.items() if k != "id"},
                     )
                 )
@@ -378,12 +382,16 @@ class UnderwritingRepository:
         A client-supplied ``id`` that does not belong to this underwriting is
         treated as a new insert — we never trust an arbitrary primary key from
         the request, we only reuse ids we already own for this row.
+
+        ``sort_order`` is stamped from each item's position in the payload —
+        the array order is the display order the client intends.
         """
         existing_by_id = {row.id: row for row in existing_rows}
         seen_ids: set[int] = set()
 
-        for item in incoming:
+        for index, item in enumerate(incoming):
             fields = dict(item)
+            fields["sort_order"] = index
             item_id = fields.pop("id", None)
             existing = existing_by_id.get(item_id) if item_id is not None else None
             if existing is not None:
