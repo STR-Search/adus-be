@@ -2,7 +2,7 @@ import math
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -324,6 +324,40 @@ class UnderwritingRepository:
             await self.db.commit()
             await self.db.refresh(underwriting)
             return underwriting
+        except Exception:
+            await self.db.rollback()
+            raise
+
+    async def bulk_sync_property_pending(self) -> int:
+        """Reconcile ``property_pending`` across all underwritings in one pass.
+
+        Mirrors the save-time rule in
+        ``SaveUnderwritingService._apply_listing_boolean_fields``
+        (``home_status != "FOR_SALE"``, so a NULL status is also pending) as a
+        set-based ``UPDATE ... FROM`` join on ``zpid``. ``IS DISTINCT FROM
+        'FOR_SALE'`` is the null-safe form: true for NULL and any non-FOR_SALE
+        value, false only for exactly ``FOR_SALE``. Underwritings whose ``zpid``
+        has no matching scheduled listing are left untouched, and the second
+        ``IS DISTINCT FROM`` guard writes only rows whose flag actually changes,
+        so ``rowcount`` reports the number updated. Raw SQL (rather than the ORM)
+        keeps this repository from importing the ``zillow`` domain's model.
+        """
+        try:
+            result = await self.db.execute(
+                text(
+                    """
+                    UPDATE iron_bank.underwritings AS uw
+                    SET property_pending = (sl.home_status IS DISTINCT FROM 'FOR_SALE')
+                    FROM zillow.scheduled_listings AS sl
+                    WHERE uw.zpid = sl.zpid
+                      AND uw.property_pending IS DISTINCT FROM (
+                          sl.home_status IS DISTINCT FROM 'FOR_SALE'
+                      )
+                    """
+                )
+            )
+            await self.db.commit()
+            return result.rowcount
         except Exception:
             await self.db.rollback()
             raise

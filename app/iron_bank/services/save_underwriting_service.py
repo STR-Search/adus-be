@@ -158,10 +158,7 @@ class SaveUnderwritingService:
         if listing is None:
             return
 
-        underwriting_data["property_pending"] = listing.home_status not in (
-            None,
-            "FOR_SALE",
-        )
+        underwriting_data["property_pending"] = listing.home_status != "FOR_SALE"
 
     async def _build_detail_data(
         self,
