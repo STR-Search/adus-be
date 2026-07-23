@@ -2,7 +2,7 @@ import math
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -241,27 +241,34 @@ class UnderwritingRepository:
                     )
                 )
 
-            for item in optimization_items or []:
+            # id may be present on the shared input schema (used by update for
+            # in-place matching); on create there is nothing to match, so drop
+            # it and let the sequence assign a fresh primary key. sort_order is
+            # server-assigned from payload position, never client-supplied.
+            for index, item in enumerate(optimization_items or []):
                 self.db.add(
                     UnderwritingOptimizationItem(
                         underwriting_id=underwriting.id,
-                        **item,
+                        sort_order=index,
+                        **{k: v for k, v in item.items() if k != "id"},
                     )
                 )
 
-            for expense in operating_expenses or []:
+            for index, expense in enumerate(operating_expenses or []):
                 self.db.add(
                     UnderwritingOperatingExpense(
                         underwriting_id=underwriting.id,
-                        **expense,
+                        sort_order=index,
+                        **{k: v for k, v in expense.items() if k != "id"},
                     )
                 )
 
-            for comp in comp_set or []:
+            for index, comp in enumerate(comp_set or []):
                 self.db.add(
                     UnderwritingCompSet(
                         underwriting_id=underwriting.id,
-                        **comp,
+                        sort_order=index,
+                        **{k: v for k, v in comp.items() if k != "id"},
                     )
                 )
 
@@ -293,19 +300,64 @@ class UnderwritingRepository:
             if tax_data is not None:
                 self._upsert_taxes(underwriting, tax_data)
             if optimization_items is not None:
-                await self._replace_optimization_items(
-                    underwriting_id, optimization_items
+                await self._upsert_children(
+                    model=UnderwritingOptimizationItem,
+                    underwriting_id=underwriting_id,
+                    existing_rows=underwriting.optimization_items,
+                    incoming=optimization_items,
                 )
             if operating_expenses is not None:
-                await self._replace_operating_expenses(
-                    underwriting_id, operating_expenses
+                await self._upsert_children(
+                    model=UnderwritingOperatingExpense,
+                    underwriting_id=underwriting_id,
+                    existing_rows=underwriting.operating_expenses,
+                    incoming=operating_expenses,
                 )
             if comp_set is not None:
-                await self._replace_comp_set(underwriting_id, comp_set)
+                await self._upsert_children(
+                    model=UnderwritingCompSet,
+                    underwriting_id=underwriting_id,
+                    existing_rows=underwriting.comp_set,
+                    incoming=comp_set,
+                )
 
             await self.db.commit()
             await self.db.refresh(underwriting)
             return underwriting
+        except Exception:
+            await self.db.rollback()
+            raise
+
+    async def bulk_sync_property_pending(self) -> int:
+        """Reconcile ``property_pending`` across all underwritings in one pass.
+
+        Mirrors the save-time rule in
+        ``SaveUnderwritingService._apply_listing_boolean_fields``
+        (``home_status != "FOR_SALE"``, so a NULL status is also pending) as a
+        set-based ``UPDATE ... FROM`` join on ``zpid``. ``IS DISTINCT FROM
+        'FOR_SALE'`` is the null-safe form: true for NULL and any non-FOR_SALE
+        value, false only for exactly ``FOR_SALE``. Underwritings whose ``zpid``
+        has no matching scheduled listing are left untouched, and the second
+        ``IS DISTINCT FROM`` guard writes only rows whose flag actually changes,
+        so ``rowcount`` reports the number updated. Raw SQL (rather than the ORM)
+        keeps this repository from importing the ``zillow`` domain's model.
+        """
+        try:
+            result = await self.db.execute(
+                text(
+                    """
+                    UPDATE iron_bank.underwritings AS uw
+                    SET property_pending = (sl.home_status IS DISTINCT FROM 'FOR_SALE')
+                    FROM zillow.scheduled_listings AS sl
+                    WHERE uw.zpid = sl.zpid
+                      AND uw.property_pending IS DISTINCT FROM (
+                          sl.home_status IS DISTINCT FROM 'FOR_SALE'
+                      )
+                    """
+                )
+            )
+            await self.db.commit()
+            return result.rowcount
         except Exception:
             await self.db.rollback()
             raise
@@ -346,56 +398,42 @@ class UnderwritingRepository:
 
         self._update_model_fields(underwriting.taxes, tax_data)
 
-    async def _replace_optimization_items(
+    async def _upsert_children(
         self,
+        *,
+        model,
         underwriting_id: int,
-        items: list[dict[str, Any]],
+        existing_rows,
+        incoming: list[dict[str, Any]],
     ) -> None:
-        await self.db.execute(
-            delete(UnderwritingOptimizationItem).where(
-                UnderwritingOptimizationItem.underwriting_id == underwriting_id
-            )
-        )
-        for item in items:
-            self.db.add(
-                UnderwritingOptimizationItem(
-                    underwriting_id=underwriting_id,
-                    **item,
-                )
-            )
+        """Diff a child collection against the incoming payload by primary key.
 
-    async def _replace_operating_expenses(
-        self,
-        underwriting_id: int,
-        expenses: list[dict[str, Any]],
-    ) -> None:
-        await self.db.execute(
-            delete(UnderwritingOperatingExpense).where(
-                UnderwritingOperatingExpense.underwriting_id == underwriting_id
-            )
-        )
-        for expense in expenses:
-            self.db.add(
-                UnderwritingOperatingExpense(
-                    underwriting_id=underwriting_id,
-                    **expense,
-                )
-            )
+        Preserves row ids across updates (so the autoincrement sequence isn't
+        churned on every edit): incoming items whose ``id`` matches an existing
+        row are updated in place; items without a matching ``id`` are inserted
+        with a fresh id; existing rows absent from the payload are deleted.
 
-    async def _replace_comp_set(
-        self,
-        underwriting_id: int,
-        comp_set: list[dict[str, Any]],
-    ) -> None:
-        await self.db.execute(
-            delete(UnderwritingCompSet).where(
-                UnderwritingCompSet.underwriting_id == underwriting_id
-            )
-        )
-        for comp in comp_set:
-            self.db.add(
-                UnderwritingCompSet(
-                    underwriting_id=underwriting_id,
-                    **comp,
-                )
-            )
+        A client-supplied ``id`` that does not belong to this underwriting is
+        treated as a new insert — we never trust an arbitrary primary key from
+        the request, we only reuse ids we already own for this row.
+
+        ``sort_order`` is stamped from each item's position in the payload —
+        the array order is the display order the client intends.
+        """
+        existing_by_id = {row.id: row for row in existing_rows}
+        seen_ids: set[int] = set()
+
+        for index, item in enumerate(incoming):
+            fields = dict(item)
+            fields["sort_order"] = index
+            item_id = fields.pop("id", None)
+            existing = existing_by_id.get(item_id) if item_id is not None else None
+            if existing is not None:
+                self._update_model_fields(existing, fields)
+                seen_ids.add(item_id)
+            else:
+                self.db.add(model(underwriting_id=underwriting_id, **fields))
+
+        for row_id, row in existing_by_id.items():
+            if row_id not in seen_ids:
+                await self.db.delete(row)
