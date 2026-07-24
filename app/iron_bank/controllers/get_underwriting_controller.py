@@ -9,11 +9,19 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingsResult,
 )
 from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
+from app.iron_bank.services.simulate_underwritings_service import (
+    SimulateUnderwritingsService,
+)
 
 
 class GetUnderwritingController:
-    def __init__(self, service: GetUnderwritingService):
+    def __init__(
+        self,
+        service: GetUnderwritingService,
+        simulation_service: SimulateUnderwritingsService | None = None,
+    ):
         self.service = service
+        self.simulation_service = simulation_service
 
     async def get_underwritings(
         self,
@@ -32,41 +40,42 @@ class GetUnderwritingController:
         max_l_cash_on_cash: Decimal | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
+        interest_rate: Decimal | None = None,
+        down_payment_pct: Decimal | None = None,
     ) -> GetUnderwritingsResult:
+        filters = dict(
+            page=page,
+            page_size=page_size,
+            zpid=zpid,
+            market_id=market_id,
+            deal_status=deal_status,
+            analyst_id=analyst_id,
+            min_purchase_price=min_purchase_price,
+            max_purchase_price=max_purchase_price,
+            min_total_oop=min_total_oop,
+            max_total_oop=max_total_oop,
+            min_l_cash_on_cash=min_l_cash_on_cash,
+            max_l_cash_on_cash=max_l_cash_on_cash,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+        simulating = (
+            interest_rate is not None or down_payment_pct is not None
+        ) and self.simulation_service is not None
         try:
-            return await self.service.get_all(
-                page=page,
-                page_size=page_size,
-                zpid=zpid,
-                market_id=market_id,
-                deal_status=deal_status,
-                analyst_id=analyst_id,
-                min_purchase_price=min_purchase_price,
-                max_purchase_price=max_purchase_price,
-                min_total_oop=min_total_oop,
-                max_total_oop=max_total_oop,
-                min_l_cash_on_cash=min_l_cash_on_cash,
-                max_l_cash_on_cash=max_l_cash_on_cash,
-                sort_by=sort_by,
-                sort_order=sort_order,
-            )
+            if simulating:
+                return await self.simulation_service.get_all_simulated(
+                    **filters,
+                    interest_rate=interest_rate,
+                    down_payment_pct=down_payment_pct,
+                )
+            return await self.service.get_all(**filters)
         except Exception as e:
             logger.error(
                 "iron_bank.get_underwritings.error",
-                page=page,
-                page_size=page_size,
-                zpid=zpid,
-                market_id=market_id,
-                deal_status=deal_status,
-                analyst_id=analyst_id,
-                min_purchase_price=min_purchase_price,
-                max_purchase_price=max_purchase_price,
-                min_total_oop=min_total_oop,
-                max_total_oop=max_total_oop,
-                min_l_cash_on_cash=min_l_cash_on_cash,
-                max_l_cash_on_cash=max_l_cash_on_cash,
-                sort_by=sort_by,
-                sort_order=sort_order,
+                **filters,
+                interest_rate=interest_rate,
+                down_payment_pct=down_payment_pct,
                 error=str(e),
             )
             raise HTTPException(status_code=500, detail="Failed to fetch underwritings")

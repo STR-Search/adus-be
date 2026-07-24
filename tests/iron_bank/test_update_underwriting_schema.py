@@ -50,6 +50,61 @@ def test_update_deal_status_rejects_unrelated_fields():
         )
 
 
+_PURCHASE_DETAILS = {
+    "purchase_price": 485000,
+    "down_payment_pct": "0.10",
+    "interest_rate": "0.0675",
+    "mortgage_years": 30,
+    "closing_costs_pct": "0.03",
+}
+
+
+@pytest.mark.parametrize(
+    "omitted",
+    [
+        ["optimization_list", "operating_expenses"],
+        ["optimization_list"],
+        ["operating_expenses"],
+    ],
+)
+def test_purchase_details_requires_explicit_collections(omitted):
+    # Without explicit collections, the update path would calculate OOP/CoC
+    # from empty defaults while preserving stored rows — reject instead.
+    payload = {
+        "details": {"purchase_details": _PURCHASE_DETAILS},
+        "optimization_list": [{"category": "Flooring", "total_price": 1000}],
+        "operating_expenses": [{"expense": "Internet", "monthly": 100}],
+    }
+    for field in omitted:
+        del payload[field]
+
+    with pytest.raises(ValidationError, match="must be sent explicitly"):
+        UpdateUnderwritingPayload.model_validate(payload)
+
+
+def test_purchase_details_accepts_explicit_collections_even_empty():
+    # Explicit empty lists are a deliberate "there are none".
+    payload = UpdateUnderwritingPayload.model_validate(
+        {
+            "details": {"purchase_details": _PURCHASE_DETAILS},
+            "optimization_list": [],
+            "operating_expenses": [],
+        }
+    )
+
+    assert payload.details.purchase_details is not None
+
+
+def test_details_without_purchase_details_needs_no_collections():
+    # Only purchase_details triggers recalculation; other detail-only updates
+    # stay valid without the collections.
+    payload = UpdateUnderwritingPayload.model_validate(
+        {"details": {"analyst_notes": "note"}}
+    )
+
+    assert payload.details.analyst_notes == "note"
+
+
 def test_generic_update_accepts_deal_status():
     # deal_status is editable from the generic update payload so the FE can
     # change it alongside other fields, not only via the dedicated endpoint.
