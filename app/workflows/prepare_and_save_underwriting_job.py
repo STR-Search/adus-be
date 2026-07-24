@@ -9,6 +9,7 @@ from app.iron_bank.services.underwriting_payload_builder import (
 )
 from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
 from app.markets.repositories.market_repository import MarketRepository
+from app.markets.repositories.realtor_repository import RealtorRepository
 from app.markets.services.market_service import MarketService
 from app.workflows.prepare_uw_data_job import PrepareUwDataJob
 from app.zillow.repositories.scheduled_listings_repository import (
@@ -41,7 +42,11 @@ class PrepareAndSaveUnderwritingJob:
             payload_builder=UnderwritingPayloadBuilder(),
             save_service=SaveUnderwritingService(
                 underwriting_repository,
-                market_service=MarketService(MarketRepository(db), ConstructionAmenitiesRepository(db)),
+                market_service=MarketService(
+                    MarketRepository(db),
+                    ConstructionAmenitiesRepository(db),
+                    RealtorRepository(db),
+                ),
                 listings_service=ScheduledListingsService(
                     ScheduledListingsRepository(db)
                 ),

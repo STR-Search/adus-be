@@ -96,6 +96,7 @@ def get_save_underwriting_controller(
     from app.airbnb_public.services.cleaned_data_service import CleanedDataService
     from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
     from app.markets.repositories.market_repository import MarketRepository
+    from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.services.market_service import MarketService
     from app.zillow.repositories.scheduled_listings_repository import (
         ScheduledListingsRepository,
@@ -105,7 +106,11 @@ def get_save_underwriting_controller(
     return SaveUnderwritingController(
         SaveUnderwritingService(
             UnderwritingRepository(db),
-            market_service=MarketService(MarketRepository(db), ConstructionAmenitiesRepository(db)),
+            market_service=MarketService(
+                MarketRepository(db),
+                ConstructionAmenitiesRepository(db),
+                RealtorRepository(db),
+            ),
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
             cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
             reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
@@ -140,6 +145,7 @@ def get_update_underwriting_controller(
     from app.external_api.services.n8n_webhook_service import N8nWebhookService
     from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
     from app.markets.repositories.market_repository import MarketRepository
+    from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.services.market_service import MarketService
     from app.zillow.repositories.scheduled_listings_repository import (
         ScheduledListingsRepository,
@@ -149,7 +155,11 @@ def get_update_underwriting_controller(
     return UpdateUnderwritingController(
         UpdateUnderwritingService(
             UnderwritingRepository(db),
-            market_service=MarketService(MarketRepository(db), ConstructionAmenitiesRepository(db)),
+            market_service=MarketService(
+                MarketRepository(db),
+                ConstructionAmenitiesRepository(db),
+                RealtorRepository(db),
+            ),
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
             cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
             reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),

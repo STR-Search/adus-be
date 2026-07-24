@@ -9,6 +9,7 @@ from app.markets.repositories.construction_repository import (
 )
 from app.markets.repositories.market_repository import MarketRepository
 from app.markets.repositories.opex_repository import OpexByBedroomsRepository, OpexBySizeRepository
+from app.markets.repositories.realtor_repository import RealtorRepository
 from app.markets.repositories.str_cribs_repository import StrCribsFeeDetailsRepository
 from app.markets.services.construction_service import ConstructionAmenitiesService, ConstructionRemodelingService
 from app.markets.services.market_service import MarketService
@@ -59,7 +60,9 @@ class PrepareUwDataJob:
         return cls(
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
             listing_details_service=ScheduledListingDetailsService(ScheduledListingDetailsRepository(db)),
-            market_service=MarketService(market_repo, ConstructionAmenitiesRepository(db)),
+            market_service=MarketService(
+                market_repo, ConstructionAmenitiesRepository(db), RealtorRepository(db)
+            ),
             opex_by_bedrooms_service=OpexByBedroomsService(OpexByBedroomsRepository(db), market_repo),
             opex_by_size_service=OpexBySizeService(OpexBySizeRepository(db), market_repo),
             construction_amenities_service=ConstructionAmenitiesService(ConstructionAmenitiesRepository(db)),

@@ -32,9 +32,11 @@ class MarketKeysMaster(Base):
     map_config: Mapped[dict | None] = mapped_column(JSONB)
     filters: Mapped[dict | None] = mapped_column(JSONB)
     # IDs referencing markets.construction_costs_amenities; validated at the
-    # service layer (arrays cannot carry FK constraints).
+    # service layer.
     must_have_amenities: Mapped[list[int] | None] = mapped_column(ARRAY(Integer))
     nice_to_have_amenities: Mapped[list[int] | None] = mapped_column(ARRAY(Integer))
+    # IDs referencing markets.realtors; validated at the service layer.
+    realtor_ids: Mapped[list[int] | None] = mapped_column(ARRAY(Integer))
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
     )
