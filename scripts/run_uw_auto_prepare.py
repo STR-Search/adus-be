@@ -17,6 +17,9 @@ from app.workflows.batch_reconcile_underwriting_prices_job import (
 from app.workflows.prepare_and_save_underwriting_job import (
     PrepareAndSaveUnderwritingJob,
 )
+from app.workflows.sync_underwriting_property_pending_job import (
+    SyncUnderwritingPropertyPendingJob,
+)
 
 
 async def run_batch(
@@ -26,6 +29,7 @@ async def run_batch(
     session_factory=AsyncSessionLocal,
     creation_job_cls=BatchPrepareAndSaveUnderwritingsJob,
     reconciliation_job_cls=BatchReconcileUnderwritingPricesJob,
+    property_pending_job_cls=SyncUnderwritingPropertyPendingJob,
 ) -> dict[str, Any]:
     async with session_factory() as session:
         creation = await creation_job_cls.from_session(session).run(
@@ -36,9 +40,11 @@ async def run_batch(
             since_hours=since_hours,
             limit=limit,
         )
+        property_pending = await property_pending_job_cls.from_session(session).run()
         return {
             "creation": creation,
             "price_reconciliation": price_reconciliation,
+            "property_pending": property_pending,
         }
 
 

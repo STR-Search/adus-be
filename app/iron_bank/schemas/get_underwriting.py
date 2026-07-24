@@ -56,6 +56,7 @@ class GetUnderwritingTaxes(BaseModel):
 
 
 class GetUnderwritingOptimizationItem(BaseModel):
+    id: int | None = None
     category: str | None = None
     total_price: Decimal | None = None
     metric: str | None = None
@@ -68,11 +69,13 @@ class GetUnderwritingOptimizationItem(BaseModel):
 class GetUnderwritingOperatingExpense(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    id: int | None = None
     expense_name: str | None = Field(default=None, alias="expense")
     monthly_amount: Decimal | None = Field(default=None, alias="monthly")
 
 
 class GetUnderwritingCompSet(BaseModel):
+    id: int | None = None
     listing_url: str | None = None
     revenue: Decimal | None = None
     bedrooms: int | None = None
