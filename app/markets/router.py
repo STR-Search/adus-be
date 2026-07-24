@@ -44,7 +44,7 @@ router = APIRouter()
 # --- Dependency factories ---
 
 def get_market_controller(db: AsyncSession = Depends(get_db)) -> MarketController:
-    return MarketController(MarketService(MarketRepository(db)))
+    return MarketController(MarketService(MarketRepository(db), ConstructionAmenitiesRepository(db)))
 
 
 def get_amenities_controller(db: AsyncSession = Depends(get_db)) -> ConstructionAmenitiesController:

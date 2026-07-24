@@ -3,7 +3,7 @@ from datetime import datetime
 from datetime import datetime
 
 from sqlalchemy import DateTime, Index, DateTime, Integer, String, text, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -31,6 +31,10 @@ class MarketKeysMaster(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     map_config: Mapped[dict | None] = mapped_column(JSONB)
     filters: Mapped[dict | None] = mapped_column(JSONB)
+    # IDs referencing markets.construction_costs_amenities; validated at the
+    # service layer (arrays cannot carry FK constraints).
+    must_have_amenities: Mapped[list[int] | None] = mapped_column(ARRAY(Integer))
+    nice_to_have_amenities: Mapped[list[int] | None] = mapped_column(ARRAY(Integer))
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
     )

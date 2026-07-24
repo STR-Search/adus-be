@@ -60,6 +60,10 @@ def upgrade() -> None:
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("map_config", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("filters", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        # IDs referencing markets.construction_costs_amenities; validated at the
+        # service layer (arrays cannot carry FK constraints).
+        sa.Column("must_have_amenities", postgresql.ARRAY(sa.Integer()), nullable=True),
+        sa.Column("nice_to_have_amenities", postgresql.ARRAY(sa.Integer()), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

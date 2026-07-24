@@ -59,7 +59,7 @@ class PrepareUwDataJob:
         return cls(
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
             listing_details_service=ScheduledListingDetailsService(ScheduledListingDetailsRepository(db)),
-            market_service=MarketService(market_repo),
+            market_service=MarketService(market_repo, ConstructionAmenitiesRepository(db)),
             opex_by_bedrooms_service=OpexByBedroomsService(OpexByBedroomsRepository(db), market_repo),
             opex_by_size_service=OpexBySizeService(OpexBySizeRepository(db), market_repo),
             construction_amenities_service=ConstructionAmenitiesService(ConstructionAmenitiesRepository(db)),

@@ -7,6 +7,7 @@ from app.iron_bank.services.save_underwriting_service import SaveUnderwritingSer
 from app.iron_bank.services.underwriting_payload_builder import (
     UnderwritingPayloadBuilder,
 )
+from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
 from app.markets.repositories.market_repository import MarketRepository
 from app.markets.services.market_service import MarketService
 from app.workflows.prepare_uw_data_job import PrepareUwDataJob
@@ -40,7 +41,7 @@ class PrepareAndSaveUnderwritingJob:
             payload_builder=UnderwritingPayloadBuilder(),
             save_service=SaveUnderwritingService(
                 underwriting_repository,
-                market_service=MarketService(MarketRepository(db)),
+                market_service=MarketService(MarketRepository(db), ConstructionAmenitiesRepository(db)),
                 listings_service=ScheduledListingsService(
                     ScheduledListingsRepository(db)
                 ),
