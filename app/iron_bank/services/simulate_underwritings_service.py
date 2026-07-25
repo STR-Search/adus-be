@@ -122,7 +122,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
 
         results = [self._to_result(underwriting) for underwriting in items]
         await self._hydrate_automated_zillow(items, results)
-        await self._populate_reference_labels(results)
+        await self._enrich(results)
 
         rows_by_id = {row.id: row for row in page_rows}
         for result in results:
