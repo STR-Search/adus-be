@@ -177,9 +177,11 @@ def get_get_underwriting_controller(
     )
     from app.markets.repositories.market_repository import MarketRepository
     from app.markets.repositories.opex_repository import OpexByBedroomsRepository
+    from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.repositories.str_cribs_repository import (
         StrCribsFeeDetailsRepository,
     )
+    from app.users.repositories.user_repository import UserRepository
     from app.markets.services.construction_service import (
         ConstructionAmenitiesService,
         ConstructionRemodelingService,
@@ -218,6 +220,9 @@ def get_get_underwriting_controller(
         ),
         str_cribs_service=StrCribsFeeDetailsService(StrCribsFeeDetailsRepository(db)),
         reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
+        user_repository=UserRepository(db),
+        market_repository=market_repo,
+        realtor_repository=RealtorRepository(db),
     )
     return GetUnderwritingController(
         GetUnderwritingService(UnderwritingRepository(db), **service_deps),

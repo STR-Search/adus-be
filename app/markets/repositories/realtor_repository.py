@@ -20,6 +20,17 @@ class RealtorRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_ids(self, record_ids: set[int]) -> list[Realtor]:
+        if not record_ids:
+            return []
+        result = await self.db.execute(
+            select(Realtor).where(
+                Realtor.id.in_(record_ids),
+                Realtor.deleted_at.is_(None),
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_all(self, search: str | None = None) -> list[Realtor]:
         query = select(Realtor).where(Realtor.deleted_at.is_(None))
         if search:
