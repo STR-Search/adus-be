@@ -6,6 +6,21 @@ from pydantic import BaseModel
 from .common import BaseResponse
 
 
+class AmenityRefSchema(BaseResponse):
+    """A construction_costs_amenities row referenced from a market's amenity lists."""
+
+    id: int
+    amenity_name: str | None = None
+
+
+class RealtorRefSchema(BaseResponse):
+    """A realtors row referenced from a market's realtor list."""
+
+    id: int
+    name: str | None = None
+    email: str | None = None
+
+
 class MarketKeysMasterSchema(BaseResponse):
     id: int
     market_slug: str | None = None
@@ -15,6 +30,9 @@ class MarketKeysMasterSchema(BaseResponse):
     analyst_owner: str | None = None
     map_config: dict[str, Any] | None = None
     filters: dict[str, Any] | None = None
+    must_have_amenities: list[AmenityRefSchema] | None = None
+    nice_to_have_amenities: list[AmenityRefSchema] | None = None
+    realtors: list[RealtorRefSchema] | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -27,6 +45,9 @@ class MarketCreateSchema(BaseModel):
     analyst_owner: str | None = None
     map_config: dict[str, Any] | None = None
     filters: dict[str, Any] | None = None
+    must_have_amenities: list[int] | None = None
+    nice_to_have_amenities: list[int] | None = None
+    realtor_ids: list[int] | None = None
 
 
 class MarketUpdateSchema(BaseModel):
@@ -34,6 +55,9 @@ class MarketUpdateSchema(BaseModel):
     analyst_owner: str | None = None
     map_config: dict[str, Any] | None = None
     filters: dict[str, Any] | None = None
+    must_have_amenities: list[int] | None = None
+    nice_to_have_amenities: list[int] | None = None
+    realtor_ids: list[int] | None = None
 
 
 class MarketSummarySchema(BaseResponse):
