@@ -101,7 +101,9 @@ async def test_save_persists_client_provided_zillow_property():
 @pytest.mark.parametrize(
     ("home_status", "expected_property_pending"),
     [
-        (None, False),
+        # An unknown home status is treated as pending — we only clear the flag
+        # for a listing we positively know is still for sale.
+        (None, True),
         ("FOR_SALE", False),
         ("SOLD", True),
         ("OTHER", True),

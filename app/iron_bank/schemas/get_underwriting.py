@@ -56,6 +56,7 @@ class GetUnderwritingTaxes(BaseModel):
 
 
 class GetUnderwritingOptimizationItem(BaseModel):
+    id: int | None = None
     category: str | None = None
     total_price: Decimal | None = None
     metric: str | None = None
@@ -68,15 +69,40 @@ class GetUnderwritingOptimizationItem(BaseModel):
 class GetUnderwritingOperatingExpense(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    id: int | None = None
     expense_name: str | None = Field(default=None, alias="expense")
     monthly_amount: Decimal | None = Field(default=None, alias="monthly")
 
 
 class GetUnderwritingCompSet(BaseModel):
+    id: int | None = None
     listing_url: str | None = None
     revenue: Decimal | None = None
     bedrooms: int | None = None
     sleeps: int | None = None
+
+
+class UserRef(BaseModel):
+    """Lightweight users.users reference used to resolve analyst_id/approver_id."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+
+
+class UnderwritingRealtorDetail(BaseModel):
+    """A markets.realtors row associated with the underwriting's market."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    brokerage: str | None = None
 
 
 class GetUnderwritingResult(UnderwritingRead):
@@ -85,6 +111,12 @@ class GetUnderwritingResult(UnderwritingRead):
     # row lacked the inputs to simulate (stored values shown instead). Stays
     # None — and out of the payload — on the normal list path.
     simulated: bool | None = None
+    # Resolved users.users references for analyst_id/approver_id, and the
+    # realtors associated with the underwriting's market (via
+    # market_keys_master.realtor_ids). Populated by the read service.
+    analyst: UserRef | None = None
+    approver: UserRef | None = None
+    realtor_details: list[UnderwritingRealtorDetail] = Field(default_factory=list)
     details: GetUnderwritingDetails | None = None
     taxes: GetUnderwritingTaxes | None = None
     optimization_list: list[GetUnderwritingOptimizationItem] = Field(

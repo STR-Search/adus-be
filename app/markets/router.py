@@ -8,6 +8,7 @@ from app.markets.controllers.construction_controller import (
 )
 from app.markets.controllers.market_controller import MarketController
 from app.markets.controllers.opex_controller import OpexByBedroomsController, OpexBySizeController
+from app.markets.controllers.realtor_controller import RealtorController
 from app.markets.controllers.str_cribs_controller import StrCribsFeeDetailsController
 from app.markets.repositories.construction_repository import (
     ConstructionAmenitiesRepository,
@@ -15,6 +16,7 @@ from app.markets.repositories.construction_repository import (
 )
 from app.markets.repositories.market_repository import MarketRepository
 from app.markets.repositories.opex_repository import OpexByBedroomsRepository, OpexBySizeRepository
+from app.markets.repositories.realtor_repository import RealtorRepository
 from app.markets.repositories.str_cribs_repository import StrCribsFeeDetailsRepository
 from app.markets.schemas.construction import (
     ConstructionCostsAmenitiesCreateSchema,
@@ -29,6 +31,7 @@ from app.markets.schemas.opex import (
     OpexBySizeCreateSchema,
     OpexBySizeUpdateSchema,
 )
+from app.markets.schemas.realtor import RealtorCreateSchema, RealtorUpdateSchema
 from app.markets.schemas.str_cribs import (
     StrCribsFeeDetailsCreateSchema,
     StrCribsFeeDetailsUpdateSchema,
@@ -36,6 +39,7 @@ from app.markets.schemas.str_cribs import (
 from app.markets.services.construction_service import ConstructionAmenitiesService, ConstructionRemodelingService
 from app.markets.services.market_service import MarketService
 from app.markets.services.opex_service import OpexByBedroomsService, OpexBySizeService
+from app.markets.services.realtor_service import RealtorService
 from app.markets.services.str_cribs_service import StrCribsFeeDetailsService
 
 router = APIRouter()
@@ -44,7 +48,17 @@ router = APIRouter()
 # --- Dependency factories ---
 
 def get_market_controller(db: AsyncSession = Depends(get_db)) -> MarketController:
-    return MarketController(MarketService(MarketRepository(db)))
+    return MarketController(
+        MarketService(
+            MarketRepository(db),
+            ConstructionAmenitiesRepository(db),
+            RealtorRepository(db),
+        )
+    )
+
+
+def get_realtor_controller(db: AsyncSession = Depends(get_db)) -> RealtorController:
+    return RealtorController(RealtorService(RealtorRepository(db)))
 
 
 def get_amenities_controller(db: AsyncSession = Depends(get_db)) -> ConstructionAmenitiesController:
@@ -142,6 +156,49 @@ async def delete_market(
     controller: MarketController = Depends(get_market_controller),
 ):
     return await controller.delete(market_id)
+
+
+# --- Realtors ---
+
+@router.get("/realtors/", tags=["realtors"])
+async def get_all_realtors(
+    search: str | None = Query(None),
+    controller: RealtorController = Depends(get_realtor_controller),
+):
+    return await controller.get_all(search=search)
+
+
+@router.get("/realtors/{record_id}", tags=["realtors"])
+async def get_realtor_by_id(
+    record_id: int,
+    controller: RealtorController = Depends(get_realtor_controller),
+):
+    return await controller.get_by_id(record_id)
+
+
+@router.post("/realtors/", status_code=201, tags=["realtors"])
+async def create_realtor(
+    data: RealtorCreateSchema,
+    controller: RealtorController = Depends(get_realtor_controller),
+):
+    return await controller.create(data)
+
+
+@router.patch("/realtors/{record_id}", tags=["realtors"])
+async def update_realtor(
+    record_id: int,
+    data: RealtorUpdateSchema,
+    controller: RealtorController = Depends(get_realtor_controller),
+):
+    return await controller.update(record_id, data)
+
+
+@router.delete("/realtors/{record_id}", tags=["realtors"])
+async def delete_realtor(
+    record_id: int,
+    controller: RealtorController = Depends(get_realtor_controller),
+):
+    return await controller.delete(record_id)
 
 
 # --- Construction: Amenities ---

@@ -8,7 +8,7 @@ def test_get_deal_statuses_returns_fe_options():
 
     assert result.statuses[0].model_dump() == {
         "key": "template_generated",
-        "label": "Template_generated",
+        "label": "Template Generated",
         "sort_order": 1,
     }
 

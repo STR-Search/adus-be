@@ -25,3 +25,14 @@ class UserRepository:
             )
         )
         return result.scalar_one_or_none()
+
+    async def get_by_ids(self, user_ids: set[int]) -> list[User]:
+        if not user_ids:
+            return []
+        result = await self.db.execute(
+            select(User).where(
+                User.id.in_(user_ids),
+                User.is_deleted.is_not(True),
+            )
+        )
+        return list(result.scalars().all())

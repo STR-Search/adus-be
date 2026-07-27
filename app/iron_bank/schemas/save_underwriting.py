@@ -69,6 +69,10 @@ class UnderwritingTaxInput(BaseModel):
 class OptimizationItemInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # Existing row id, round-tripped from GET, so the update path can match and
+    # update this item in place instead of delete-and-recreate. Absent/None
+    # means "new item" (fresh PK); ignored on create.
+    id: int | None = None
     category: str | None = None
     total_price: Decimal | None = None
     metric: str | None = None
@@ -81,6 +85,8 @@ class OptimizationItemInput(BaseModel):
 class OperatingExpenseInput(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
+    # See OptimizationItemInput.id: round-tripped for in-place update matching.
+    id: int | None = None
     expense_name: str | None = Field(default=None, alias="expense")
     monthly_amount: Decimal | None = Field(default=None, alias="monthly")
 
@@ -88,6 +94,8 @@ class OperatingExpenseInput(BaseModel):
 class CompSetInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # See OptimizationItemInput.id: round-tripped for in-place update matching.
+    id: int | None = None
     listing_url: str | None = None
     revenue: Decimal | None = None
     bedrooms: int | None = None

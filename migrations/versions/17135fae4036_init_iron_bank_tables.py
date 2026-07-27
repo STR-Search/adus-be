@@ -160,6 +160,7 @@ def upgrade() -> None:
         sa.Column("revenue", sa.Numeric(precision=12, scale=2), nullable=True),
         sa.Column("bedrooms", sa.Integer(), nullable=True),
         sa.Column("sleeps", sa.Integer(), nullable=True),
+        sa.Column("sort_order", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"
         ),
@@ -203,6 +204,7 @@ def upgrade() -> None:
         sa.Column("underwriting_id", sa.Integer(), nullable=False),
         sa.Column("expense_name", sa.String(length=255), nullable=True),
         sa.Column("monthly_amount", sa.Numeric(precision=12, scale=2), nullable=True),
+        sa.Column("sort_order", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"
         ),
@@ -220,6 +222,7 @@ def upgrade() -> None:
         sa.Column("spec", sa.Text(), nullable=True),
         sa.Column("tier", sa.Text(), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column("sort_order", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"
         ),
