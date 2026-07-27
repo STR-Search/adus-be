@@ -1,3 +1,4 @@
+from datetime import timezone
 from types import SimpleNamespace
 from decimal import Decimal
 
@@ -248,11 +249,13 @@ async def test_update_deal_status_assigns_approver_on_present_to_clients():
         actor_user_id=99,
     )
 
-    # analyst preserved (already set), approver set to the acting user.
-    assert repository.update_kwargs["underwriting_data"] == {
-        "deal_status": DealStatus.PRESENT_TO_CLIENTS,
-        "approver_id": 99,
-    }
+    # analyst preserved (already set), approver set to the acting user, and the
+    # approval is timestamped.
+    underwriting_data = repository.update_kwargs["underwriting_data"]
+    assert underwriting_data["deal_status"] == DealStatus.PRESENT_TO_CLIENTS
+    assert underwriting_data["approver_id"] == 99
+    assert underwriting_data["deal_approved"].tzinfo is timezone.utc
+    assert set(underwriting_data) == {"deal_status", "approver_id", "deal_approved"}
 
 
 @pytest.mark.asyncio

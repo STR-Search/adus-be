@@ -79,7 +79,9 @@ class TestPrepare:
                 original_photos=["a.jpg"], lot_size_sqft=21780
             ),
             market=SimpleNamespace(
-                market_name="Smoky Mountains", market_slug="smoky-mountains"
+                market_name="Smoky Mountains",
+                market_slug="smoky-mountains",
+                must_have_amenities=[SimpleNamespace(id=1, amenity_name="Hot Tub")],
             ),
             market_id=3,
             opex_by_bedrooms=_opex_by_bedrooms(),
@@ -169,7 +171,7 @@ class TestPrepare:
             "price_tier_2": None,
             "price_tier_3": 60000,
         }
-        assert amenities[2]["amenity_name"] == "Hot Tub"
+        assert amenities[3]["amenity_name"] == "Hot Tub"
 
     def test_prepends_consolidated_shipping_amenity_from_opex(self):
         amenities = self._prepare().model_dump()["construction_amenities"]
@@ -179,9 +181,26 @@ class TestPrepare:
             "location": None,
             "notes": None,
             "price_tier_1": 18225,
-            "price_tier_2": None,
-            "price_tier_3": None,
+            "price_tier_2": 18225,
+            "price_tier_3": 18225,
         }
+
+    def test_surfaces_market_must_have_amenity_ids(self):
+        result = self._prepare().model_dump()
+        assert result["must_have_amenity_ids"] == [1]
+
+    def test_must_have_amenity_ids_empty_without_market(self):
+        result = self._prepare(market=None, market_id=None).model_dump()
+        assert result["must_have_amenity_ids"] == []
+
+    def test_must_have_amenity_ids_empty_when_market_has_none(self):
+        market = SimpleNamespace(
+            market_name="Smoky Mountains",
+            market_slug="smoky-mountains",
+            must_have_amenities=None,
+        )
+        result = self._prepare(market=market).model_dump()
+        assert result["must_have_amenity_ids"] == []
 
     def test_consolidated_shipping_is_not_an_absolute_opex(self):
         opex = self._prepare().model_dump()["opex"]

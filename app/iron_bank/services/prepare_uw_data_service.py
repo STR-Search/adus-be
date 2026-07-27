@@ -29,6 +29,19 @@ class PrepareUwDataService:
     # build_amenities_options) rather than monthly operating expenses.
     _OPEX_AMENITY_FIELDS = {"consolidated_shipping"}
 
+    # Synthetic amenity options prepended to the construction_costs_amenities
+    # catalog by build_amenities_options. They are not catalog rows, so they
+    # carry non-positive sentinel ids that cannot collide with real ones.
+    FURNISHINGS_OPTION_ID = 0
+    CONSOLIDATED_SHIPPING_OPTION_ID = -1
+    STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID = -2
+    # Seeded on every underwriting regardless of market, in this order.
+    SEEDED_AMENITY_OPTION_IDS = (
+        FURNISHINGS_OPTION_ID,
+        CONSOLIDATED_SHIPPING_OPTION_ID,
+        STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID,
+    )
+
     def normalize_sqft(self, area: int | None) -> int | None:
         if area is None:
             return None
@@ -106,7 +119,7 @@ class PrepareUwDataService:
     ) -> list[dict]:
         furnishings = {
             "amenity_name": "Furnishings",
-            "id": 0,
+            "id": PrepareUwDataService.FURNISHINGS_OPTION_ID,
             "location": None,
             "notes": None,
             "price_tier_1": (
@@ -121,7 +134,7 @@ class PrepareUwDataService:
         }
         consolidated_shipping = {
             "amenity_name": "Consolidated Shipping",
-            "id": -1,
+            "id": PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID,
             "location": None,
             "notes": None,
             "price_tier_1": (
@@ -136,7 +149,7 @@ class PrepareUwDataService:
         }
         str_cribs_project_management = {
             "amenity_name": "STR Cribs - Project Management",
-            "id": -2,
+            "id": PrepareUwDataService.STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID,
             "location": None,
             "notes": None,
             "price_tier_1": (str_cribs_fee.fee if str_cribs_fee else None),
@@ -146,6 +159,18 @@ class PrepareUwDataService:
         return [furnishings, consolidated_shipping, str_cribs_project_management] + [
             a.model_dump() for a in construction_amenities
         ]
+
+    @staticmethod
+    def _must_have_amenity_ids(market) -> list[int]:
+        """Amenity ids this market requires, in the order the market lists them.
+
+        ``market.must_have_amenities`` arrives already resolved against the
+        amenity catalog, so ids pointing at soft-deleted rows have been dropped
+        upstream.
+        """
+        if market is None:
+            return []
+        return [ref.id for ref in market.must_have_amenities or []]
 
     def prepare(
         self,
@@ -186,6 +211,7 @@ class PrepareUwDataService:
                 "construction_remodeling": [
                     r.model_dump() for r in construction_remodeling
                 ],
+                "must_have_amenity_ids": self._must_have_amenity_ids(market),
                 "config": config,
             }
         )

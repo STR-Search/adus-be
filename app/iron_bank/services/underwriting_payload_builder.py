@@ -1,12 +1,16 @@
 from decimal import Decimal
 from typing import Any
 
+import structlog
 from pydantic import BaseModel
 
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
 from app.iron_bank.services.base_underwriting_payload_builder import (
     BaseUnderwritingPayloadBuilder,
 )
+from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
+
+logger = structlog.get_logger(__name__)
 
 
 class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
@@ -15,6 +19,12 @@ class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
     This replaces the FE mapping step for automated/draft underwriting flows.
     It does not fetch data or persist anything.
     """
+
+    # Seeded optimization items all price at tier 2 for now; the analyst
+    # re-tiers from the amenity catalog in the edit form.
+    _AMENITY_PRICE_TIER_FIELD = "price_tier_2"
+    _AMENITY_TIER_LABEL = "Mid"
+    _AMENITY_METRIC = "flat"
 
     def build(self, prepared: dict[str, Any] | BaseModel) -> SaveUnderwritingPayload:
         if isinstance(prepared, BaseModel):
@@ -46,6 +56,7 @@ class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
             ),
             "taxes": self._build_taxes(config) if purchase_price is not None else None,
             "operating_expenses": self._build_operating_expenses(opex, property_taxes),
+            "optimization_list": self._build_optimization_list(prepared),
         }
         return SaveUnderwritingPayload.model_validate(payload)
 
@@ -90,6 +101,57 @@ class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
                 "inputs": {},
             }
         return None
+
+    def _build_optimization_list(
+        self, prepared: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Seed the rehab budget from the amenity options prepared for this deal.
+
+        Two groups, in this order: the options every deal gets (furnishings,
+        consolidated shipping, the STR Cribs management fee) followed by the
+        market's must-have amenities. Items whose tier-2 price is missing are
+        still seeded with a blank amount — a visible row the analyst fills in
+        beats a silently absent line item.
+        """
+        options_by_id = {
+            option.get("id"): option
+            for option in prepared.get("construction_amenities") or []
+        }
+        selected_ids = list(
+            dict.fromkeys(
+                [
+                    *PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS,
+                    *(prepared.get("must_have_amenity_ids") or []),
+                ]
+            )
+        )
+
+        unknown_ids = [
+            amenity_id for amenity_id in selected_ids if amenity_id not in options_by_id
+        ]
+        if unknown_ids:
+            logger.warning(
+                "_build_optimization_list: amenity ids absent from the catalog",
+                zpid=(prepared.get("zillow_property") or {}).get("id"),
+                market_id=prepared.get("market_id"),
+                unknown_amenity_ids=unknown_ids,
+            )
+
+        return [
+            self._amenity_to_optimization_item(options_by_id[amenity_id])
+            for amenity_id in selected_ids
+            if amenity_id in options_by_id
+        ]
+
+    def _amenity_to_optimization_item(self, option: dict[str, Any]) -> dict[str, Any]:
+        price = option.get(self._AMENITY_PRICE_TIER_FIELD)
+        return {
+            "category": option.get("amenity_name"),
+            "total_price": price,
+            "base_price": price,
+            "metric": self._AMENITY_METRIC,
+            "tier": self._AMENITY_TIER_LABEL,
+        }
 
     def _build_cleaning_cost(self, cleaning: dict[str, Any]) -> dict[str, Any] | None:
         fee = cleaning.get("fee")
