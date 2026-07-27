@@ -63,6 +63,16 @@ class FakeGetAllService:
         return self.items
 
 
+class FakeStrCribsService:
+    def __init__(self, fee=None):
+        self.fee = fee
+        self.requested_area = None
+
+    async def get_by_area(self, area):
+        self.requested_area = area
+        return self.fee
+
+
 class FakeExternalApiService:
     def __init__(self, fred=None):
         self.fred = fred
@@ -106,6 +116,7 @@ def _job(listing, market=None, uw_service=None, **overrides):
         opex_by_size_service=FakeOpexBySizeService(),
         construction_amenities_service=FakeGetAllService(),
         construction_remodeling_service=FakeGetAllService(),
+        str_cribs_service=FakeStrCribsService(),
         external_api_service=FakeExternalApiService(),
         uw_data_service=uw_service or RecordingUwDataService(),
     )

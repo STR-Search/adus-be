@@ -7,8 +7,8 @@ import app.dependencies as deps
 from app.dependencies import get_current_user
 
 
-def _request(headers: dict) -> SimpleNamespace:
-    return SimpleNamespace(headers=headers)
+def _request(headers: dict, path: str = "/underwritings") -> SimpleNamespace:
+    return SimpleNamespace(headers=headers, url=SimpleNamespace(path=path))
 
 
 @pytest.mark.asyncio

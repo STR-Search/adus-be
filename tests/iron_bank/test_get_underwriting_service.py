@@ -20,20 +20,8 @@ class FakeUnderwritingRepository:
         self.requested_id = underwriting_id
         return self.underwriting
 
-    async def get_all_paginated(
-        self,
-        *,
-        page: int,
-        page_size: int,
-        zpid: str | None = None,
-        market_id: int | None = None,
-    ):
-        self.requested_page = {
-            "page": page,
-            "page_size": page_size,
-            "zpid": zpid,
-            "market_id": market_id,
-        }
+    async def get_all_paginated(self, *, page: int, page_size: int, **filters):
+        self.requested_page = {"page": page, "page_size": page_size, **filters}
         items = [self.underwriting] if self.underwriting is not None else []
         return items, len(items), 1 if items else 0
 
@@ -75,6 +63,15 @@ def _underwriting():
                 },
             },
             cleaning_cost={"monthly_cleaning_cost": 1540},
+            property_taxes={
+                "source": "opex_property_tax_pct",
+                "annual_amount": Decimal("5820"),
+                "monthly_amount": Decimal("485"),
+                "inputs": {
+                    "opex_property_tax_pct": Decimal("0.012"),
+                    "purchase_price": Decimal("485000"),
+                },
+            },
             zillow_property=None,
             analyst_notes="Existing hot tub and cabin aesthetic.",
         ),
@@ -90,19 +87,24 @@ def _underwriting():
         ),
         optimization_items=[
             SimpleNamespace(
+                id=101,
                 category="Flooring",
                 total_price=Decimal("27000"),
                 metric="sqft",
                 base_price=Decimal("15"),
                 spec="@$15/sqft x 1,800 sqft",
                 tier="Mid",
+                notes=None,
             )
         ],
         operating_expenses=[
-            SimpleNamespace(expense_name="Internet", monthly_amount=Decimal("100"))
+            SimpleNamespace(
+                id=201, expense_name="Internet", monthly_amount=Decimal("100")
+            )
         ],
         comp_set=[
             SimpleNamespace(
+                id=301,
                 listing_url="https://www.airbnb.com/rooms/1",
                 revenue=Decimal("112400"),
                 bedrooms=4,
@@ -129,16 +131,18 @@ async def test_get_underwriting_returns_save_shaped_aggregate():
     assert data["taxes"]["sla_multiplier_pct"] == Decimal("0.36")
     assert data["optimization_list"] == [
         {
+            "id": 101,
             "category": "Flooring",
             "total_price": Decimal("27000"),
             "metric": "sqft",
             "base_price": Decimal("15"),
             "spec": "@$15/sqft x 1,800 sqft",
             "tier": "Mid",
+            "notes": None,
         }
     ]
     assert data["operating_expenses"] == [
-        {"expense": "Internet", "monthly": Decimal("100")}
+        {"id": 201, "expense": "Internet", "monthly": Decimal("100")}
     ]
     assert data["comp_set"][0]["listing_url"] == "https://www.airbnb.com/rooms/1"
 
@@ -158,12 +162,10 @@ async def test_get_all_returns_paginated_results():
 
     result = await service.get_all(page=1, page_size=50)
 
-    assert repository.requested_page == {
-        "page": 1,
-        "page_size": 50,
-        "zpid": None,
-        "market_id": None,
-    }
+    assert repository.requested_page["page"] == 1
+    assert repository.requested_page["page_size"] == 50
+    assert repository.requested_page["zpid"] is None
+    assert repository.requested_page["market_id"] is None
     assert result.total == 1
     assert result.page == 1
     assert result.page_size == 50
@@ -177,7 +179,7 @@ class FakeListRepository:
     def __init__(self, items):
         self.items = items
 
-    async def get_all_paginated(self, *, page, page_size, zpid=None, market_id=None):
+    async def get_all_paginated(self, *, page, page_size, **filters):
         return self.items, len(self.items), 1
 
 
@@ -254,14 +256,22 @@ async def test_get_all_passes_filters_to_repository():
     repository = FakeUnderwritingRepository(_underwriting())
     service = GetUnderwritingService(repository)
 
-    await service.get_all(page=1, page_size=20, zpid="12345", market_id=3)
+    await service.get_all(
+        page=1,
+        page_size=20,
+        zpid="12345",
+        market_id=3,
+        deal_status="template_generated",
+        analyst_id=7,
+    )
 
-    assert repository.requested_page == {
-        "page": 1,
-        "page_size": 20,
-        "zpid": "12345",
-        "market_id": 3,
-    }
+    requested = repository.requested_page
+    assert requested["page"] == 1
+    assert requested["page_size"] == 20
+    assert requested["zpid"] == "12345"
+    assert requested["market_id"] == 3
+    assert requested["deal_status"] == "template_generated"
+    assert requested["analyst_id"] == 7
 
 
 @pytest.mark.asyncio
@@ -314,7 +324,9 @@ class MissingListingDetailsService:
 
 class StubOpexByBedrooms:
     furnishings_low = Decimal("1000")
+    furnishings_mid = Decimal("1500")
     furnishings_high = Decimal("2000")
+    consolidated_shipping = Decimal("500")
 
 
 class StubOpexByBedroomsService:
