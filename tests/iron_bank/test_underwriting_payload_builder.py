@@ -97,9 +97,144 @@ def test_builds_draft_payload_when_optional_prepared_fields_are_missing():
     assert payload.details is None
     assert payload.taxes is None
     assert [
-        expense.model_dump(by_alias=True)
+        expense.model_dump(by_alias=True, exclude={"id"})
         for expense in payload.operating_expenses
     ] == [{"expense": "Property Taxes", "monthly": None}]
+
+
+def _amenity_option(amenity_id, name, price_tier_2):
+    return {
+        "id": amenity_id,
+        "amenity_name": name,
+        "location": None,
+        "notes": "catalog note",
+        "price_tier_1": 1,
+        "price_tier_2": price_tier_2,
+        "price_tier_3": 3,
+    }
+
+
+def _prepared_with_amenities(*, amenities, must_have_amenity_ids):
+    return {
+        "market_id": 3,
+        "zillow_property": {"id": "12345", "price": "485000"},
+        "opex": {"cleaning": {}, "absolute": {}},
+        "config": {},
+        "construction_amenities": amenities,
+        "must_have_amenity_ids": must_have_amenity_ids,
+    }
+
+
+def test_seeds_optimization_items_from_base_options_and_must_haves():
+    prepared = _prepared_with_amenities(
+        amenities=[
+            _amenity_option(0, "Furnishings", 45000),
+            _amenity_option(-1, "Consolidated Shipping", 18225),
+            _amenity_option(-2, "STR Cribs - Project Management", 12000),
+            _amenity_option(1, "Hot Tub", 9500),
+            _amenity_option(2, "Fire Pit", 2200),
+            _amenity_option(3, "Not A Must Have", 1000),
+        ],
+        must_have_amenity_ids=[2, 1],
+    )
+
+    payload = UnderwritingPayloadBuilder().build(prepared)
+
+    assert [
+        item.model_dump(exclude_unset=True) for item in payload.optimization_list
+    ] == [
+        {
+            "category": "Furnishings",
+            "total_price": Decimal("45000"),
+            "base_price": Decimal("45000"),
+            "metric": "flat",
+            "tier": "Mid",
+        },
+        {
+            "category": "Consolidated Shipping",
+            "total_price": Decimal("18225"),
+            "base_price": Decimal("18225"),
+            "metric": "flat",
+            "tier": "Mid",
+        },
+        {
+            "category": "STR Cribs - Project Management",
+            "total_price": Decimal("12000"),
+            "base_price": Decimal("12000"),
+            "metric": "flat",
+            "tier": "Mid",
+        },
+        {
+            "category": "Fire Pit",
+            "total_price": Decimal("2200"),
+            "base_price": Decimal("2200"),
+            "metric": "flat",
+            "tier": "Mid",
+        },
+        {
+            "category": "Hot Tub",
+            "total_price": Decimal("9500"),
+            "base_price": Decimal("9500"),
+            "metric": "flat",
+            "tier": "Mid",
+        },
+    ]
+    # spec and notes are left for the analyst.
+    assert all(
+        item.spec is None and item.notes is None for item in payload.optimization_list
+    )
+
+
+def test_seeds_blank_optimization_item_when_tier_price_is_missing():
+    prepared = _prepared_with_amenities(
+        amenities=[_amenity_option(0, "Furnishings", None)],
+        must_have_amenity_ids=[],
+    )
+
+    payload = UnderwritingPayloadBuilder().build(prepared)
+
+    assert [item.category for item in payload.optimization_list] == ["Furnishings"]
+    assert payload.optimization_list[0].total_price is None
+    assert payload.optimization_list[0].base_price is None
+
+
+def test_skips_must_have_ids_absent_from_the_amenity_catalog():
+    prepared = _prepared_with_amenities(
+        amenities=[_amenity_option(0, "Furnishings", 45000)],
+        must_have_amenity_ids=[99],
+    )
+
+    payload = UnderwritingPayloadBuilder().build(prepared)
+
+    assert [item.category for item in payload.optimization_list] == ["Furnishings"]
+
+
+def test_deduplicates_must_have_ids_overlapping_base_options():
+    prepared = _prepared_with_amenities(
+        amenities=[
+            _amenity_option(0, "Furnishings", 45000),
+            _amenity_option(1, "Hot Tub", 9500),
+        ],
+        must_have_amenity_ids=[0, 1, 1],
+    )
+
+    payload = UnderwritingPayloadBuilder().build(prepared)
+
+    assert [item.category for item in payload.optimization_list] == [
+        "Furnishings",
+        "Hot Tub",
+    ]
+
+
+def test_optimization_list_is_empty_without_prepared_amenities():
+    prepared = {
+        "market_id": None,
+        "zillow_property": {"id": "12345", "price": None},
+        "opex": {"cleaning": {}, "absolute": {}},
+        "config": {},
+    }
+
+    assert UnderwritingPayloadBuilder().build(prepared).optimization_list == []
 
 
 def test_property_taxes_hierarchy():
