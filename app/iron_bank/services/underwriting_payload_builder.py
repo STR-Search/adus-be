@@ -25,6 +25,7 @@ class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
     _AMENITY_PRICE_TIER_FIELD = "price_tier_2"
     _AMENITY_TIER_LABEL = "Mid"
     _AMENITY_METRIC = "flat"
+    _POOL_AMENITY_IDS_TO_EXCLUDE = {4, 5, 13, 14}
 
     def build(self, prepared: dict[str, Any] | BaseModel) -> SaveUnderwritingPayload:
         if isinstance(prepared, BaseModel):
@@ -121,7 +122,10 @@ class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
             dict.fromkeys(
                 [
                     *PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS,
-                    *(prepared.get("must_have_amenity_ids") or []),
+                    *(
+                        id for id in (prepared.get("must_have_amenity_ids") or [])
+                        if id not in self._POOL_AMENITY_IDS_TO_EXCLUDE
+                    ),
                 ]
             )
         )
