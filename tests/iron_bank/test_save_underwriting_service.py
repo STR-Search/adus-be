@@ -101,7 +101,9 @@ async def test_save_persists_client_provided_zillow_property():
 @pytest.mark.parametrize(
     ("home_status", "expected_property_pending"),
     [
-        (None, False),
+        # An unknown home status is treated as pending — we only clear the flag
+        # for a listing we positively know is still for sale.
+        (None, True),
         ("FOR_SALE", False),
         ("SOLD", True),
         ("OTHER", True),
@@ -349,7 +351,7 @@ async def test_save_skips_airbnb_forecast_when_purchase_details_are_missing():
             "details": {
                 "cleaning_cost": {
                     "cost_per_clean": 100,
-                    "turns_per_year": 10,
+                    "turns_per_month": 10,
                 }
             },
         }
@@ -361,7 +363,7 @@ async def test_save_skips_airbnb_forecast_when_purchase_details_are_missing():
     assert repository.detail_data == {
         "cleaning_cost": {
             "cost_per_clean": 100,
-            "turns_per_year": 10,
+            "turns_per_month": 10,
         }
     }
     assert "forecasted_revenue" not in repository.detail_data

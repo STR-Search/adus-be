@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import Row, func, select
+from sqlalchemy import Row, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -21,6 +21,16 @@ class ScheduledListingsRepository:
             select(ScheduledListing).where(ScheduledListing.zpid == zpid)
         )
         return result.scalar_one_or_none()
+
+    async def set_remove_listing(self, zpid: str, remove: bool) -> bool:
+        """Flag/unflag a listing for removal. No commit — the caller's
+        transaction owns the write. Returns whether a row matched."""
+        result = await self.db.execute(
+            update(ScheduledListing)
+            .where(ScheduledListing.zpid == zpid)
+            .values(remove_listing=remove)
+        )
+        return result.rowcount > 0
 
     async def get_all(self, skip: int = 0, limit: int = 100) -> list[ScheduledListing]:
         result = await self.db.execute(
@@ -131,6 +141,40 @@ class ScheduledListingsRepository:
         logger.debug(
             "zillow.scheduled_listings.get_active_since_by_market",
             market_id=market_id,
+            since_hours=since_hours,
+            limit=limit,
+            server_now_utc=server_now.isoformat(),
+            cutoff_utc=cutoff.isoformat(),
+            count=len(items),
+        )
+        return items
+
+    async def get_active_since_by_preset(
+        self,
+        *,
+        preset_id: uuid.UUID,
+        since_hours: int,
+        limit: int | None = None,
+    ) -> list[ScheduledListing]:
+        """Returns active listings created in the last since_hours for a preset."""
+        server_now = datetime.now(timezone.utc)
+        cutoff = server_now - timedelta(hours=since_hours)
+        query = (
+            select(ScheduledListing)
+            .where(ScheduledListing.preset_id == preset_id)
+            .where(ScheduledListing.keep_updated.is_(True))
+            .where(ScheduledListing.remove_listing.is_(False))
+            .where(ScheduledListing.created_at >= cutoff)
+            .order_by(ScheduledListing.created_at.desc(), ScheduledListing.zpid)
+        )
+        if limit is not None:
+            query = query.limit(limit)
+
+        result = await self.db.execute(query)
+        items = list(result.scalars().all())
+        logger.debug(
+            "zillow.scheduled_listings.get_active_since_by_preset",
+            preset_id=preset_id,
             since_hours=since_hours,
             limit=limit,
             server_now_utc=server_now.isoformat(),

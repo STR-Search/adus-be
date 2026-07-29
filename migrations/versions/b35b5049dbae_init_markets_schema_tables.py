@@ -10,6 +10,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "b35b5049dbae"
@@ -30,6 +31,7 @@ def upgrade() -> None:
         sa.Column("price_tier_2", sa.Numeric(), nullable=True),
         sa.Column("price_tier_3", sa.Numeric(), nullable=True),
         sa.Column("notes", sa.String(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         schema="markets",
     )
@@ -43,8 +45,44 @@ def upgrade() -> None:
         sa.Column("price_tier_2", sa.Numeric(), nullable=True),
         sa.Column("price_tier_3", sa.Numeric(), nullable=True),
         sa.Column("notes", sa.String(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         schema="markets",
+    )
+    op.create_table(
+        "realtors",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("name", sa.String(), nullable=True),
+        sa.Column("email", sa.String(), nullable=True),
+        sa.Column("phone", sa.String(), nullable=True),
+        sa.Column("brokerage", sa.String(), nullable=True),
+        sa.Column("notes", sa.String(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+            nullable=True,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+            nullable=True,
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        schema="markets",
+    )
+    # Realtor identity is the email, matched case- and whitespace-insensitively
+    # so the same contact cannot be entered twice; enforced only among active
+    # rows, and rows without an email are exempt.
+    op.create_index(
+        "uq_realtors_email_active",
+        "realtors",
+        [sa.text("lower(btrim(email))")],
+        unique=True,
+        schema="markets",
+        postgresql_where=sa.text("deleted_at IS NULL AND email IS NOT NULL"),
     )
     op.create_table(
         "market_keys_master",
@@ -54,9 +92,38 @@ def upgrade() -> None:
         sa.Column("market_name_current", sa.String(), nullable=True),
         sa.Column("market_status", sa.String(), nullable=True),
         sa.Column("analyst_owner", sa.String(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("map_config", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("filters", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("must_have_amenities", postgresql.ARRAY(sa.Integer()), nullable=True),
+        sa.Column(
+            "nice_to_have_amenities", postgresql.ARRAY(sa.Integer()), nullable=True
+        ),
+        sa.Column("realtor_ids", postgresql.ARRAY(sa.Integer()), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+            nullable=True,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+            nullable=True,
+        ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("market_slug"),
         schema="markets",
+    )
+    # Partial unique index: slug uniqueness is only enforced among active
+    # (non-soft-deleted) rows, so a deleted slug can be re-created.
+    op.create_index(
+        "uq_market_keys_master_market_slug_active",
+        "market_keys_master",
+        ["market_slug"],
+        unique=True,
+        schema="markets",
+        postgresql_where=sa.text("deleted_at IS NULL"),
     )
     op.create_table(
         "opex_by_bedrooms",
@@ -80,15 +147,21 @@ def upgrade() -> None:
         sa.Column("furnishings_mid", sa.Numeric(), nullable=True),
         sa.Column("furnishings_high", sa.Numeric(), nullable=True),
         sa.Column("consolidated_shipping", sa.Numeric(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["market_id"],
             ["markets.market_keys_master.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "market_id", "bedrooms", name="uq_opex_by_bedrooms_market_bedrooms"
-        ),
         schema="markets",
+    )
+    op.create_index(
+        "uq_opex_by_bedrooms_market_bedrooms_active",
+        "opex_by_bedrooms",
+        ["market_id", "bedrooms"],
+        unique=True,
+        schema="markets",
+        postgresql_where=sa.text("deleted_at IS NULL"),
     )
     op.create_table(
         "opex_by_size",
@@ -98,6 +171,7 @@ def upgrade() -> None:
         sa.Column("internet", sa.Numeric(), nullable=True),
         sa.Column("pest_control", sa.Numeric(), nullable=True),
         sa.Column("utilities", sa.Numeric(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["market_id"],
             ["markets.market_keys_master.id"],
@@ -105,15 +179,57 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         schema="markets",
     )
+    op.create_table(
+        "str_cribs_fee_details",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        # Inclusive upper bound (sqft) of the fee tier; the open-ended top
+        # tier uses a max-int32 sentinel so a `sqft >= :area` lookup always
+        # resolves to a row.
+        sa.Column("sqft", sa.Integer(), nullable=True),
+        sa.Column("fee", sa.Numeric(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.PrimaryKeyConstraint("id"),
+        schema="markets",
+    )
     # ### end Alembic commands ###
+
+    # Triggers to keep updated_at current on every row modification (the ORM
+    # does not maintain it).
+    op.execute("""
+        CREATE OR REPLACE FUNCTION markets.update_updated_at()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = now();
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """)
+    op.execute("""
+        CREATE TRIGGER market_keys_master_updated_at
+            BEFORE UPDATE ON markets.market_keys_master
+            FOR EACH ROW EXECUTE FUNCTION markets.update_updated_at();
+        """)
+    op.execute("""
+        CREATE TRIGGER realtors_updated_at
+            BEFORE UPDATE ON markets.realtors
+            FOR EACH ROW EXECUTE FUNCTION markets.update_updated_at();
+        """)
 
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.execute("DROP TRIGGER IF EXISTS realtors_updated_at ON markets.realtors;")
+    op.execute(
+        "DROP TRIGGER IF EXISTS market_keys_master_updated_at "
+        "ON markets.market_keys_master;"
+    )
+    op.execute("DROP FUNCTION IF EXISTS markets.update_updated_at();")
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_table("str_cribs_fee_details", schema="markets")
     op.drop_table("opex_by_size", schema="markets")
     op.drop_table("opex_by_bedrooms", schema="markets")
     op.drop_table("market_keys_master", schema="markets")
+    op.drop_table("realtors", schema="markets")
     op.drop_table("construction_costs_remodeling", schema="markets")
     op.drop_table("construction_costs_amenities", schema="markets")
     # ### end Alembic commands ###

@@ -21,6 +21,7 @@ class UnderwritingOptimizationItem(Base):
     spec = Column(Text, nullable=True)
     tier = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
+    sort_order = Column(Integer, nullable=True)
 
     underwriting = relationship("Underwriting", back_populates="optimization_items")
 
@@ -38,6 +39,7 @@ class UnderwritingOperatingExpense(Base):
 
     expense_name = Column(String(255), nullable=True)
     monthly_amount = Column(Numeric(12, 2), nullable=True)
+    sort_order = Column(Integer, nullable=True)
 
     underwriting = relationship("Underwriting", back_populates="operating_expenses")
 
@@ -57,6 +59,7 @@ class UnderwritingCompSet(Base):
     revenue = Column(Numeric(12, 2), nullable=True)
     bedrooms = Column(Integer, nullable=True)
     sleeps = Column(Integer, nullable=True)
+    sort_order = Column(Integer, nullable=True)
 
     underwriting = relationship("Underwriting", back_populates="comp_set")
 

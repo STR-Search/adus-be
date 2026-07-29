@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
+    ARRAY,
     Column,
     DateTime,
     ForeignKey,
@@ -68,8 +69,16 @@ class Underwriting(Base):
         nullable=True,
     )
 
-    analyst_id = Column(Integer, nullable=True)
-    approver_id = Column(Integer, nullable=True)
+    analyst_id = Column(
+        Integer,
+        ForeignKey("users.users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    approver_id = Column(
+        Integer,
+        ForeignKey("users.users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     deal_status = Column(String(50), nullable=True)
     deal_added = Column(
@@ -114,12 +123,15 @@ class Underwriting(Base):
     remote = Column(Boolean, default=False)
     can_support_cohost = Column(Boolean, default=False)
 
-    market_type = Column(String(50), nullable=True)
+    # Multi-select tags store a list of reference slugs (text[]); single-select
+    # tags store one slug (varchar). See REFERENCE_TAG_FIELDS split in
+    # app/iron_bank/schemas/underwriting.py.
+    market_type = Column(ARRAY(Text), nullable=True)
     execution_type = Column(String(50), nullable=True)
-    seasonality = Column(String(50), nullable=True)
+    seasonality = Column(ARRAY(Text), nullable=True)
     regulatory_clarity = Column(String(50), nullable=True)
     offer_competitiveness = Column(String(50), nullable=True)
-    core_value_driver = Column(String(50), nullable=True)
+    core_value_driver = Column(ARRAY(Text), nullable=True)
     cash_flow_quality = Column(String(50), nullable=True)
     view_quality = Column(String(50), nullable=True)
     pool_type = Column(String(50), nullable=True)
@@ -156,13 +168,29 @@ class Underwriting(Base):
     taxes = relationship(
         "UnderwritingTax", back_populates="underwriting", uselist=False
     )
+    # Children are ordered by their payload position (sort_order), with id as
+    # a tiebreaker so pre-backfill rows (NULL sort_order) keep insertion order.
     optimization_items = relationship(
-        "UnderwritingOptimizationItem", back_populates="underwriting"
+        "UnderwritingOptimizationItem",
+        back_populates="underwriting",
+        order_by=(
+            "[UnderwritingOptimizationItem.sort_order,"
+            " UnderwritingOptimizationItem.id]"
+        ),
     )
     operating_expenses = relationship(
-        "UnderwritingOperatingExpense", back_populates="underwriting"
+        "UnderwritingOperatingExpense",
+        back_populates="underwriting",
+        order_by=(
+            "[UnderwritingOperatingExpense.sort_order,"
+            " UnderwritingOperatingExpense.id]"
+        ),
     )
-    comp_set = relationship("UnderwritingCompSet", back_populates="underwriting")
+    comp_set = relationship(
+        "UnderwritingCompSet",
+        back_populates="underwriting",
+        order_by="[UnderwritingCompSet.sort_order, UnderwritingCompSet.id]",
+    )
 
 
 class UnderwritingDetail(Base):

@@ -44,6 +44,20 @@ class FakeReconciliationJob:
         return {"updated": 1, "failed": 0}
 
 
+class FakePropertyPendingJob:
+    session = None
+    ran = False
+
+    @classmethod
+    def from_session(cls, session):
+        cls.session = session
+        return cls()
+
+    async def run(self):
+        self.__class__.ran = True
+        return {"updated": 3}
+
+
 @pytest.mark.asyncio
 async def test_run_batch_runs_creation_and_price_reconciliation():
     summary = await run_uw_auto_prepare.run_batch(
@@ -52,14 +66,18 @@ async def test_run_batch_runs_creation_and_price_reconciliation():
         session_factory=FakeSessionFactory,
         creation_job_cls=FakeCreationJob,
         reconciliation_job_cls=FakeReconciliationJob,
+        property_pending_job_cls=FakePropertyPendingJob,
     )
 
     assert summary == {
         "creation": {"saved": 2, "failed": 0},
         "price_reconciliation": {"updated": 1, "failed": 0},
+        "property_pending": {"updated": 3},
     }
     assert FakeCreationJob.session.name == "session"
     assert FakeReconciliationJob.session.name == "session"
+    assert FakePropertyPendingJob.session.name == "session"
+    assert FakePropertyPendingJob.ran is True
     assert FakeCreationJob.called_with == {"since_hours": 24, "limit": 500}
     assert FakeReconciliationJob.called_with == {
         "since_hours": 24,

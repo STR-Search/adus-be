@@ -1,8 +1,16 @@
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    model_serializer,
+    model_validator,
+)
 
+from app.core.reference_data.schemas import ReferenceDataOption
 from app.iron_bank.enums import (
     DealStatus,
     SortOrder,
@@ -53,6 +61,7 @@ class GetUnderwritingTaxes(BaseModel):
 
 
 class GetUnderwritingOptimizationItem(BaseModel):
+    id: int | None = None
     category: str | None = None
     total_price: Decimal | None = None
     metric: str | None = None
@@ -65,18 +74,54 @@ class GetUnderwritingOptimizationItem(BaseModel):
 class GetUnderwritingOperatingExpense(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    id: int | None = None
     expense_name: str | None = Field(default=None, alias="expense")
     monthly_amount: Decimal | None = Field(default=None, alias="monthly")
 
 
 class GetUnderwritingCompSet(BaseModel):
+    id: int | None = None
     listing_url: str | None = None
     revenue: Decimal | None = None
     bedrooms: int | None = None
     sleeps: int | None = None
 
 
+class UserRef(BaseModel):
+    """Lightweight users.users reference used to resolve analyst_id/approver_id."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+
+
+class UnderwritingRealtorDetail(BaseModel):
+    """A markets.realtors row associated with the underwriting's market."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    brokerage: str | None = None
+
+
 class GetUnderwritingResult(UnderwritingRead):
+    # Only populated in simulation mode (interest_rate / down_payment_pct
+    # overrides): True when the row's metrics were recalculated, False when the
+    # row lacked the inputs to simulate (stored values shown instead). Stays
+    # None — and out of the payload — on the normal list path.
+    simulated: bool | None = None
+    # Resolved users.users references for analyst_id/approver_id, and the
+    # realtors associated with the underwriting's market (via
+    # market_keys_master.realtor_ids). Populated by the read service.
+    analyst: UserRef | None = None
+    approver: UserRef | None = None
+    realtor_details: list[UnderwritingRealtorDetail] = Field(default_factory=list)
     details: GetUnderwritingDetails | None = None
     taxes: GetUnderwritingTaxes | None = None
     optimization_list: list[GetUnderwritingOptimizationItem] = Field(
@@ -86,6 +131,22 @@ class GetUnderwritingResult(UnderwritingRead):
         default_factory=list
     )
     comp_set: list[GetUnderwritingCompSet] = Field(default_factory=list)
+
+    @model_serializer(mode="wrap")
+    def _drop_null_simulated(self, handler):
+        # Keep the non-simulation response contract unchanged: the `simulated`
+        # key only appears when the row went through simulation mode.
+        data = handler(self)
+        if isinstance(data, dict) and data.get("simulated") is None:
+            data.pop("simulated", None)
+        return data
+
+
+class SimulationParams(BaseModel):
+    """Echo of the financing overrides a simulated list was computed with."""
+
+    interest_rate: Decimal | None = None
+    down_payment_pct: Decimal | None = None
 
 
 class GetUnderwritingsQuery(BaseModel):
@@ -109,8 +170,15 @@ class GetUnderwritingsQuery(BaseModel):
     max_purchase_price: Decimal | None = Field(None, ge=0)
     min_total_oop: Decimal | None = Field(None, ge=0)
     max_total_oop: Decimal | None = Field(None, ge=0)
+    min_l_cash_on_cash: Decimal | None = None
+    max_l_cash_on_cash: Decimal | None = None
     sort_by: UnderwritingSortBy = UnderwritingSortBy.ID
     sort_order: SortOrder = SortOrder.DESC
+    # Simulation mode: when either override is present, list metrics are
+    # recalculated with it (nothing is persisted) and filtering/sorting run on
+    # the simulated values. Fractional values, e.g. 0.069 and 0.1.
+    interest_rate: Decimal | None = Field(None, ge=0, lt=1)
+    down_payment_pct: Decimal | None = Field(None, ge=0, le=1)
 
     @model_validator(mode="after")
     def check_ranges(self):
@@ -130,6 +198,14 @@ class GetUnderwritingsQuery(BaseModel):
             raise ValueError(
                 "min_total_oop must be less than or equal to max_total_oop"
             )
+        if (
+            self.min_l_cash_on_cash is not None
+            and self.max_l_cash_on_cash is not None
+            and self.min_l_cash_on_cash > self.max_l_cash_on_cash
+        ):
+            raise ValueError(
+                "min_l_cash_on_cash must be less than or equal to max_l_cash_on_cash"
+            )
         return self
 
 
@@ -139,6 +215,15 @@ class GetUnderwritingsResult(BaseModel):
     page: int
     page_size: int
     pages: int
+    # Present only in simulation mode; echoes the overrides applied.
+    simulation: SimulationParams | None = None
+
+    @model_serializer(mode="wrap")
+    def _drop_null_simulation(self, handler):
+        data = handler(self)
+        if isinstance(data, dict) and data.get("simulation") is None:
+            data.pop("simulation", None)
+        return data
 
 
 class ConstructionAmenityOption(BaseModel):
@@ -197,6 +282,11 @@ class EditContextualData(BaseModel):
     )
     construction_remodeling: list[ConstructionRemodelingOption] = Field(
         default_factory=list
+    )
+    # iron_bank domain reference data, grouped by set_code — the same payload
+    # served by GET /reference-data?domain=iron_bank.
+    deal_tag_options: dict[str, list[ReferenceDataOption]] = Field(
+        default_factory=dict
     )
 
 

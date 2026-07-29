@@ -79,7 +79,9 @@ class TestPrepare:
                 original_photos=["a.jpg"], lot_size_sqft=21780
             ),
             market=SimpleNamespace(
-                market_name="Smoky Mountains", market_slug="smoky-mountains"
+                market_name="Smoky Mountains",
+                market_slug="smoky-mountains",
+                must_have_amenities=[SimpleNamespace(id=1, amenity_name="Hot Tub")],
             ),
             market_id=3,
             opex_by_bedrooms=_opex_by_bedrooms(),
@@ -169,7 +171,7 @@ class TestPrepare:
             "price_tier_2": None,
             "price_tier_3": 60000,
         }
-        assert amenities[2]["amenity_name"] == "Hot Tub"
+        assert amenities[3]["amenity_name"] == "Hot Tub"
 
     def test_prepends_consolidated_shipping_amenity_from_opex(self):
         amenities = self._prepare().model_dump()["construction_amenities"]
@@ -179,9 +181,26 @@ class TestPrepare:
             "location": None,
             "notes": None,
             "price_tier_1": 18225,
-            "price_tier_2": None,
-            "price_tier_3": None,
+            "price_tier_2": 18225,
+            "price_tier_3": 18225,
         }
+
+    def test_surfaces_market_must_have_amenity_ids(self):
+        result = self._prepare().model_dump()
+        assert result["must_have_amenity_ids"] == [1]
+
+    def test_must_have_amenity_ids_empty_without_market(self):
+        result = self._prepare(market=None, market_id=None).model_dump()
+        assert result["must_have_amenity_ids"] == []
+
+    def test_must_have_amenity_ids_empty_when_market_has_none(self):
+        market = SimpleNamespace(
+            market_name="Smoky Mountains",
+            market_slug="smoky-mountains",
+            must_have_amenities=None,
+        )
+        result = self._prepare(market=market).model_dump()
+        assert result["must_have_amenity_ids"] == []
 
     def test_consolidated_shipping_is_not_an_absolute_opex(self):
         opex = self._prepare().model_dump()["opex"]
@@ -190,6 +209,15 @@ class TestPrepare:
     def test_config_includes_fred_rate_as_fraction(self):
         config = self._prepare().model_dump()["config"]
         assert config["fred"] == {"value": 0.065, "date": "2026-06-01"}
+
+    def test_interest_rate_is_fred_rate_plus_spread(self):
+        config = self._prepare().model_dump()["config"]
+        # fred 6.5% -> 0.065 + 0.0035 spread
+        assert config["interest_rate"] == 0.0685
+
+    def test_interest_rate_falls_back_to_default_without_fred(self):
+        config = self._prepare(fred=None).model_dump()["config"]
+        assert config["interest_rate"] == 0.0688
 
     def test_handles_all_optional_inputs_missing(self):
         result = self._prepare(

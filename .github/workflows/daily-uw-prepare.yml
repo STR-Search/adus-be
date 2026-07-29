@@ -22,4 +22,4 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           APP_ENV: production
-        run: uv run python -m scripts.run_uw_auto_prepare --since-hours 24
+        run: uv run python -m scripts.run_uw_auto_prepare --since-hours 26

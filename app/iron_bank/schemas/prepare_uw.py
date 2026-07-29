@@ -42,4 +42,8 @@ class PrepareUwDataResult(BaseModel):
     opex: PreparedOpex
     construction_amenities: list[ConstructionAmenityOption]
     construction_remodeling: list[ConstructionRemodelingOption]
+    # ids into construction_amenities that this market requires on every deal
+    # (market_keys_master.must_have_amenities). The payload builder seeds one
+    # optimization item per id.
+    must_have_amenity_ids: list[int] = Field(default_factory=list)
     config: UwConfigSchema

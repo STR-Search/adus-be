@@ -69,6 +69,10 @@ class UnderwritingTaxInput(BaseModel):
 class OptimizationItemInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # Existing row id, round-tripped from GET, so the update path can match and
+    # update this item in place instead of delete-and-recreate. Absent/None
+    # means "new item" (fresh PK); ignored on create.
+    id: int | None = None
     category: str | None = None
     total_price: Decimal | None = None
     metric: str | None = None
@@ -81,6 +85,8 @@ class OptimizationItemInput(BaseModel):
 class OperatingExpenseInput(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
+    # See OptimizationItemInput.id: round-tripped for in-place update matching.
+    id: int | None = None
     expense_name: str | None = Field(default=None, alias="expense")
     monthly_amount: Decimal | None = Field(default=None, alias="monthly")
 
@@ -88,6 +94,8 @@ class OperatingExpenseInput(BaseModel):
 class CompSetInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # See OptimizationItemInput.id: round-tripped for in-place update matching.
+    id: int | None = None
     listing_url: str | None = None
     revenue: Decimal | None = None
     bedrooms: int | None = None
@@ -142,16 +150,16 @@ class SaveUnderwritingPayload(UnderwritingBase):
                 "can_support_cohost": True,
                 "renovation_level": 2,
                 "deal_complexity": 3,
-                "market_type": "Mountain",
-                "execution_type": "Turnkey",
-                "seasonality": "Year Round",
-                "regulatory_clarity": "Clear",
-                "offer_competitiveness": "Moderate",
-                "core_value_driver": "Cash Flow",
+                "market_type": ["mountain", "lake"],
+                "execution_type": "moderate",
+                "seasonality": ["jun", "jul", "aug"],
+                "regulatory_clarity": "moderate",
+                "offer_competitiveness": "moderate",
+                "core_value_driver": ["views", "location"],
                 "cash_flow_quality": None,
-                "view_quality": "Excellent",
-                "pool_type": "None",
-                "primary_guest_avatar": "Families",
+                "view_quality": "premium",
+                "pool_type": "in_ground",
+                "primary_guest_avatar": "family_stays",
                 "loom_vid": "https://loom.com/share/abc123",
                 "video_walkthrough": "https://youtube.com/watch?v=xwalk001",
                 "survey": "https://typeform.com/survey/deal-001",

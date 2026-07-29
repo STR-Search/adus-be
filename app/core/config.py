@@ -22,6 +22,24 @@ class Config(BaseSettings):
     CLERK_ISSUER: str = ""  # e.g. https://intent-snapper-24.clerk.accounts.dev
     CLERK_JWKS_URL: str = ""  # e.g. {issuer}/.well-known/jwks.json
 
+    # Sentry error monitoring
+    SENTRY_ENABLED: bool = False
+    SENTRY_DSN: str = ""
+
+    # n8n automation webhook, fired when an underwriting reaches
+    # present_to_clients. n8n distinguishes environments by URL path
+    # (/webhook-test/<uuid> vs /webhook/<uuid>, same uuid), so this is set per
+    # environment rather than branched on APP_ENV in code. Disabled by default
+    # so no environment starts firing events by surprise.
+    N8N_WEBHOOK_URL: str = ""
+    N8N_WEBHOOK_ENABLED: bool = False
+    N8N_WEBHOOK_TIMEOUT_SECONDS: int = 10
+
+    # Log the original DBAPI error (message + SQL + params) at the engine
+    # boundary. Server-side only; never reaches clients. Safe to leave on in
+    # every environment — kept as a flag purely so verbosity is toggleable.
+    DB_ERROR_LOGGING: bool = True
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"

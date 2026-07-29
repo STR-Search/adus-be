@@ -12,7 +12,7 @@ def test_list_status_options_returns_fe_labels_and_stable_keys():
 
     assert result.statuses[0].model_dump() == {
         "key": "template_generated",
-        "label": "Template_generated",
+        "label": "Template Generated",
         "sort_order": 1,
     }
 

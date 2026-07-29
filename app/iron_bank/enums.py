@@ -26,6 +26,7 @@ class UnderwritingSortBy(StrEnum):
     PURCHASE_PRICE = "purchase_price"
     TOTAL_OOP = "total_oop"
     SHEET_NUMBER = "sheet_number"
+    L_CASH_ON_CASH = "l_cash_on_cash"
 
 
 class SortOrder(StrEnum):

@@ -13,9 +13,15 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingEditContextResult,
     GetUnderwritingResult,
     GetUnderwritingsResult,
+    UnderwritingRealtorDetail,
+    UserRef,
     ZillowProperty,
 )
-from app.iron_bank.schemas.underwriting import UnderwritingRead
+from app.iron_bank.schemas.underwriting import (
+    MULTI_SELECT_TAG_FIELDS,
+    SINGLE_SELECT_TAG_FIELDS,
+    UnderwritingRead,
+)
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 
 
@@ -28,6 +34,11 @@ class GetUnderwritingService:
         opex_by_bedrooms_service: Any = None,
         construction_amenities_service: Any = None,
         construction_remodeling_service: Any = None,
+        str_cribs_service: Any = None,
+        reference_data_service: Any = None,
+        user_repository: Any = None,
+        market_repository: Any = None,
+        realtor_repository: Any = None,
     ):
         self.repository = repository
         self.listings_service = listings_service
@@ -35,29 +46,19 @@ class GetUnderwritingService:
         self.opex_by_bedrooms_service = opex_by_bedrooms_service
         self.construction_amenities_service = construction_amenities_service
         self.construction_remodeling_service = construction_remodeling_service
+        self.str_cribs_service = str_cribs_service
+        self.reference_data_service = reference_data_service
+        self.user_repository = user_repository
+        self.market_repository = market_repository
+        self.realtor_repository = realtor_repository
 
     async def get(self, underwriting_id: int) -> GetUnderwritingResult:
         underwriting = await self.repository.get_by_id(underwriting_id)
         if underwriting is None:
             raise LookupError(f"Underwriting {underwriting_id} not found")
         result = self._to_result(underwriting)
-        await self._attach_user_names([result])
+        await self._enrich([result])
         return result
-
-    async def _attach_user_names(self, results) -> None:
-        """Resolves analyst_id/approver_id to display names in one batch."""
-        ids = {
-            user_id
-            for result in results
-            for user_id in (result.analyst_id, result.approver_id)
-            if user_id is not None
-        }
-        if not ids:
-            return
-        names = await self.repository.get_user_names(ids)
-        for result in results:
-            result.analyst_name = names.get(result.analyst_id)
-            result.approver_name = names.get(result.approver_id)
 
     async def get_edit_context(
         self, underwriting_id: int
@@ -83,8 +84,33 @@ class GetUnderwritingService:
 
         amenities = await self.construction_amenities_service.get_all()
         remodeling = await self.construction_remodeling_service.get_all()
+
+        # iron_bank reference data (deal tag options), grouped by set_code. The
+        # (domain="iron_bank") options were already fetched into the service's
+        # per-request cache by _populate_reference_labels, so this is a cache
+        # hit rather than a second query.
+        deal_tag_options: dict = {}
+        if self.reference_data_service is not None:
+            reference_data = await self.reference_data_service.get_reference_data(
+                domain="iron_bank"
+            )
+            deal_tag_options = reference_data.options
+
+        # zillow_property was just coerced onto details, so its area is the
+        # single source for the cribs fee tier (both automated and stored
+        # paths funnel through it).
+        area = (
+            underwriting.details.zillow_property.area
+            if underwriting.details and underwriting.details.zillow_property
+            else None
+        )
+        str_cribs_fee = (
+            await self.str_cribs_service.get_by_area(area)
+            if self.str_cribs_service is not None and area is not None
+            else None
+        )
         amenity_options = PrepareUwDataService.build_amenities_options(
-            opex_by_bedrooms, amenities
+            opex_by_bedrooms, amenities, str_cribs_fee
         )
 
         return GetUnderwritingEditContextResult(
@@ -99,6 +125,7 @@ class GetUnderwritingService:
                         ConstructionRemodelingOption.model_validate(r.model_dump())
                         for r in remodeling
                     ],
+                    deal_tag_options=deal_tag_options,
                 ),
             )
         )
@@ -138,6 +165,8 @@ class GetUnderwritingService:
         max_purchase_price: Decimal | None = None,
         min_total_oop: Decimal | None = None,
         max_total_oop: Decimal | None = None,
+        min_l_cash_on_cash: Decimal | None = None,
+        max_l_cash_on_cash: Decimal | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
     ) -> GetUnderwritingsResult:
@@ -154,12 +183,14 @@ class GetUnderwritingService:
             max_purchase_price=max_purchase_price,
             min_total_oop=min_total_oop,
             max_total_oop=max_total_oop,
+            min_l_cash_on_cash=min_l_cash_on_cash,
+            max_l_cash_on_cash=max_l_cash_on_cash,
             sort_by=sort_by,
             sort_order=sort_order,
         )
         results = [self._to_result(underwriting) for underwriting in items]
-        await self._attach_user_names(results)
         await self._hydrate_automated_zillow(items, results)
+        await self._enrich(results)
         return GetUnderwritingsResult(
             data=results,
             total=total,
@@ -207,6 +238,118 @@ class GetUnderwritingService:
                 listing, listing_details.get(underwriting.zpid)
             )
             self._apply_zillow_to_details(result, zillow_property)
+
+    async def _enrich(self, results: list[GetUnderwritingResult]) -> None:
+        """Post-read enrichment shared by the single-get, list, and simulation
+        paths: reference-data labels, resolved analyst/approver users, and the
+        market's realtor details."""
+        await self._populate_reference_labels(results)
+        await self._populate_user_refs(results)
+        await self._populate_realtor_details(results)
+
+    async def _populate_user_refs(
+        self, results: list[GetUnderwritingResult]
+    ) -> None:
+        """Resolve ``analyst`` / ``approver`` from analyst_id / approver_id.
+
+        One batched query for the distinct user ids across the page; no-op when
+        no user repository is configured. Deleted or unknown ids leave the ref
+        ``None`` (the raw ``*_id`` fields still carry the stored value).
+        """
+        if self.user_repository is None or not results:
+            return
+        user_ids = {r.analyst_id for r in results if r.analyst_id is not None} | {
+            r.approver_id for r in results if r.approver_id is not None
+        }
+        if not user_ids:
+            return
+        users = await self.user_repository.get_by_ids(user_ids)
+        refs = {user.id: UserRef.model_validate(user) for user in users}
+        for result in results:
+            if result.analyst_id is not None:
+                result.analyst = refs.get(result.analyst_id)
+            if result.approver_id is not None:
+                result.approver = refs.get(result.approver_id)
+
+    async def _populate_realtor_details(
+        self, results: list[GetUnderwritingResult]
+    ) -> None:
+        """Resolve ``realtor_details`` from the market's realtor_ids.
+
+        Each distinct market on the page is fetched once, then all referenced
+        realtors in one batched query. No-op when the market/realtor
+        repositories aren't configured. Soft-deleted or unknown realtor ids
+        drop out of the list; each market's realtor_ids order is preserved.
+        """
+        if (
+            self.market_repository is None
+            or self.realtor_repository is None
+            or not results
+        ):
+            return
+        market_ids = {r.market_id for r in results if r.market_id is not None}
+        if not market_ids:
+            return
+        realtor_ids_by_market: dict[int, list[int]] = {}
+        for market_id in market_ids:
+            market = await self.market_repository.get_by_id(market_id)
+            realtor_ids_by_market[market_id] = (
+                market.realtor_ids or [] if market is not None else []
+            )
+        realtor_ids = {
+            realtor_id
+            for ids in realtor_ids_by_market.values()
+            for realtor_id in ids
+        }
+        if not realtor_ids:
+            return
+        realtors = await self.realtor_repository.get_by_ids(realtor_ids)
+        details = {
+            realtor.id: UnderwritingRealtorDetail.model_validate(realtor)
+            for realtor in realtors
+        }
+        for result in results:
+            if result.market_id is None:
+                continue
+            result.realtor_details = [
+                details[realtor_id]
+                for realtor_id in realtor_ids_by_market.get(result.market_id, [])
+                if realtor_id in details
+            ]
+
+    async def _populate_reference_labels(
+        self, results: list[GetUnderwritingResult]
+    ) -> None:
+        """Resolve ``<field>_label`` for each tag slug from reference data.
+
+        Fetches the ``(set_code, slug) → label`` map once for the whole batch;
+        no-op when no reference-data service is configured. Single-select fields
+        resolve to one label, multi-select fields to a list of labels (one per
+        slug). Unknown/retired slugs simply leave the label ``None`` (single) or
+        drop out of the list (multi).
+        """
+        if self.reference_data_service is None or not results:
+            return
+        label_map = await self.reference_data_service.get_label_map(
+            domain="iron_bank"
+        )
+        for result in results:
+            for field in SINGLE_SELECT_TAG_FIELDS:
+                slug = getattr(result, field, None)
+                if slug is not None:
+                    setattr(result, f"{field}_label", label_map.get((field, slug)))
+            for field in MULTI_SELECT_TAG_FIELDS:
+                slugs = getattr(result, field, None)
+                if slugs:
+                    setattr(
+                        result,
+                        f"{field}_label",
+                        [
+                            label_map[(field, slug)]
+                            for slug in slugs
+                            if (field, slug) in label_map
+                        ],
+                    )
 
     def _to_result(self, underwriting) -> GetUnderwritingResult:
         return GetUnderwritingResult.model_validate(
@@ -266,6 +409,7 @@ class GetUnderwritingService:
 
     def _optimization_item_data(self, item) -> dict[str, Any]:
         return {
+            "id": item.id,
             "category": item.category,
             "total_price": item.total_price,
             "metric": item.metric,
@@ -277,12 +421,14 @@ class GetUnderwritingService:
 
     def _operating_expense_data(self, expense) -> dict[str, Any]:
         return {
+            "id": expense.id,
             "expense_name": expense.expense_name,
             "monthly_amount": expense.monthly_amount,
         }
 
     def _comp_set_data(self, comp) -> dict[str, Any]:
         return {
+            "id": comp.id,
             "listing_url": comp.listing_url,
             "revenue": comp.revenue,
             "bedrooms": comp.bedrooms,

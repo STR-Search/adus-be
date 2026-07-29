@@ -20,18 +20,8 @@ class FakeUnderwritingRepository:
         self.requested_id = underwriting_id
         return self.underwriting
 
-    async def get_all_paginated(
-        self,
-        *,
-        page: int,
-        page_size: int,
-        **filters,
-    ):
-        self.requested_page = {
-            "page": page,
-            "page_size": page_size,
-            **filters,
-        }
+    async def get_all_paginated(self, *, page: int, page_size: int, **filters):
+        self.requested_page = {"page": page, "page_size": page_size, **filters}
         items = [self.underwriting] if self.underwriting is not None else []
         return items, len(items), 1 if items else 0
 
@@ -73,6 +63,15 @@ def _underwriting():
                 },
             },
             cleaning_cost={"monthly_cleaning_cost": 1540},
+            property_taxes={
+                "source": "opex_property_tax_pct",
+                "annual_amount": Decimal("5820"),
+                "monthly_amount": Decimal("485"),
+                "inputs": {
+                    "opex_property_tax_pct": Decimal("0.012"),
+                    "purchase_price": Decimal("485000"),
+                },
+            },
             zillow_property=None,
             analyst_notes="Existing hot tub and cabin aesthetic.",
         ),
@@ -88,19 +87,24 @@ def _underwriting():
         ),
         optimization_items=[
             SimpleNamespace(
+                id=101,
                 category="Flooring",
                 total_price=Decimal("27000"),
                 metric="sqft",
                 base_price=Decimal("15"),
                 spec="@$15/sqft x 1,800 sqft",
                 tier="Mid",
+                notes=None,
             )
         ],
         operating_expenses=[
-            SimpleNamespace(expense_name="Internet", monthly_amount=Decimal("100"))
+            SimpleNamespace(
+                id=201, expense_name="Internet", monthly_amount=Decimal("100")
+            )
         ],
         comp_set=[
             SimpleNamespace(
+                id=301,
                 listing_url="https://www.airbnb.com/rooms/1",
                 revenue=Decimal("112400"),
                 bedrooms=4,
@@ -127,16 +131,18 @@ async def test_get_underwriting_returns_save_shaped_aggregate():
     assert data["taxes"]["sla_multiplier_pct"] == Decimal("0.36")
     assert data["optimization_list"] == [
         {
+            "id": 101,
             "category": "Flooring",
             "total_price": Decimal("27000"),
             "metric": "sqft",
             "base_price": Decimal("15"),
             "spec": "@$15/sqft x 1,800 sqft",
             "tier": "Mid",
+            "notes": None,
         }
     ]
     assert data["operating_expenses"] == [
-        {"expense": "Internet", "monthly": Decimal("100")}
+        {"id": 201, "expense": "Internet", "monthly": Decimal("100")}
     ]
     assert data["comp_set"][0]["listing_url"] == "https://www.airbnb.com/rooms/1"
 
@@ -257,6 +263,8 @@ async def test_get_all_passes_filters_to_repository():
         market_id=3,
         source="legacy_sheet",
         search="fort lauderdale",
+        deal_status="template_generated",
+        analyst_id=7,
     )
 
     expected = {
@@ -266,6 +274,8 @@ async def test_get_all_passes_filters_to_repository():
         "market_id": 3,
         "source": "legacy_sheet",
         "search": "fort lauderdale",
+        "deal_status": "template_generated",
+        "analyst_id": 7,
     }
     for key, value in expected.items():
         assert repository.requested_page[key] == value
@@ -321,7 +331,9 @@ class MissingListingDetailsService:
 
 class StubOpexByBedrooms:
     furnishings_low = Decimal("1000")
+    furnishings_mid = Decimal("1500")
     furnishings_high = Decimal("2000")
+    consolidated_shipping = Decimal("500")
 
 
 class StubOpexByBedroomsService:

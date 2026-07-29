@@ -295,10 +295,10 @@ Those financing values come from prepared config, with defaults in
 `BaseUnderwritingPayloadBuilder`.
 
 `details.cleaning_cost` is created when cleaning fee and/or turn count is
-available. If both are available, annual cleaning cost is calculated as:
+available. If both are available, monthly cleaning cost is calculated as:
 
 ```text
-cost_per_clean * turns_per_year
+cost_per_clean * turns_per_month
 ```
 
 `taxes` is seeded from config defaults when purchase price exists.

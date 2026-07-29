@@ -14,8 +14,18 @@ _FRED_URL = (
 class ExternalApiService:
     def __init__(self):
         self.fred_api_key = get_config().FRED_API_KEY
+        self._cached_rate: MortgageRateResponse | None = None
 
     async def get_30y_fixed_rate(self) -> MortgageRateResponse | None:
+        # Memoized per instance so a batch (which reuses one service) hits FRED
+        # once instead of once per listing. MORTGAGE30US is weekly data, so the
+        # value is identical across a batch. A failed fetch (None) is not cached,
+        # so later listings retry until one succeeds.
+        if self._cached_rate is None:
+            self._cached_rate = await self._fetch_30y_fixed_rate()
+        return self._cached_rate
+
+    async def _fetch_30y_fixed_rate(self) -> MortgageRateResponse | None:
         url = f"{_FRED_URL}&api_key={self.fred_api_key}"
 
         for attempt in range(3):

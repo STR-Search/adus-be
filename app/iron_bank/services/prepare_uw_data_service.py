@@ -9,6 +9,8 @@ class PrepareUwDataService:
     service must not import from other domains.
     """
 
+    # Spread applied over the FRED 30y fixed rate to derive the UW interest rate.
+    _INTEREST_RATE_SPREAD_OVER_FRED = 0.0035
     _SQFT_CHECKPOINTS = [1000, 1500, 2000, 2750, 3500, 4500]
     _OPEX_METADATA_FIELDS = {"id", "market_id", "market_slug", "bedrooms", "sqft"}
     _OPEX_CLEANING_FIELDS = {"cleaning_fee", "num_of_turns"}
@@ -26,6 +28,19 @@ class PrepareUwDataService:
     # Opex columns that are surfaced as amenity options (see
     # build_amenities_options) rather than monthly operating expenses.
     _OPEX_AMENITY_FIELDS = {"consolidated_shipping"}
+
+    # Synthetic amenity options prepended to the construction_costs_amenities
+    # catalog by build_amenities_options. They are not catalog rows, so they
+    # carry non-positive sentinel ids that cannot collide with real ones.
+    FURNISHINGS_OPTION_ID = 0
+    CONSOLIDATED_SHIPPING_OPTION_ID = -1
+    STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID = -2
+    # Seeded on every underwriting regardless of market, in this order.
+    SEEDED_AMENITY_OPTION_IDS = (
+        FURNISHINGS_OPTION_ID,
+        CONSOLIDATED_SHIPPING_OPTION_ID,
+        STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID,
+    )
 
     def normalize_sqft(self, area: int | None) -> int | None:
         if area is None:
@@ -100,11 +115,11 @@ class PrepareUwDataService:
 
     @staticmethod
     def build_amenities_options(
-        opex_by_bedrooms, construction_amenities: list
+        opex_by_bedrooms, construction_amenities: list, str_cribs_fee=None
     ) -> list[dict]:
         furnishings = {
             "amenity_name": "Furnishings",
-            "id": 0,
+            "id": PrepareUwDataService.FURNISHINGS_OPTION_ID,
             "location": None,
             "notes": None,
             "price_tier_1": (
@@ -119,18 +134,43 @@ class PrepareUwDataService:
         }
         consolidated_shipping = {
             "amenity_name": "Consolidated Shipping",
-            "id": -1,
+            "id": PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID,
             "location": None,
             "notes": None,
             "price_tier_1": (
                 opex_by_bedrooms.consolidated_shipping if opex_by_bedrooms else None
             ),
-            "price_tier_2": None,
-            "price_tier_3": None,
+            "price_tier_2": (
+                opex_by_bedrooms.consolidated_shipping if opex_by_bedrooms else None
+            ),
+            "price_tier_3": (
+                opex_by_bedrooms.consolidated_shipping if opex_by_bedrooms else None
+            ),
         }
-        return [furnishings, consolidated_shipping] + [
+        str_cribs_project_management = {
+            "amenity_name": "STR Cribs - Project Management",
+            "id": PrepareUwDataService.STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID,
+            "location": None,
+            "notes": None,
+            "price_tier_1": (str_cribs_fee.fee if str_cribs_fee else None),
+            "price_tier_2": (str_cribs_fee.fee if str_cribs_fee else None),
+            "price_tier_3": (str_cribs_fee.fee if str_cribs_fee else None),
+        }
+        return [furnishings, consolidated_shipping, str_cribs_project_management] + [
             a.model_dump() for a in construction_amenities
         ]
+
+    @staticmethod
+    def _must_have_amenity_ids(market) -> list[int]:
+        """Amenity ids this market requires, in the order the market lists them.
+
+        ``market.must_have_amenities`` arrives already resolved against the
+        amenity catalog, so ids pointing at soft-deleted rows have been dropped
+        upstream.
+        """
+        if market is None:
+            return []
+        return [ref.id for ref in market.must_have_amenities or []]
 
     def prepare(
         self,
@@ -144,14 +184,18 @@ class PrepareUwDataService:
         construction_amenities: list,
         construction_remodeling: list,
         fred,
+        str_cribs_fee=None,
     ) -> PrepareUwDataResult:
         amenities = self.build_amenities_options(
-            opex_by_bedrooms, construction_amenities
+            opex_by_bedrooms, construction_amenities, str_cribs_fee
         )
 
         config = UW_CONFIG_DEFAULTS.model_dump()
         if fred is not None:
-            config["fred"] = {"value": fred.value / 100, "date": fred.date}
+            fred_rate = fred.value / 100
+            config["fred"] = {"value": fred_rate, "date": fred.date}
+            # Underwrite at 0.35% above the current FRED 30y fixed rate.
+            config["interest_rate"] = fred_rate + self._INTEREST_RATE_SPREAD_OVER_FRED
         self._apply_opex_config_values(config, opex_by_bedrooms, opex_by_size)
 
         return PrepareUwDataResult.model_validate(
@@ -167,6 +211,7 @@ class PrepareUwDataService:
                 "construction_remodeling": [
                     r.model_dump() for r in construction_remodeling
                 ],
+                "must_have_amenity_ids": self._must_have_amenity_ids(market),
                 "config": config,
             }
         )

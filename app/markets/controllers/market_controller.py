@@ -41,6 +41,8 @@ class MarketController:
     async def create(self, data: MarketCreateSchema) -> MarketKeysMasterSchema:
         try:
             return await self.service.create(data)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             logger.error("market.create.error", error=str(e))
             raise HTTPException(status_code=500, detail="Failed to create market")
@@ -53,6 +55,8 @@ class MarketController:
             return market
         except HTTPException:
             raise
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             logger.error("market.update.error", market_id=market_id, error=str(e))
             raise HTTPException(status_code=500, detail="Failed to update market")

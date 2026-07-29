@@ -1,9 +1,12 @@
+import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.reference_data.repository import ReferenceDataRepository
+from app.core.reference_data.service import ReferenceDataService
 from app.dependencies import get_current_user
 from app.iron_bank.controllers.create_underwriting_from_url_controller import (
     CreateUnderwritingFromUrlController,
@@ -24,7 +27,10 @@ from app.iron_bank.controllers.workflow_trigger_controller import (
 )
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
-from app.iron_bank.schemas.batch_prepare_uw import BatchPrepareUwByMarketResult
+from app.iron_bank.schemas.job import (
+    JobCreatedResponse,
+    JobStatusResponse,
+)
 from app.iron_bank.schemas.create_underwriting_from_url import (
     CreateUnderwritingFromUrlPayload,
 )
@@ -52,12 +58,13 @@ from app.iron_bank.services.create_underwriting_from_url_service import (
     CreateUnderwritingFromUrlService,
 )
 from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
+from app.iron_bank.services.simulate_underwritings_service import (
+    SimulateUnderwritingsService,
+)
 from app.iron_bank.services.deal_status_service import DealStatusService
 from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
 from app.iron_bank.services.update_underwriting_service import UpdateUnderwritingService
-from app.workflows.batch_prepare_and_save_underwritings_by_market_job import (
-    BatchPrepareAndSaveUnderwritingsByMarketJob,
-)
+from app.iron_bank.repositories.job_repository import JobRepository
 from app.workflows.prepare_uw_data_job import PrepareUwDataJob
 import app.iron_bank.models  # noqa: F401 — ensures all models are registered with SQLAlchemy
 
@@ -77,11 +84,7 @@ def get_prepare_uw_data_controller(
 def get_workflow_trigger_controller(
     db: AsyncSession = Depends(get_db),
 ) -> WorkflowTriggerController:
-    return WorkflowTriggerController(
-        batch_prepare_by_market_job=BatchPrepareAndSaveUnderwritingsByMarketJob.from_session(
-            db
-        ),
-    )
+    return WorkflowTriggerController(job_repository=JobRepository(db))
 
 
 def get_save_underwriting_controller(
@@ -91,7 +94,9 @@ def get_save_underwriting_controller(
         CleanedDataRepository,
     )
     from app.airbnb_public.services.cleaned_data_service import CleanedDataService
+    from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
     from app.markets.repositories.market_repository import MarketRepository
+    from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.services.market_service import MarketService
     from app.zillow.repositories.scheduled_listings_repository import (
         ScheduledListingsRepository,
@@ -101,9 +106,14 @@ def get_save_underwriting_controller(
     return SaveUnderwritingController(
         SaveUnderwritingService(
             UnderwritingRepository(db),
-            market_service=MarketService(MarketRepository(db)),
+            market_service=MarketService(
+                MarketRepository(db),
+                ConstructionAmenitiesRepository(db),
+                RealtorRepository(db),
+            ),
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
             cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
+            reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
         )
     )
 
@@ -132,7 +142,10 @@ def get_update_underwriting_controller(
         CleanedDataRepository,
     )
     from app.airbnb_public.services.cleaned_data_service import CleanedDataService
+    from app.external_api.services.n8n_webhook_service import N8nWebhookService
+    from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
     from app.markets.repositories.market_repository import MarketRepository
+    from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.services.market_service import MarketService
     from app.zillow.repositories.scheduled_listings_repository import (
         ScheduledListingsRepository,
@@ -142,9 +155,15 @@ def get_update_underwriting_controller(
     return UpdateUnderwritingController(
         UpdateUnderwritingService(
             UnderwritingRepository(db),
-            market_service=MarketService(MarketRepository(db)),
+            market_service=MarketService(
+                MarketRepository(db),
+                ConstructionAmenitiesRepository(db),
+                RealtorRepository(db),
+            ),
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
             cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
+            reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
+            n8n_webhook_service=N8nWebhookService(),
         )
     )
 
@@ -158,10 +177,16 @@ def get_get_underwriting_controller(
     )
     from app.markets.repositories.market_repository import MarketRepository
     from app.markets.repositories.opex_repository import OpexByBedroomsRepository
+    from app.markets.repositories.realtor_repository import RealtorRepository
+    from app.markets.repositories.str_cribs_repository import (
+        StrCribsFeeDetailsRepository,
+    )
+    from app.users.repositories.user_repository import UserRepository
     from app.markets.services.construction_service import (
         ConstructionAmenitiesService,
         ConstructionRemodelingService,
     )
+    from app.markets.services.str_cribs_service import StrCribsFeeDetailsService
     from app.markets.services.opex_service import OpexByBedroomsService
     from app.zillow.repositories.scheduled_listing_details_repository import (
         ScheduledListingDetailsRepository,
@@ -175,23 +200,35 @@ def get_get_underwriting_controller(
     from app.zillow.services.scheduled_listings_service import ScheduledListingsService
 
     market_repo = MarketRepository(db)
+    # Shared dependency set so the normal list service and the simulation
+    # service can never drift apart: the simulation service is the read
+    # service plus a calculator, and the page it returns is enriched (zillow
+    # hydration, reference labels) identically to the normal list.
+    service_deps = dict(
+        listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
+        listing_details_service=ScheduledListingDetailsService(
+            ScheduledListingDetailsRepository(db)
+        ),
+        opex_by_bedrooms_service=OpexByBedroomsService(
+            OpexByBedroomsRepository(db), market_repo
+        ),
+        construction_amenities_service=ConstructionAmenitiesService(
+            ConstructionAmenitiesRepository(db)
+        ),
+        construction_remodeling_service=ConstructionRemodelingService(
+            ConstructionRemodelingRepository(db)
+        ),
+        str_cribs_service=StrCribsFeeDetailsService(StrCribsFeeDetailsRepository(db)),
+        reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
+        user_repository=UserRepository(db),
+        market_repository=market_repo,
+        realtor_repository=RealtorRepository(db),
+    )
     return GetUnderwritingController(
-        GetUnderwritingService(
-            UnderwritingRepository(db),
-            listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
-            listing_details_service=ScheduledListingDetailsService(
-                ScheduledListingDetailsRepository(db)
-            ),
-            opex_by_bedrooms_service=OpexByBedroomsService(
-                OpexByBedroomsRepository(db), market_repo
-            ),
-            construction_amenities_service=ConstructionAmenitiesService(
-                ConstructionAmenitiesRepository(db)
-            ),
-            construction_remodeling_service=ConstructionRemodelingService(
-                ConstructionRemodelingRepository(db)
-            ),
-        )
+        GetUnderwritingService(UnderwritingRepository(db), **service_deps),
+        simulation_service=SimulateUnderwritingsService(
+            UnderwritingRepository(db), **service_deps
+        ),
     )
 
 
@@ -205,10 +242,12 @@ async def get_prepare_uw_data(
 
 @router.post(
     "/underwritings/batch-prepare-by-market",
-    response_model=BatchPrepareUwByMarketResult,
+    response_model=JobCreatedResponse,
+    status_code=202,
     tags=["iron_bank"],
 )
 async def batch_prepare_underwritings_by_market(
+    background: BackgroundTasks,
     market_id: int = Query(...),
     since_hours: int = Query(..., ge=1),
     limit: int | None = Query(None, ge=1),
@@ -218,7 +257,41 @@ async def batch_prepare_underwritings_by_market(
         market_id=market_id,
         since_hours=since_hours,
         limit=limit,
+        background=background,
     )
+
+
+@router.post(
+    "/underwritings/batch-prepare-by-preset",
+    response_model=JobCreatedResponse,
+    status_code=202,
+    tags=["iron_bank"],
+)
+async def batch_prepare_underwritings_by_preset(
+    background: BackgroundTasks,
+    preset_id: uuid.UUID = Query(...),
+    since_hours: int = Query(..., ge=1),
+    limit: int | None = Query(None, ge=1),
+    controller: WorkflowTriggerController = Depends(get_workflow_trigger_controller),
+):
+    return await controller.batch_prepare_by_preset(
+        preset_id=preset_id,
+        since_hours=since_hours,
+        limit=limit,
+        background=background,
+    )
+
+
+@router.get(
+    "/jobs/{job_id}",
+    response_model=JobStatusResponse,
+    tags=["iron_bank"],
+)
+async def get_job(
+    job_id: uuid.UUID,
+    controller: WorkflowTriggerController = Depends(get_workflow_trigger_controller),
+):
+    return await controller.get_job(job_id)
 
 
 @router.get(

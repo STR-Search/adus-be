@@ -16,14 +16,29 @@ repositories, controllers, and router.
 
 ### Shared
 - `app/core/` — config, DB engine, logger. Do not reorganize.
+- `app/core/reference_data/` — shared, DB-backed enum/reference-data system
+  (`reference.enum_options` table). Any domain stores a stable **slug** on its
+  tag columns and resolves labels via `ReferenceDataService`. Full layered CRUD
+  (repository/service/controller/router) plus `GET/POST/PATCH /reference-data`.
 - `app/middleware/` — auth. Do not reorganize.
 - `app/dependencies.py` — shared FastAPI dependencies (DB session, auth guards)
 
 ## Database Rules
-- Managed schemas: `markets` and `iron_bank`
+- Managed schemas: `markets`, `iron_bank`, `users`, and `reference`
 - `public` schema is owned by another org — never touch it
 - Alembic version table lives in `markets` schema
-- Two Alembic branches: `markets` and `iron_bank`
+- Four Alembic branches: `markets`, `iron_bank`, `users`, and `reference`
+
+## Auth
+- Global guard: `dependencies=[Depends(get_current_user)]` in `app/__init__.py`
+  applies to every route (except `/docs`, `/redoc`, `/openapi.json`).
+- `get_current_user` (`app/dependencies.py`) accepts two credentials, both
+  resolving to a `User`:
+  - `X-ADUS-API-KEY: <key>` — API-key auth (CLI / external teams). Checked first.
+  - `Authorization: Bearer <jwt>` — Clerk JWT auth (app / browser users).
+- API keys are stored hashed (SHA-256) in `users.api_keys`; plaintext is shown
+  once at creation. Manage via `POST/GET/DELETE /users/api-keys`, or bootstrap
+  one with `uv run python scripts/issue_api_key.py --user-id <id> --name <name>`.
 
 ## Commands
 

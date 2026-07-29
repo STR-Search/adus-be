@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +13,10 @@ class ConstructionAmenitiesRepository:
 
     async def get_by_id(self, record_id: int) -> ConstructionCostsAmenities | None:
         result = await self.db.execute(
-            select(ConstructionCostsAmenities).where(ConstructionCostsAmenities.id == record_id)
+            select(ConstructionCostsAmenities).where(
+                ConstructionCostsAmenities.id == record_id,
+                ConstructionCostsAmenities.deleted_at.is_(None),
+            )
         )
         return result.scalar_one_or_none()
 
@@ -20,7 +25,9 @@ class ConstructionAmenitiesRepository:
         location: str | None = None,
         search: str | None = None,
     ) -> list[ConstructionCostsAmenities]:
-        query = select(ConstructionCostsAmenities)
+        query = select(ConstructionCostsAmenities).where(
+            ConstructionCostsAmenities.deleted_at.is_(None)
+        )
         if location is not None:
             query = query.where(ConstructionCostsAmenities.location == location)
         if search:
@@ -56,7 +63,7 @@ class ConstructionAmenitiesRepository:
         record = await self.get_by_id(record_id)
         if record is None:
             return False
-        await self.db.delete(record)
+        record.deleted_at = datetime.now(timezone.utc)
         await self.db.commit()
         return True
 
@@ -67,7 +74,10 @@ class ConstructionRemodelingRepository:
 
     async def get_by_id(self, record_id: int) -> ConstructionCostsRemodeling | None:
         result = await self.db.execute(
-            select(ConstructionCostsRemodeling).where(ConstructionCostsRemodeling.id == record_id)
+            select(ConstructionCostsRemodeling).where(
+                ConstructionCostsRemodeling.id == record_id,
+                ConstructionCostsRemodeling.deleted_at.is_(None),
+            )
         )
         return result.scalar_one_or_none()
 
@@ -76,7 +86,9 @@ class ConstructionRemodelingRepository:
         location: str | None = None,
         search: str | None = None,
     ) -> list[ConstructionCostsRemodeling]:
-        query = select(ConstructionCostsRemodeling)
+        query = select(ConstructionCostsRemodeling).where(
+            ConstructionCostsRemodeling.deleted_at.is_(None)
+        )
         if location is not None:
             query = query.where(ConstructionCostsRemodeling.location == location)
         if search:
@@ -113,6 +125,6 @@ class ConstructionRemodelingRepository:
         record = await self.get_by_id(record_id)
         if record is None:
             return False
-        await self.db.delete(record)
+        record.deleted_at = datetime.now(timezone.utc)
         await self.db.commit()
         return True
