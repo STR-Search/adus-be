@@ -145,7 +145,7 @@ def test_map_deal_status():
     assert backfill.map_deal_status("Maybe (Save for Later)") == "maybe"
 
     assert (
-        backfill.map_deal_status(None) == "Previously Underwritten - No Status"
+        backfill.map_deal_status(None) == "previously_underwritten_no_status"
     )
 
     assert (
@@ -214,7 +214,7 @@ def test_build_deal_without_summary_defaults_to_no_status():
     deal = backfill.build_deal(42, None, backfill.parse_deal_tab(OLD_FORMAT_GRID))
     uw = deal["underwriting"]
 
-    assert uw["deal_status"] == "Previously Underwritten - No Status"
+    assert uw["deal_status"] == "previously_underwritten_no_status"
     # purchase price falls back to the tab's Purchase Details
     assert uw["purchase_price"] == Decimal("439000")
     assert deal["analyst_name"] == "John B"  # from 'Prepared By:'

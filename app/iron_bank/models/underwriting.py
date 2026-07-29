@@ -38,7 +38,7 @@ class Underwriting(Base):
             "'present_to_clients', "
             "'client_under_contract', "
             "'training_deal', "
-            "'Previously Underwritten - No Status'"
+            "'previously_underwritten_no_status'"
             ")",
             name="ck_underwritings_deal_status",
         ),

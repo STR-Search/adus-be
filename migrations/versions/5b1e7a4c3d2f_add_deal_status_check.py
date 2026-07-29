@@ -28,7 +28,8 @@ DEAL_STATUS_CHECK = (
     "'awaiting_realtor_details', "
     "'present_to_clients', "
     "'client_under_contract', "
-    "'training_deal'"
+    "'training_deal', "
+    "'previously_underwritten_no_status'"
     ")"
 )
 

@@ -4,11 +4,6 @@ Adds provenance for the legacy Google Sheet backfill:
 - underwritings.source ('adus' | 'legacy_sheet')
 - underwritings.sheet_number (the deal's tab/link number in the sheet),
   partial-unique so re-running the backfill can never duplicate a deal
-- extends the deal_status CHECK to allow the fixed
-  'Previously Underwritten - No Status' value for legacy rows with no
-  recorded sheet status, alongside the existing enum keys. A CHECK's
-  expression cannot be modified once created, so each direction drops the
-  constraint and recreates its own version.
 
 Revision ID: a3f8c2d91e47
 Revises: 5b1e7a4c3d2f
@@ -22,32 +17,9 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a3f8c2d91e47"
-down_revision: Union[str, Sequence[str], None] = "5b1e7a4c3d2f"
+down_revision: Union[str, Sequence[str], None] = "d3f8a1c9b204"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
-
-
-# Current constraint (pre-migration), restored on downgrade.
-OLD_DEAL_STATUS_CHECK = (
-    "deal_status IS NULL OR deal_status IN ("
-    "'template_generated', "
-    "'analyst_started', "
-    "'analyst_completed', "
-    "'delete_zillow', "
-    "'delete_deal', "
-    "'maybe', "
-    "'re_forecast_revenue', "
-    "'awaiting_realtor_details', "
-    "'present_to_clients', "
-    "'client_under_contract', "
-    "'training_deal'"
-    ")"
-)
-
-# Same enum keys, plus the fixed legacy no-status marker, applied on upgrade.
-NEW_DEAL_STATUS_CHECK = (
-    OLD_DEAL_STATUS_CHECK[:-1] + ", 'Previously Underwritten - No Status')"
-)
 
 
 def upgrade() -> None:
@@ -70,34 +42,10 @@ def upgrade() -> None:
         schema="iron_bank",
         postgresql_where=sa.text("sheet_number IS NOT NULL"),
     )
-    op.drop_constraint(
-        "ck_underwritings_deal_status",
-        "underwritings",
-        schema="iron_bank",
-        type_="check",
-    )
-    op.create_check_constraint(
-        "ck_underwritings_deal_status",
-        "underwritings",
-        NEW_DEAL_STATUS_CHECK,
-        schema="iron_bank",
-    )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_constraint(
-        "ck_underwritings_deal_status",
-        "underwritings",
-        schema="iron_bank",
-        type_="check",
-    )
-    op.create_check_constraint(
-        "ck_underwritings_deal_status",
-        "underwritings",
-        OLD_DEAL_STATUS_CHECK,
-        schema="iron_bank",
-    )
     op.drop_index(
         "uq_underwritings_sheet_number",
         "underwritings",

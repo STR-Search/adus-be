@@ -38,8 +38,6 @@ class UnderwritingBase(BaseModel):
     market_id: int | None = None
     analyst_id: int | None = None
     approver_id: int | None = None
-    # DealStatus keys for app rows; legacy sheet imports may carry a dynamic
-    # "Previously Underwritten - <sheet status>" string instead.
     deal_status: DealStatus | str | None = None
     deal_added: datetime | None = None
     deal_submitted: datetime | None = None
@@ -103,11 +101,7 @@ class UnderwritingBase(BaseModel):
             try:
                 return DealStatus(value)
             except ValueError:
-                if not value.startswith("Previously Underwritten - "):
-                    raise ValueError(
-                        "deal_status must be a DealStatus key or a "
-                        "'Previously Underwritten - ...' legacy value"
-                    )
+                raise ValueError(f"deal_status must be a valid DealStatus key, got {value!r}")
         return value
 
 
@@ -127,8 +121,6 @@ class DealStatusLabelMixin(BaseModel):
         value = (
             deal_status.value if isinstance(deal_status, DealStatus) else deal_status
         )
-        # Dynamic legacy statuses ("Previously Underwritten - ...") are already
-        # display-formatted, so they fall through as their own label.
         return _STATUS_LABEL.get(value, value)
 
 

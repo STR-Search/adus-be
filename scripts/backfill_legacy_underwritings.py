@@ -57,7 +57,7 @@ CLIENT_SHOWN_SHEET = "ClientShown_Properties"
 LEGACY_SOURCE = "legacy_sheet"
 # Blank sheet statuses (no summary row, or an empty status cell) become this
 # fixed DealStatus value.
-NO_STATUS = "Previously Underwritten - No Status"
+NO_STATUS = "previously_underwritten_no_status"
 
 # Sheet status label -> deal_status enum value.
 STATUS_MAP: dict[str, str] = {
