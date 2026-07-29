@@ -6,6 +6,16 @@ from app.core.logger import logger
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
 from app.iron_bank.schemas.deal_status import UpdateDealStatusResult
+from app.iron_bank.schemas.get_underwriting import (
+    GetUnderwritingCompSet,
+    GetUnderwritingDetails,
+    GetUnderwritingOperatingExpense,
+    GetUnderwritingOptimizationItem,
+    GetUnderwritingResult,
+    GetUnderwritingTaxes,
+    UnderwritingRealtorDetail,
+    UserRef,
+)
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
 from app.iron_bank.schemas.underwriting import UnderwritingRead
 from app.iron_bank.schemas.update_underwriting import (
@@ -35,6 +45,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         listings_service=None,
         cleaned_data_service=None,
         reference_data_service=None,
+        user_repository=None,
         n8n_webhook_service=None,
     ):
         super().__init__(
@@ -45,6 +56,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
             cleaned_data_service=cleaned_data_service,
             reference_data_service=reference_data_service,
         )
+        self.user_repository = user_repository
         # Optional by design: only the HTTP deal-status path wires this in, so
         # machine-driven flows (e.g. ReconcileUnderwritingPriceJob) can never
         # fire a client-facing automation.
@@ -223,34 +235,86 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         )
 
     async def _trigger_n8n_webhook(self, underwriting) -> None:
-        """POST the underwriting row to the n8n automation webhook.
+        """POST full underwriting data (parent + children + resolved refs) to n8n webhook.
 
         Never raises. The status write has already committed, so an n8n outage
         must not surface to the caller — it cannot be allowed to 500 an
         approver's status change.
 
-        The body is the parent ``underwritings`` row only, serialized through
-        ``UnderwritingRead`` — the same shape ``GetUnderwritingService`` returns
-        for the parent, so n8n sees a field set it can also fetch from
-        ``GET /iron-bank/underwritings/{id}``. Child tables (details, taxes,
-        opex, comps) are deliberately excluded; n8n can call back for those.
+        The body is serialized through ``GetUnderwritingResult`` — the same shape
+        ``GetUnderwritingService`` returns for the full read, including child
+        tables (details, taxes, opex, comps) and resolved user/realtor references.
         """
         if self.n8n_webhook_service is None:
             return
 
-        # Field-by-field getattr (rather than validating the ORM object
-        # directly) never touches a relationship attribute, which would raise
-        # MissingGreenlet under async SQLAlchemy. Nones are dropped so the
-        # schema's own defaults apply: UnderwritingRead declares the tag
-        # booleans as non-optional (`turnkey: bool = False`), and a nullable
-        # column that happens to be NULL would otherwise fail validation.
-        row = UnderwritingRead.model_validate(
-            {
-                field: value
-                for field in UnderwritingRead.model_fields
-                if (value := getattr(underwriting, field, None)) is not None
-            }
-        )
+        # Build parent row fields (UnderwritingRead contract).
+        result_data = {
+            field: value
+            for field in UnderwritingRead.model_fields
+            if (value := getattr(underwriting, field, None)) is not None
+        }
+
+        # Resolve analyst and approver.
+        if self.user_repository is not None:
+            user_ids = set()
+            if underwriting.analyst_id is not None:
+                user_ids.add(underwriting.analyst_id)
+            if underwriting.approver_id is not None:
+                user_ids.add(underwriting.approver_id)
+            if user_ids:
+                users = await self.user_repository.get_by_ids(user_ids)
+                refs = {user.id: UserRef.model_validate(user) for user in users}
+                if underwriting.analyst_id is not None:
+                    result_data["analyst"] = refs.get(underwriting.analyst_id)
+                if underwriting.approver_id is not None:
+                    result_data["approver"] = refs.get(underwriting.approver_id)
+
+        # Resolve realtor details for the market.
+        if underwriting.market_id is not None and self.market_service is not None:
+            realtors = await self.market_service.get_realtors_for_market(
+                underwriting.market_id
+            )
+            if realtors:
+                result_data["realtor_details"] = [
+                    UnderwritingRealtorDetail.model_validate(r) for r in realtors
+                ]
+
+        # Add details child table.
+        detail = getattr(underwriting, "detail", None)
+        if detail:
+            result_data["details"] = GetUnderwritingDetails.model_validate(detail)
+
+        # Add taxes child table.
+        tax = getattr(underwriting, "tax", None)
+        if tax:
+            result_data["taxes"] = GetUnderwritingTaxes.model_validate(tax)
+
+        # Add optimization items.
+        optimization_items = getattr(underwriting, "optimization_items", None)
+        if optimization_items:
+            result_data["optimization_list"] = [
+                GetUnderwritingOptimizationItem.model_validate(item)
+                for item in optimization_items
+            ]
+
+        # Add operating expenses.
+        operating_expenses = getattr(underwriting, "operating_expenses", None)
+        if operating_expenses:
+            result_data["operating_expenses"] = [
+                GetUnderwritingOperatingExpense.model_validate(item)
+                for item in operating_expenses
+            ]
+
+        # Add comp set.
+        comp_set = getattr(underwriting, "comp_set", None)
+        if comp_set:
+            result_data["comp_set"] = [
+                GetUnderwritingCompSet.model_validate(item)
+                for item in comp_set
+            ]
+
+        row = GetUnderwritingResult.model_validate(result_data)
 
         try:
             # mode="json" keeps Decimal as a string ("525000.00") rather than
