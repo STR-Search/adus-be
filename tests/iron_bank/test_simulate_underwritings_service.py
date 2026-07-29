@@ -59,6 +59,7 @@ def _stored_forecasted_revenue():
 
 def _row(
     id=1,
+    source="adus",
     purchase_price=Decimal("100000"),
     total_oop=Decimal("30000"),
     l_cash_on_cash=Decimal("0.5"),
@@ -70,6 +71,7 @@ def _row(
 ):
     return SimpleNamespace(
         id=id,
+        source=source,
         purchase_price=purchase_price,
         total_oop=total_oop,
         l_cash_on_cash=l_cash_on_cash,
