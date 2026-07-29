@@ -221,6 +221,36 @@ def test_build_deal_without_summary_defaults_to_no_status():
     assert "no summary row in any tracking tab (deal tab only)" in deal["warnings"]
 
 
+def test_extract_zpid():
+    assert (
+        backfill.extract_zpid(
+            "https://www.zillow.com/homedetails/3998-Hidden-Valley-Ln-Linden-VA-22642/12230595_zpid/"
+        )
+        == "12230595"
+    )
+    assert backfill.extract_zpid("https://www.redfin.com/VA/Luray/2225-Valley-Burg-Rd-22835/home/106228965") is None
+    assert backfill.extract_zpid("https://airbnb.com/rooms/1") is None
+    assert backfill.extract_zpid(None) is None
+
+
+def test_build_deal_extracts_candidate_zpid():
+    deal = backfill.build_deal(
+        1156,
+        None,
+        None,
+        listing_url="https://www.zillow.com/homedetails/15017-N-49th-St-Scottsdale-AZ-85254/8028368_zpid/?",
+    )
+    assert deal["candidate_zpid"] == "8028368"
+
+    deal_no_url = backfill.build_deal(1156, None, None)
+    assert deal_no_url["candidate_zpid"] is None
+
+    deal_non_zillow = backfill.build_deal(
+        1156, None, None, listing_url="https://airbnb.com/rooms/1"
+    )
+    assert deal_non_zillow["candidate_zpid"] is None
+
+
 def test_value_normalization():
     assert backfill.to_decimal("$1,234.50") == Decimal("1234.50")
     assert backfill.to_decimal("") is None
