@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from pydantic import BaseModel, Field, computed_field, field_validator
 
-from app.iron_bank.enums import DealStatus
+from app.iron_bank.enums import DealStatus, UnderwritingSource
 from app.iron_bank.services.deal_status_service import STATUS_OPTIONS
 
 _STATUS_LABEL: dict[str, str] = {s.value: label for s, label, _ in STATUS_OPTIONS}
@@ -36,6 +36,8 @@ REFERENCE_TAG_FIELDS: tuple[str, ...] = (
 class UnderwritingBase(BaseModel):
     zpid: str | None = None
     market_id: int | None = None
+    source: UnderwritingSource | None = None
+    sheet_number: int | None = None
     analyst_id: int | None = None
     approver_id: int | None = None
     deal_status: DealStatus | None = None
@@ -127,8 +129,6 @@ class DealStatusLabelMixin(BaseModel):
 class UnderwritingRead(UnderwritingBase, DealStatusLabelMixin):
     id: int
     display_id: str | None = None  # e.g. "UW-001" — generated at API layer
-    source: str | None = None  # 'adus' | 'legacy_sheet'
-    sheet_number: int | None = None  # legacy Google Sheet tab/link number
     optimization_total: Decimal | None = None
     operating_expense_total: Decimal | None = None
 
