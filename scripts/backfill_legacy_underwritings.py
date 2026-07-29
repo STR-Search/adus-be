@@ -1,8 +1,9 @@
 """Backfill legacy underwritings from the 'Underwritten Properties' Google Sheet export.
 
-Reads the XLSX export of the underwriting Google Sheet and loads each deal
-into iron_bank verbatim (no recalculation), marked with source='legacy_sheet'
-and its sheet tab/link number so the team can verify rows against the sheet.
+Reads either a local XLSX export or the live Google Sheet (--gsheet) and
+loads each deal into iron_bank verbatim (no recalculation), marked with
+source='legacy_sheet' and its sheet tab/link number so the team can verify
+rows against the sheet.
 
 Deal sources inside the workbook:
 - Main_Sheet rows (header row 4) keyed by the 'Link' column
@@ -15,19 +16,28 @@ Idempotent: deals whose sheet_number already exists in the DB are skipped
 (and a partial unique index enforces this DB-side). Use --update to
 delete-and-reinsert a range after parser fixes or a fresh export.
 
+--gsheet reads live via the Sheets API instead of a local file (same
+{summaries, tabs, listing_urls} shape either way, so everything downstream
+is unaffected). Needs GOOGLE_SERVICE_ACCOUNT_CREDENTIALS set in the
+environment -- a service account key as inline JSON, not a file path -- for
+a service account already shared (Viewer) on the sheet.
+
 Usage:
   python scripts/backfill_legacy_underwritings.py --dry-run
   python scripts/backfill_legacy_underwritings.py --range 1558:1937
   python scripts/backfill_legacy_underwritings.py --range 1558:1600 --update
   python scripts/backfill_legacy_underwritings.py --backfill-zpids
+  python scripts/backfill_legacy_underwritings.py --gsheet <spreadsheet_id> --dry-run
 """
 
 import argparse
 import asyncio
 import json
+import os
 import re
 import sys
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -182,9 +192,12 @@ SUMMARY_FIELDS = {
 }
 
 
-def index_summary_rows(ws, header_row: int) -> dict[int, dict[str, Any]]:
-    """Returns {sheet_number: raw summary dict} for one summary tab."""
-    rows = ws.iter_rows(min_row=header_row, values_only=True)
+def index_summary_rows(
+    rows: Iterable[tuple], header_row: int
+) -> dict[int, dict[str, Any]]:
+    """Returns {sheet_number: raw summary dict} for one summary tab.
+    `rows` starts at `header_row` (the header itself is the first row)."""
+    rows = iter(rows)
     headers = next(rows, None)
     if headers is None:
         return {}
@@ -747,14 +760,21 @@ def read_workbook(path: Path) -> dict[str, Any]:
     import openpyxl
 
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    main_rows = index_summary_rows(wb[MAIN_SHEET], header_row=4)
+    main_rows = index_summary_rows(
+        wb[MAIN_SHEET].iter_rows(min_row=4, values_only=True), header_row=4
+    )
     deleted_rows = (
-        index_summary_rows(wb[DELETE_SHEET], header_row=1)
+        index_summary_rows(
+            wb[DELETE_SHEET].iter_rows(min_row=1, values_only=True), header_row=1
+        )
         if DELETE_SHEET in wb.sheetnames
         else {}
     )
     client_shown_rows = (
-        index_summary_rows(wb[CLIENT_SHOWN_SHEET], header_row=1)
+        index_summary_rows(
+            wb[CLIENT_SHOWN_SHEET].iter_rows(min_row=1, values_only=True),
+            header_row=1,
+        )
         if CLIENT_SHOWN_SHEET in wb.sheetnames
         else {}
     )
@@ -780,6 +800,168 @@ def read_workbook(path: Path) -> dict[str, Any]:
             },
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# live Google Sheet reading (--gsheet)
+# ---------------------------------------------------------------------------
+
+GOOGLE_SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+SHEETS_API_BATCH_SIZE = 50
+DEAL_TAB_RANGE = "A1:Z80"  # deal tabs: every labeled section lives in the first 80 rows
+SHEET_CELL_FIELDS = (
+    "sheets(properties.title,data.rowData.values("
+    "effectiveValue,effectiveFormat.numberFormat,hyperlink))"
+)
+
+
+def _sheets_service():
+    """Authenticates via a service account passed as inline JSON (not a file
+    path) in GOOGLE_SERVICE_ACCOUNT_CREDENTIALS -- the same service account
+    already shared on the sheet, reused from another project rather than
+    provisioning a new one."""
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+
+    raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_CREDENTIALS")
+    if not raw:
+        sys.exit(
+            "GOOGLE_SERVICE_ACCOUNT_CREDENTIALS is not set "
+            "(a service account key, as inline JSON)."
+        )
+    info = json.loads(raw)
+    credentials = service_account.Credentials.from_service_account_info(
+        info, scopes=GOOGLE_SHEETS_SCOPES
+    )
+    return build("sheets", "v4", credentials=credentials, cache_discovery=False)
+
+
+def _a1_ref(row_idx: int, col_idx: int) -> str:
+    return f"{_column_letter(col_idx)}{row_idx + 1}"
+
+
+def _cell_value(cell: dict[str, Any]) -> Any:
+    """Converts one Sheets API CellData dict into the same typed value
+    openpyxl's data_only=True mode would give us: a real datetime for a
+    date/time-formatted cell, a plain number otherwise (percentages are
+    already stored as their raw fraction, same as openpyxl -- '16.53%' is
+    numberValue 0.1653), or a string."""
+    effective = cell.get("effectiveValue") or {}
+    if "numberValue" in effective:
+        number = effective["numberValue"]
+        fmt = ((cell.get("effectiveFormat") or {}).get("numberFormat") or {}).get(
+            "type"
+        )
+        if fmt in ("DATE", "DATE_TIME"):
+            # Sheets and Excel share the same serial-date epoch (1899-12-30)
+            return datetime(1899, 12, 30, tzinfo=timezone.utc) + timedelta(
+                days=number
+            )
+        return number
+    if "stringValue" in effective:
+        return effective["stringValue"]
+    if "boolValue" in effective:
+        return effective["boolValue"]
+    return None
+
+
+def _grid_from_sheet_data(
+    sheet_data: dict[str, Any],
+) -> tuple[list[tuple], dict[str, str]]:
+    """One requested range's GridData -> (grid rows, {cell_ref: hyperlink})."""
+    row_data = (sheet_data.get("data") or [{}])[0].get("rowData") or []
+    grid: list[tuple] = []
+    hyperlinks: dict[str, str] = {}
+    for row_idx, row in enumerate(row_data):
+        values = row.get("values") or []
+        row_values = []
+        for col_idx, cell in enumerate(values):
+            row_values.append(_cell_value(cell))
+            link = cell.get("hyperlink")
+            if link:
+                hyperlinks[_a1_ref(row_idx, col_idx)] = link
+        grid.append(tuple(row_values))
+    return grid, hyperlinks
+
+
+def _fetch_sheet_grids(
+    service, spreadsheet_id: str, ranges: list[str]
+) -> dict[str, tuple[list[tuple], dict[str, str]]]:
+    """Batched grid+hyperlink fetch for a list of A1 ranges (e.g.
+    'Main_Sheet' or '233!A1:Z80'), chunked to stay within the API's
+    per-request size/quota limits. Returns {tab_title: (grid, hyperlinks)}."""
+    result: dict[str, tuple[list[tuple], dict[str, str]]] = {}
+    for i in range(0, len(ranges), SHEETS_API_BATCH_SIZE):
+        chunk = ranges[i : i + SHEETS_API_BATCH_SIZE]
+        response = (
+            service.spreadsheets()
+            .get(spreadsheetId=spreadsheet_id, ranges=chunk, fields=SHEET_CELL_FIELDS)
+            .execute()
+        )
+        for sheet in response.get("sheets", []):
+            title = sheet["properties"]["title"]
+            result[title] = _grid_from_sheet_data(sheet)
+    return result
+
+
+def read_google_sheet(spreadsheet_id: str) -> dict[str, Any]:
+    """Live equivalent of read_workbook(), sourced from the Sheets API
+    instead of a local xlsx export. Produces the identical
+    {summaries, tabs, listing_urls} shape build_deal()/load_deals() expect,
+    so nothing downstream needs to know which source was used."""
+    service = _sheets_service()
+    metadata = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties.title")
+        .execute()
+    )
+    titles = [s["properties"]["title"] for s in metadata.get("sheets", [])]
+    deal_tab_names = [name for name in titles if re.fullmatch(r"\d+", name.strip())]
+
+    tracking_names = [
+        name for name in (MAIN_SHEET, DELETE_SHEET, CLIENT_SHOWN_SHEET) if name in titles
+    ]
+    tracking_grids = _fetch_sheet_grids(service, spreadsheet_id, tracking_names)
+
+    deal_ranges = [f"{name}!{DEAL_TAB_RANGE}" for name in deal_tab_names]
+    deal_grids = _fetch_sheet_grids(service, spreadsheet_id, deal_ranges)
+
+    def summary_rows(tab_name: str, header_row: int) -> dict[int, dict[str, Any]]:
+        if tab_name not in tracking_grids:
+            return {}
+        grid, _ = tracking_grids[tab_name]
+        return index_summary_rows(iter(grid[header_row - 1 :]), header_row=header_row)
+
+    main_rows = summary_rows(MAIN_SHEET, header_row=4)
+    deleted_rows = summary_rows(DELETE_SHEET, header_row=1)
+    client_shown_rows = summary_rows(CLIENT_SHOWN_SHEET, header_row=1)
+
+    tabs: dict[int, list[tuple]] = {
+        int(name): deal_grids.get(name, ([], {}))[0] for name in deal_tab_names
+    }
+
+    # Precedence: deal tab > Main_Sheet > ClientShown > Delete_Properties,
+    # matching extract_listing_urls()'s ordering for the xlsx path.
+    listing_urls: dict[int, str] = {}
+    for tab_name, rows in (
+        (DELETE_SHEET, deleted_rows),
+        (CLIENT_SHOWN_SHEET, client_shown_rows),
+        (MAIN_SHEET, main_rows),
+    ):
+        _, hyperlinks = tracking_grids.get(tab_name, ([], {}))
+        for link, raw in rows.items():
+            url = hyperlinks.get(raw.get("_address_ref", ""))
+            if url:
+                listing_urls[link] = url
+    for name in deal_tab_names:
+        _, hyperlinks = deal_grids.get(name, ([], {}))
+        for ref, url in sorted(hyperlinks.items()):
+            if re.fullmatch(r"[EF][1-6]", ref):
+                listing_urls[int(name)] = url
+                break
+
+    summaries = {**deleted_rows, **client_shown_rows, **main_rows}
+    return {"summaries": summaries, "tabs": tabs, "listing_urls": listing_urls}
 
 
 # ---------------------------------------------------------------------------
@@ -1018,7 +1200,11 @@ def parse_args() -> argparse.Namespace:
         "--gsheet",
         type=str,
         default=None,
-        help="Google Sheet spreadsheet id (cron mode; not implemented yet).",
+        help=(
+            "Google Sheet spreadsheet id: pulls live instead of --xlsx. "
+            "Needs GOOGLE_SERVICE_ACCOUNT_CREDENTIALS (a service account "
+            "key, as inline JSON) set in the environment."
+        ),
     )
     parser.add_argument(
         "--range",
@@ -1053,16 +1239,13 @@ def main() -> None:
         result = asyncio.run(backfill_missing_zpids())
         print(json.dumps(result, indent=2, default=str))
         return
-    if args.gsheet is not None:
-        sys.exit(
-            "--gsheet mode is planned for the cron phase: it needs gspread and a "
-            "GOOGLE_SERVICE_ACCOUNT_FILE the sheet is shared with. Use --xlsx for now."
-        )
-    if not args.xlsx.exists():
-        sys.exit(f"XLSX not found: {args.xlsx}")
-
     bounds = parse_range(args.range)
-    data = read_workbook(args.xlsx)
+    if args.gsheet is not None:
+        data = read_google_sheet(args.gsheet)
+    else:
+        if not args.xlsx.exists():
+            sys.exit(f"XLSX not found: {args.xlsx}")
+        data = read_workbook(args.xlsx)
     numbers = sorted(set(data["summaries"]) | set(data["tabs"]))
     if bounds:
         numbers = [n for n in numbers if bounds[0] <= n <= bounds[1]]
@@ -1089,7 +1272,7 @@ def main() -> None:
         result = asyncio.run(load_deals(deals, update=args.update))
 
     report = {
-        "xlsx": str(args.xlsx),
+        "source": f"gsheet:{args.gsheet}" if args.gsheet is not None else str(args.xlsx),
         "range": args.range,
         "dry_run": args.dry_run,
         "deals_found": len(deals),

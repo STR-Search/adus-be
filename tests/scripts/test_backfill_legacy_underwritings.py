@@ -221,6 +221,47 @@ def test_build_deal_without_summary_defaults_to_no_status():
     assert "no summary row in any tracking tab (deal tab only)" in deal["warnings"]
 
 
+def test_a1_ref():
+    assert backfill._a1_ref(0, 0) == "A1"
+    assert backfill._a1_ref(4, 8) == "I5"
+    assert backfill._a1_ref(0, 26) == "AA1"
+
+
+def test_cell_value_number():
+    cell = {"effectiveValue": {"numberValue": 1875000.0}}
+    assert backfill._cell_value(cell) == 1875000.0
+
+
+def test_cell_value_percentage_stays_a_raw_fraction():
+    # Sheets stores a cell formatted as "16.53%" as numberValue 0.1653 --
+    # same raw fraction openpyxl would give us, so no rescaling needed.
+    cell = {
+        "effectiveValue": {"numberValue": 0.1653},
+        "effectiveFormat": {"numberFormat": {"type": "PERCENT"}},
+    }
+    assert backfill._cell_value(cell) == 0.1653
+
+
+def test_cell_value_date():
+    cell = {
+        "effectiveValue": {"numberValue": 45919},
+        "effectiveFormat": {"numberFormat": {"type": "DATE"}},
+    }
+    value = backfill._cell_value(cell)
+    assert value.year == 2025
+    assert value.month == 9
+    assert value.day == 19
+
+
+def test_cell_value_string_and_bool():
+    assert backfill._cell_value({"effectiveValue": {"stringValue": "Taylor J"}}) == "Taylor J"
+    assert backfill._cell_value({"effectiveValue": {"boolValue": True}}) is True
+
+
+def test_cell_value_empty_cell():
+    assert backfill._cell_value({}) is None
+
+
 def test_extract_zpid():
     assert (
         backfill.extract_zpid(
