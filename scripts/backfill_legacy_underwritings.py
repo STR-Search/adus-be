@@ -19,6 +19,7 @@ Usage:
   python scripts/backfill_legacy_underwritings.py --dry-run
   python scripts/backfill_legacy_underwritings.py --range 1558:1937
   python scripts/backfill_legacy_underwritings.py --range 1558:1600 --update
+  python scripts/backfill_legacy_underwritings.py --backfill-zpids
 """
 
 import argparse
@@ -633,6 +634,11 @@ def build_deal(
     return {
         "sheet_number": sheet_number,
         "underwriting": underwriting,
+        # Kept outside `underwriting`: it's spread straight into
+        # Underwriting(**underwriting_data), and zpid is FK'd to
+        # zillow.scheduled_listings, so it can only be assigned there once
+        # load_deals() has confirmed it against that table.
+        "candidate_zpid": extract_zpid(underwriting.get("listing_url")),
         "detail": detail or None,
         "taxes": taxes,
         "optimization_items": optimization_items,
@@ -722,6 +728,19 @@ def extract_listing_urls(
                     urls[int(name)] = url
                     break
     return urls
+
+
+ZPID_RE = re.compile(r"(\d+)_zpid")
+
+
+def extract_zpid(url: str | None) -> str | None:
+    """Pulls the numeric zpid out of a Zillow listing URL, e.g.
+    '.../12230595_zpid/'. Only Zillow URLs contain '_zpid', so no separate
+    domain check is needed."""
+    if not url:
+        return None
+    match = ZPID_RE.search(url)
+    return match.group(1) if match else None
 
 
 def read_workbook(path: Path) -> dict[str, Any]:
@@ -817,8 +836,15 @@ async def load_deals(deals: list[dict[str, Any]], update: bool) -> dict[str, Any
         UnderwritingRepository,
     )
     from app.users.models.user import User
+    from app.zillow.repositories.scheduled_listings_repository import (
+        ScheduledListingsRepository,
+    )
+    from app.zillow.services.scheduled_listings_service import (
+        ScheduledListingsService,
+    )
 
     inserted, skipped, failed = [], [], []
+    zpids_matched = 0
     async with AsyncSessionLocal() as session:
         existing = set(
             (
@@ -839,6 +865,16 @@ async def load_deals(deals: list[dict[str, Any]], update: bool) -> dict[str, Any
         match_user = build_user_matcher(users)
         created_users: dict[str, int] = {}
         repository = UnderwritingRepository(session)
+
+        # zpid is FK'd to zillow.scheduled_listings, which only holds Zillow's
+        # currently-scraped listings, so a candidate extracted from an old
+        # sheet URL may no longer be present there. Only ones that are get
+        # written; everything else stays NULL, same as before this change.
+        listings_service = ScheduledListingsService(ScheduledListingsRepository(session))
+        candidate_zpids = list(
+            {d["candidate_zpid"] for d in deals if d.get("candidate_zpid")}
+        )
+        confirmed_listings = await listings_service.get_by_zpids(candidate_zpids)
 
         async def resolve_user(name: str | None) -> int | None:
             """Match an existing user, or create a placeholder to link to."""
@@ -877,6 +913,10 @@ async def load_deals(deals: list[dict[str, Any]], update: bool) -> dict[str, Any
             underwriting = dict(deal["underwriting"])
             underwriting["analyst_id"] = await resolve_user(deal["analyst_name"])
             underwriting["approver_id"] = await resolve_user(deal["approver_name"])
+            candidate_zpid = deal.get("candidate_zpid")
+            if candidate_zpid in confirmed_listings:
+                underwriting["zpid"] = candidate_zpid
+                zpids_matched += 1
             if deal["notes"]:
                 underwriting["note"] = "\n".join(deal["notes"])
 
@@ -898,7 +938,58 @@ async def load_deals(deals: list[dict[str, Any]], update: bool) -> dict[str, Any
         "skipped": skipped,
         "failed": failed,
         "created_users": created_users,
+        "zpids_matched": zpids_matched,
     }
+
+
+async def backfill_missing_zpids() -> dict[str, Any]:
+    """Fills zpid on already-loaded legacy rows from their stored listing_url.
+    In-place UPDATE only (no delete/reinsert): ids and created_at on existing
+    rows are untouched. Safe to run repeatedly -- it only ever targets rows
+    where zpid is still NULL."""
+    from sqlalchemy import select, update
+
+    from app.core.database import AsyncSessionLocal
+    from app.iron_bank.models import Underwriting
+    from app.zillow.repositories.scheduled_listings_repository import (
+        ScheduledListingsRepository,
+    )
+    from app.zillow.services.scheduled_listings_service import (
+        ScheduledListingsService,
+    )
+
+    async with AsyncSessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(Underwriting.id, Underwriting.listing_url).where(
+                    Underwriting.source == LEGACY_SOURCE,
+                    Underwriting.zpid.is_(None),
+                    Underwriting.listing_url.isnot(None),
+                )
+            )
+        ).all()
+
+        candidates = {
+            row.id: zpid
+            for row in rows
+            if (zpid := extract_zpid(row.listing_url)) is not None
+        }
+
+        listings_service = ScheduledListingsService(ScheduledListingsRepository(session))
+        confirmed = await listings_service.get_by_zpids(list(set(candidates.values())))
+
+        updated = []
+        for underwriting_id, zpid in candidates.items():
+            if zpid in confirmed:
+                await session.execute(
+                    update(Underwriting)
+                    .where(Underwriting.id == underwriting_id)
+                    .values(zpid=zpid)
+                )
+                updated.append({"id": underwriting_id, "zpid": zpid})
+        await session.commit()
+
+    return {"checked": len(rows), "extracted": len(candidates), "updated": updated}
 
 
 # ---------------------------------------------------------------------------
@@ -945,11 +1036,23 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Delete-and-reinsert deals that already exist (parser fixes, fresh export).",
     )
+    parser.add_argument(
+        "--backfill-zpids",
+        action="store_true",
+        help=(
+            "Fill zpid on already-loaded legacy rows from their stored "
+            "listing_url (targeted UPDATE; no xlsx, no delete/reinsert)."
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.backfill_zpids:
+        result = asyncio.run(backfill_missing_zpids())
+        print(json.dumps(result, indent=2, default=str))
+        return
     if args.gsheet is not None:
         sys.exit(
             "--gsheet mode is planned for the cron phase: it needs gspread and a "
@@ -975,7 +1078,13 @@ def main() -> None:
     ]
 
     if args.dry_run:
-        result = {"inserted": [], "skipped": [], "failed": [], "created_users": {}}
+        result = {
+            "inserted": [],
+            "skipped": [],
+            "failed": [],
+            "created_users": {},
+            "zpids_matched": 0,
+        }
     else:
         result = asyncio.run(load_deals(deals, update=args.update))
 
@@ -988,6 +1097,8 @@ def main() -> None:
         "skipped_existing": len(result["skipped"]),
         "created_placeholder_users": result["created_users"],
         "failed": result["failed"],
+        "zpids_extracted": sum(1 for deal in deals if deal.get("candidate_zpid")),
+        "zpids_matched": result["zpids_matched"],
         "deals_with_warnings": [
             {"sheet_number": deal["sheet_number"], "warnings": deal["warnings"]}
             for deal in deals
