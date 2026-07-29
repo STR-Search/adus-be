@@ -6,10 +6,11 @@ Adds provenance for the legacy Google Sheet backfill:
   partial-unique so re-running the backfill can never duplicate a deal
 
 Revision ID: a3f8c2d91e47
-Revises: 5b1e7a4c3d2f
+Revises: d3f8a1c9b204
 Create Date: 2026-07-02 00:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa

@@ -189,7 +189,6 @@ class GetUnderwritingService:
             sort_order=sort_order,
         )
         results = [self._to_result(underwriting) for underwriting in items]
-        await self._attach_user_names(results)
         await self._hydrate_automated_zillow(items, results)
         await self._enrich(results)
         return GetUnderwritingsResult(

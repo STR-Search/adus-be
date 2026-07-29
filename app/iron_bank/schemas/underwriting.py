@@ -38,7 +38,7 @@ class UnderwritingBase(BaseModel):
     market_id: int | None = None
     analyst_id: int | None = None
     approver_id: int | None = None
-    deal_status: DealStatus | str | None = None
+    deal_status: DealStatus | None = None
     deal_added: datetime | None = None
     deal_submitted: datetime | None = None
     deal_approved: datetime | None = None
@@ -129,9 +129,6 @@ class UnderwritingRead(UnderwritingBase, DealStatusLabelMixin):
     display_id: str | None = None  # e.g. "UW-001" — generated at API layer
     source: str | None = None  # 'adus' | 'legacy_sheet'
     sheet_number: int | None = None  # legacy Google Sheet tab/link number
-    # Display names resolved from users.users at read time (not stored columns)
-    analyst_name: str | None = None
-    approver_name: str | None = None
     optimization_total: Decimal | None = None
     operating_expense_total: Decimal | None = None
 
