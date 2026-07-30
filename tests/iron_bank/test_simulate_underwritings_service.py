@@ -149,6 +149,22 @@ async def _get_all_simulated(service, **kwargs):
 
 
 @pytest.mark.asyncio
+async def test_forwards_source_and_search_filters_to_the_input_query():
+    """The controller passes the same filter set to both list paths."""
+    service, repository = _service([_row(id=1)], {1: _item(id=1)})
+
+    await _get_all_simulated(
+        service,
+        interest_rate=Decimal("0"),
+        source="adus",
+        search="Austin",
+    )
+
+    assert repository.sim_filters["source"] == "adus"
+    assert repository.sim_filters["search"] == "Austin"
+
+
+@pytest.mark.asyncio
 async def test_simulates_metrics_with_both_overrides():
     service, _ = _service([_row(id=1)], {1: _item(id=1)})
 

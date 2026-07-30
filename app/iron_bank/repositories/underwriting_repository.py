@@ -127,6 +127,8 @@ class UnderwritingRepository:
         market_id: int | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        source: str | None = None,
+        search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
     ) -> list[Any]:
@@ -151,6 +153,8 @@ class UnderwritingRepository:
                 Underwriting.l_cash_on_cash,
                 Underwriting.optimization_total,
                 Underwriting.operating_expense_total,
+                # Read by the service to skip legacy sheet deals.
+                Underwriting.source,
                 UnderwritingDetail.purchase_details,
                 UnderwritingDetail.forecasted_revenue,
                 UnderwritingTax.tax_savings,
@@ -170,6 +174,19 @@ class UnderwritingRepository:
             query = query.where(Underwriting.market_id == market_id)
         if deal_status is not None:
             query = query.where(Underwriting.deal_status == deal_status)
+        if source is not None:
+            query = query.where(Underwriting.source == source)
+        if search is not None and search.strip():
+            term = search.strip()
+            conditions = [
+                Underwriting.property_address.ilike(f"%{term}%"),
+                Underwriting.city.ilike(f"%{term}%"),
+                Underwriting.state.ilike(f"%{term}%"),
+            ]
+            # a numeric term also matches the legacy sheet number exactly
+            if term.isdigit():
+                conditions.append(Underwriting.sheet_number == int(term))
+            query = query.where(or_(*conditions))
         if analyst_id is not None:
             query = query.where(Underwriting.analyst_id == analyst_id)
         if min_purchase_price is not None:

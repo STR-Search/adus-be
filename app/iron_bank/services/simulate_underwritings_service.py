@@ -75,6 +75,8 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         market_id: int | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        source: str | None = None,
+        search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
         min_total_oop: Decimal | None = None,
@@ -91,6 +93,8 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             market_id=market_id,
             deal_status=deal_status,
             analyst_id=analyst_id,
+            source=source,
+            search=search,
             min_purchase_price=min_purchase_price,
             max_purchase_price=max_purchase_price,
         )
