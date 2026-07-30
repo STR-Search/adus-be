@@ -517,6 +517,77 @@ async def test_webhook_payload_hydrates_realtor_details_from_market():
 
 
 @pytest.mark.asyncio
+async def test_webhook_payload_includes_child_tables_from_orm_rows():
+    """Children arrive as ORM rows, not dicts — the schemas must accept them."""
+    webhook = FakeN8nWebhookService()
+    underwriting = _webhook_underwriting(
+        detail=SimpleNamespace(
+            purchase_details={"purchase_price": 525000},
+            y1_coc_incl_tax_savings=None,
+            forecasted_revenue=None,
+            cleaning_cost=None,
+            property_taxes=None,
+            zillow_property={"id": "2078451", "bedrooms": 4},
+            analyst_notes="looks good",
+        ),
+        taxes=SimpleNamespace(
+            land_assumptions_pct=Decimal("0.2000"),
+            sla_multiplier_pct=None,
+            improvement_basis=None,
+            estimated_short_life_assets=None,
+            bonus_amount_pct=None,
+            tax_rate_pct=None,
+            y1_loss_from_depreciation=None,
+            tax_savings=Decimal("41000.00"),
+        ),
+        optimization_items=[
+            SimpleNamespace(
+                id=1,
+                category="Hot tub",
+                total_price=Decimal("12000.00"),
+                metric=None,
+                base_price=None,
+                spec=None,
+                tier=None,
+                notes=None,
+            )
+        ],
+        operating_expenses=[
+            SimpleNamespace(
+                id=2, expense_name="Insurance", monthly_amount=Decimal("310.00")
+            )
+        ],
+        comp_set=[
+            SimpleNamespace(
+                id=3,
+                listing_url="https://airbnb.com/y",
+                revenue=Decimal("94000.00"),
+                bedrooms=4,
+                sleeps=10,
+            )
+        ],
+    )
+    service = UpdateUnderwritingService(
+        FakeUnderwritingRepository(underwriting), n8n_webhook_service=webhook
+    )
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    payload = webhook.payloads[0]
+    assert payload["details"]["analyst_notes"] == "looks good"
+    assert payload["details"]["zillow_property"]["bedrooms"] == 4
+    # The relationship is `taxes`, not `tax` — reading the wrong name dropped it.
+    assert payload["taxes"]["tax_savings"] == "41000.00"
+    assert payload["optimization_list"][0]["category"] == "Hot tub"
+    assert payload["operating_expenses"][0]["expense_name"] == "Insurance"
+    assert payload["comp_set"][0]["revenue"] == "94000.00"
+
+
+@pytest.mark.asyncio
 async def test_update_deal_status_succeeds_when_payload_build_raises():
     """A broken payload build must not 500 an already-committed status change."""
     webhook = FakeN8nWebhookService()

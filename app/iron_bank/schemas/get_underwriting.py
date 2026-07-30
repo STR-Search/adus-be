@@ -35,6 +35,10 @@ class ZillowProperty(BaseModel):
 
 
 class GetUnderwritingDetails(BaseModel):
+    # from_attributes on the child schemas lets callers validate the ORM rows
+    # directly instead of hand-mapping every column to a dict first.
+    model_config = ConfigDict(from_attributes=True)
+
     purchase_details: dict[str, Any] | None = None
     y1_coc_incl_tax_savings: dict[str, Any] | None = None
     forecasted_revenue: dict[str, Any] | None = None
@@ -45,6 +49,8 @@ class GetUnderwritingDetails(BaseModel):
 
 
 class GetUnderwritingTaxes(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     land_assumptions_pct: Decimal | None = None
     sla_multiplier_pct: Decimal | None = None
     improvement_basis: Decimal | None = None
@@ -56,6 +62,8 @@ class GetUnderwritingTaxes(BaseModel):
 
 
 class GetUnderwritingOptimizationItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int | None = None
     category: str | None = None
     total_price: Decimal | None = None
@@ -67,7 +75,7 @@ class GetUnderwritingOptimizationItem(BaseModel):
 
 
 class GetUnderwritingOperatingExpense(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
     id: int | None = None
     expense_name: str | None = Field(default=None, alias="expense")
@@ -75,6 +83,8 @@ class GetUnderwritingOperatingExpense(BaseModel):
 
 
 class GetUnderwritingCompSet(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int | None = None
     listing_url: str | None = None
     revenue: Decimal | None = None
