@@ -1,4 +1,5 @@
 from app.markets.models.market import MarketKeysMaster
+from app.markets.models.realtor import Realtor
 from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
 from app.markets.repositories.market_repository import MarketRepository
 from app.markets.repositories.realtor_repository import RealtorRepository
@@ -106,6 +107,21 @@ class MarketService:
         if market is None:
             return None
         return self._to_schema(market, *await self._get_lookup_maps())
+
+    async def get_realtors_for_market(self, market_id: int) -> list[Realtor]:
+        """Realtor rows attached to a market, in the market's realtor_ids order.
+
+        Returns the ORM rows rather than RealtorRefSchema so callers get every
+        column, including phone. Unknown or soft-deleted ids drop out; an
+        unknown market yields an empty list.
+        """
+        market = await self.repository.get_by_id(market_id)
+        realtor_ids = (market.realtor_ids or []) if market is not None else []
+        if not realtor_ids:
+            return []
+        realtors = await self.realtor_repository.get_by_ids(set(realtor_ids))
+        by_id = {realtor.id: realtor for realtor in realtors}
+        return [by_id[realtor_id] for realtor_id in realtor_ids if realtor_id in by_id]
 
     async def get_by_market_slug(self, market_slug: str) -> MarketKeysMasterSchema | None:
         market = await self.repository.get_by_market_slug(market_slug)

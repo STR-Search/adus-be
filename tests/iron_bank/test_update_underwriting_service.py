@@ -464,6 +464,79 @@ async def test_update_deal_status_fires_webhook_on_present_to_clients():
     assert payload["turnkey"] is False
 
 
+class FakeRealtorMarketService:
+    """A market_service wired the way the router wires it, for the webhook path."""
+
+    def __init__(self, realtors=None, fail: bool = False):
+        self.realtors = realtors or []
+        self.fail = fail
+        self.requested_market_id = None
+
+    async def get_realtors_for_market(self, market_id: int):
+        if self.fail:
+            raise AttributeError("boom")
+        self.requested_market_id = market_id
+        return self.realtors
+
+
+@pytest.mark.asyncio
+async def test_webhook_payload_hydrates_realtor_details_from_market():
+    webhook = FakeN8nWebhookService()
+    market_service = FakeRealtorMarketService(
+        [
+            SimpleNamespace(
+                id=5,
+                name="Dana Reyes",
+                email="dana@x.com",
+                phone="555-0100",
+                brokerage="Reyes Realty",
+            )
+        ]
+    )
+    repository = FakeUnderwritingRepository(_webhook_underwriting())
+    service = UpdateUnderwritingService(
+        repository, market_service=market_service, n8n_webhook_service=webhook
+    )
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    assert market_service.requested_market_id == 7
+    assert webhook.payloads[0]["realtor_details"] == [
+        {
+            "id": 5,
+            "name": "Dana Reyes",
+            "email": "dana@x.com",
+            "phone": "555-0100",
+            "brokerage": "Reyes Realty",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_update_deal_status_succeeds_when_payload_build_raises():
+    """A broken payload build must not 500 an already-committed status change."""
+    webhook = FakeN8nWebhookService()
+    repository = FakeUnderwritingRepository(_webhook_underwriting())
+    service = UpdateUnderwritingService(
+        repository,
+        market_service=FakeRealtorMarketService(fail=True),
+        n8n_webhook_service=webhook,
+    )
+
+    result = await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    assert result.underwriting_id == 42
+    assert webhook.payloads == []
+
+
 @pytest.mark.asyncio
 async def test_update_deal_status_does_not_fire_for_other_statuses():
     webhook = FakeN8nWebhookService()
