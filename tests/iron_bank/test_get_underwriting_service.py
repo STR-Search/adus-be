@@ -263,6 +263,7 @@ async def test_get_all_passes_filters_to_repository():
         market_id=3,
         deal_status="template_generated",
         analyst_id=7,
+        search="fort lauderdale",
     )
 
     requested = repository.requested_page
@@ -272,6 +273,16 @@ async def test_get_all_passes_filters_to_repository():
     assert requested["market_id"] == 3
     assert requested["deal_status"] == "template_generated"
     assert requested["analyst_id"] == 7
+    expected = {
+        "page": 1,
+        "page_size": 20,
+        "zpid": "12345",
+        "market_id": 3,
+        "source": "legacy_sheet",
+        "search": "fort lauderdale",
+    }
+    for key, value in expected.items():
+        assert repository.requested_page[key] == value
 
 
 @pytest.mark.asyncio

@@ -13,6 +13,12 @@ class DealStatus(StrEnum):
     PRESENT_TO_CLIENTS = "present_to_clients"
     CLIENT_UNDER_CONTRACT = "client_under_contract"
     TRAINING_DEAL = "training_deal"
+    PREVIOUSLY_UNDERWRITTEN_NO_STATUS = "previously_underwritten_no_status"
+
+
+class UnderwritingSource(StrEnum):
+    ADUS = "adus"
+    LEGACY_SHEET = "legacy_sheet"
 
 
 class UnderwritingSortBy(StrEnum):
@@ -20,6 +26,7 @@ class UnderwritingSortBy(StrEnum):
     PURCHASE_PRICE = "purchase_price"
     TOTAL_OOP = "total_oop"
     L_CASH_ON_CASH = "l_cash_on_cash"
+    SHEET_NUMBER = "sheet_number"
 
 
 class SortOrder(StrEnum):

@@ -4,6 +4,7 @@ from typing import Any
 import structlog
 from pydantic import BaseModel
 
+from app.iron_bank.enums import UnderwritingSource
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
 from app.iron_bank.services.base_underwriting_payload_builder import (
     BaseUnderwritingPayloadBuilder,
@@ -45,6 +46,7 @@ class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         payload = {
             "zpid": zillow_property.get("id"),
             "market_id": prepared.get("market_id"),
+            "source": UnderwritingSource.ADUS,
             "deal_status": self._DEFAULT_DEAL_STATUS,
             "is_automated": True,
             "listing_url": zillow_property.get("url"),

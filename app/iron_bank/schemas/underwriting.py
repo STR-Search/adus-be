@@ -1,8 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, field_validator
 
-from app.iron_bank.enums import DealStatus
+from app.iron_bank.enums import DealStatus, UnderwritingSource
 from app.iron_bank.services.deal_status_service import STATUS_OPTIONS
 
 _STATUS_LABEL: dict[str, str] = {s.value: label for s, label, _ in STATUS_OPTIONS}
@@ -36,6 +36,8 @@ REFERENCE_TAG_FIELDS: tuple[str, ...] = (
 class UnderwritingBase(BaseModel):
     zpid: str | None = None
     market_id: int | None = None
+    source: UnderwritingSource | None = None
+    sheet_number: int | None = None
     analyst_id: int | None = None
     approver_id: int | None = None
     deal_status: DealStatus | None = None
@@ -94,6 +96,16 @@ class UnderwritingBase(BaseModel):
     property_uniqueness: str | None = None
     deal_score: int | None = Field(default=None, ge=1, le=100)
 
+    @field_validator("deal_status")
+    @classmethod
+    def check_deal_status(cls, value):
+        if isinstance(value, str) and not isinstance(value, DealStatus):
+            try:
+                return DealStatus(value)
+            except ValueError:
+                raise ValueError(f"deal_status must be a valid DealStatus key, got {value!r}")
+        return value
+
 
 class UnderwritingCreate(UnderwritingBase):
     pass
@@ -108,7 +120,10 @@ class DealStatusLabelMixin(BaseModel):
         deal_status: DealStatus | None = getattr(self, "deal_status", None)
         if deal_status is None:
             return None
-        return _STATUS_LABEL.get(deal_status.value)
+        value = (
+            deal_status.value if isinstance(deal_status, DealStatus) else deal_status
+        )
+        return _STATUS_LABEL.get(value, value)
 
 
 class UnderwritingRead(UnderwritingBase, DealStatusLabelMixin):

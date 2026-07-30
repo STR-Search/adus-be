@@ -2,7 +2,7 @@ import math
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -44,6 +44,8 @@ class UnderwritingRepository:
         market_id: int | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        source: str | None = None,
+        search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
         min_total_oop: Decimal | None = None,
@@ -61,6 +63,19 @@ class UnderwritingRepository:
             query = query.where(Underwriting.market_id == market_id)
         if deal_status is not None:
             query = query.where(Underwriting.deal_status == deal_status)
+        if source is not None:
+            query = query.where(Underwriting.source == source)
+        if search is not None and search.strip():
+            term = search.strip()
+            conditions = [
+                Underwriting.property_address.ilike(f"%{term}%"),
+                Underwriting.city.ilike(f"%{term}%"),
+                Underwriting.state.ilike(f"%{term}%"),
+            ]
+            # a numeric term also matches the legacy sheet number exactly
+            if term.isdigit():
+                conditions.append(Underwriting.sheet_number == int(term))
+            query = query.where(or_(*conditions))
         if analyst_id is not None:
             query = query.where(Underwriting.analyst_id == analyst_id)
         if min_purchase_price is not None:
@@ -343,9 +358,7 @@ class UnderwritingRepository:
         keeps this repository from importing the ``zillow`` domain's model.
         """
         try:
-            result = await self.db.execute(
-                text(
-                    """
+            result = await self.db.execute(text("""
                     UPDATE iron_bank.underwritings AS uw
                     SET property_pending = (sl.home_status IS DISTINCT FROM 'FOR_SALE')
                     FROM zillow.scheduled_listings AS sl
@@ -353,9 +366,7 @@ class UnderwritingRepository:
                       AND uw.property_pending IS DISTINCT FROM (
                           sl.home_status IS DISTINCT FROM 'FOR_SALE'
                       )
-                    """
-                )
-            )
+                    """))
             await self.db.commit()
             return result.rowcount
         except Exception:

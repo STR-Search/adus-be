@@ -151,6 +151,9 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         Any missing/invalid input (no purchase_details, no forecasted_revenue,
         zero total_oop, malformed stored JSON, ...) flags the row rather than
         failing the request.
+
+        Legacy sheet deals are not simulated — they return stored values with
+        simulated=False to exclude them from 'what-if' calculations.
         """
         fallback = _SimulatedRow(
             id=row.id,
@@ -159,6 +162,11 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             total_oop=row.total_oop,
             l_cash_on_cash=row.l_cash_on_cash,
         )
+
+        # Skip simulation for legacy sheet deals
+        if row.source == "legacy_sheet":
+            return fallback
+
         try:
             return self._calculate_simulated_row(row, interest_rate, down_payment_pct)
         except (ValueError, KeyError, TypeError, ValidationError) as e:
