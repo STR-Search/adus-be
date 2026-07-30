@@ -290,9 +290,9 @@ class UpdateUnderwritingService(SaveUnderwritingService):
                 result_data["details"] = GetUnderwritingDetails.model_validate(detail)
 
             # Add taxes child table.
-            tax = getattr(underwriting, "tax", None)
-            if tax:
-                result_data["taxes"] = GetUnderwritingTaxes.model_validate(tax)
+            taxes = getattr(underwriting, "taxes", None)
+            if taxes:
+                result_data["taxes"] = GetUnderwritingTaxes.model_validate(taxes)
 
             # Add optimization items.
             optimization_items = getattr(underwriting, "optimization_items", None)
@@ -314,8 +314,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
             comp_set = getattr(underwriting, "comp_set", None)
             if comp_set:
                 result_data["comp_set"] = [
-                    GetUnderwritingCompSet.model_validate(item)
-                    for item in comp_set
+                    GetUnderwritingCompSet.model_validate(item) for item in comp_set
                 ]
 
             row = GetUnderwritingResult.model_validate(result_data)
