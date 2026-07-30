@@ -248,75 +248,78 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         if self.n8n_webhook_service is None:
             return
 
-        # Build parent row fields (UnderwritingRead contract).
-        result_data = {
-            field: value
-            for field in UnderwritingRead.model_fields
-            if (value := getattr(underwriting, field, None)) is not None
-        }
+        # The whole body is guarded, not just the send: building the payload
+        # touches the DB and several schemas, and a failure there must not 500
+        # a status change that has already committed.
+        try:
+            # Build parent row fields (UnderwritingRead contract).
+            result_data = {
+                field: value
+                for field in UnderwritingRead.model_fields
+                if (value := getattr(underwriting, field, None)) is not None
+            }
 
-        # Resolve analyst and approver.
-        if self.user_repository is not None:
-            user_ids = set()
-            if underwriting.analyst_id is not None:
-                user_ids.add(underwriting.analyst_id)
-            if underwriting.approver_id is not None:
-                user_ids.add(underwriting.approver_id)
-            if user_ids:
-                users = await self.user_repository.get_by_ids(user_ids)
-                refs = {user.id: UserRef.model_validate(user) for user in users}
+            # Resolve analyst and approver.
+            if self.user_repository is not None:
+                user_ids = set()
                 if underwriting.analyst_id is not None:
-                    result_data["analyst"] = refs.get(underwriting.analyst_id)
+                    user_ids.add(underwriting.analyst_id)
                 if underwriting.approver_id is not None:
-                    result_data["approver"] = refs.get(underwriting.approver_id)
+                    user_ids.add(underwriting.approver_id)
+                if user_ids:
+                    users = await self.user_repository.get_by_ids(user_ids)
+                    refs = {user.id: UserRef.model_validate(user) for user in users}
+                    if underwriting.analyst_id is not None:
+                        result_data["analyst"] = refs.get(underwriting.analyst_id)
+                    if underwriting.approver_id is not None:
+                        result_data["approver"] = refs.get(underwriting.approver_id)
 
-        # Resolve realtor details for the market.
-        if underwriting.market_id is not None and self.market_service is not None:
-            realtors = await self.market_service.get_realtors_for_market(
-                underwriting.market_id
-            )
-            if realtors:
-                result_data["realtor_details"] = [
-                    UnderwritingRealtorDetail.model_validate(r) for r in realtors
+            # Resolve realtor details for the market.
+            if underwriting.market_id is not None and self.market_service is not None:
+                realtors = await self.market_service.get_realtors_for_market(
+                    underwriting.market_id
+                )
+                if realtors:
+                    result_data["realtor_details"] = [
+                        UnderwritingRealtorDetail.model_validate(r) for r in realtors
+                    ]
+
+            # Add details child table.
+            detail = getattr(underwriting, "detail", None)
+            if detail:
+                result_data["details"] = GetUnderwritingDetails.model_validate(detail)
+
+            # Add taxes child table.
+            tax = getattr(underwriting, "tax", None)
+            if tax:
+                result_data["taxes"] = GetUnderwritingTaxes.model_validate(tax)
+
+            # Add optimization items.
+            optimization_items = getattr(underwriting, "optimization_items", None)
+            if optimization_items:
+                result_data["optimization_list"] = [
+                    GetUnderwritingOptimizationItem.model_validate(item)
+                    for item in optimization_items
                 ]
 
-        # Add details child table.
-        detail = getattr(underwriting, "detail", None)
-        if detail:
-            result_data["details"] = GetUnderwritingDetails.model_validate(detail)
+            # Add operating expenses.
+            operating_expenses = getattr(underwriting, "operating_expenses", None)
+            if operating_expenses:
+                result_data["operating_expenses"] = [
+                    GetUnderwritingOperatingExpense.model_validate(item)
+                    for item in operating_expenses
+                ]
 
-        # Add taxes child table.
-        tax = getattr(underwriting, "tax", None)
-        if tax:
-            result_data["taxes"] = GetUnderwritingTaxes.model_validate(tax)
+            # Add comp set.
+            comp_set = getattr(underwriting, "comp_set", None)
+            if comp_set:
+                result_data["comp_set"] = [
+                    GetUnderwritingCompSet.model_validate(item)
+                    for item in comp_set
+                ]
 
-        # Add optimization items.
-        optimization_items = getattr(underwriting, "optimization_items", None)
-        if optimization_items:
-            result_data["optimization_list"] = [
-                GetUnderwritingOptimizationItem.model_validate(item)
-                for item in optimization_items
-            ]
+            row = GetUnderwritingResult.model_validate(result_data)
 
-        # Add operating expenses.
-        operating_expenses = getattr(underwriting, "operating_expenses", None)
-        if operating_expenses:
-            result_data["operating_expenses"] = [
-                GetUnderwritingOperatingExpense.model_validate(item)
-                for item in operating_expenses
-            ]
-
-        # Add comp set.
-        comp_set = getattr(underwriting, "comp_set", None)
-        if comp_set:
-            result_data["comp_set"] = [
-                GetUnderwritingCompSet.model_validate(item)
-                for item in comp_set
-            ]
-
-        row = GetUnderwritingResult.model_validate(result_data)
-
-        try:
             # mode="json" keeps Decimal as a string ("525000.00") rather than
             # coercing to float the way jsonable_encoder would.
             await self.n8n_webhook_service.send(payload=row.model_dump(mode="json"))
