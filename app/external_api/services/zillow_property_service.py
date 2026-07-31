@@ -167,6 +167,7 @@ class ZillowPropertyService:
             "area": details.living_area,
             "original_photos": details.original_photos,
             "lot_size_sqft": details.lot_size_sqft,
+            "description": details.description,
         }
 
     @staticmethod

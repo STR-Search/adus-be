@@ -76,7 +76,9 @@ class TestPrepare:
         kwargs = dict(
             listing=_listing(),
             listing_details=SimpleNamespace(
-                original_photos=["a.jpg"], lot_size_sqft=21780
+                original_photos=["a.jpg"],
+                lot_size_sqft=21780,
+                description="Cabin in the woods.",
             ),
             market=SimpleNamespace(
                 market_name="Smoky Mountains",
@@ -124,6 +126,7 @@ class TestPrepare:
             "area": 1800,
             "original_photos": ["a.jpg"],
             "lot_size_sqft": 21780,
+            "description": "Cabin in the woods.",
         }
 
     def test_prefers_unformatted_price_when_available(self):
