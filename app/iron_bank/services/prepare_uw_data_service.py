@@ -207,6 +207,9 @@ class PrepareUwDataService:
                 "zillow_property": self._transform_zillow_property(
                     listing, listing_details
                 ),
+                "street": listing.address_street,
+                "city": listing.address_city,
+                "state": listing.address_state,
                 "opex": self._transform_opex_costs(opex_by_bedrooms, opex_by_size),
                 "construction_amenities": amenities,
                 "construction_remodeling": [

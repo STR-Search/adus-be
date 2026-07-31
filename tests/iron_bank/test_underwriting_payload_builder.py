@@ -43,6 +43,8 @@ def test_builds_save_payload_from_prepared_uw_data():
     assert payload.market_id == 3
     assert payload.listing_url == "https://www.zillow.com/homedetails/12345"
     assert payload.property_address == "123 Pine Ridge Rd"
+    # absent from `prepared` here — the address-part columns stay null
+    assert payload.street is None
     assert payload.purchase_price is None
     assert payload.deal_status == DealStatus.TEMPLATE_GENERATED
     assert payload.details.purchase_details.purchase_price == Decimal("485000")
@@ -74,6 +76,22 @@ def test_builds_save_payload_from_prepared_uw_data():
         {"expense": "Utilities", "monthly": Decimal("350")},
         {"expense": "Pest Control", "monthly": Decimal("60")},
     ]
+
+
+def test_maps_prepared_address_parts_onto_columns():
+    """street/city/state ride alongside zillow_property, not inside it."""
+    prepared = {
+        "zillow_property": {"id": "12345", "address": "123 Pine Ridge Rd"},
+        "street": "123 Pine Ridge Rd",
+        "city": "Gatlinburg",
+        "state": "TN",
+    }
+
+    payload = UnderwritingPayloadBuilder().build(prepared)
+
+    assert payload.street == "123 Pine Ridge Rd"
+    assert payload.city == "Gatlinburg"
+    assert payload.state == "TN"
 
 
 def test_builds_draft_payload_when_optional_prepared_fields_are_missing():

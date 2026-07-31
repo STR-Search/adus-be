@@ -21,6 +21,9 @@ def _zillow_property(**overrides):
         "bedrooms": 5,
         "bathrooms": 4.0,
         "area": 4608,
+        "street": "727 N Pine St",
+        "city": "San Antonio",
+        "state": "TX",
         "original_photos": [{"caption": ""}],
         "lot_size_sqft": 10698.0,
     }
@@ -48,6 +51,37 @@ def test_build_from_zillow_property_sets_non_automated_core_fields():
     assert payload.operating_expenses == []
     assert payload.deal_status == DealStatus.TEMPLATE_GENERATED
     assert payload.purchase_price == Decimal("389000.0")
+
+
+def test_build_from_zillow_property_lifts_address_parts_onto_columns():
+    """street/city/state land on the row's columns, not the stored blob."""
+    builder = NonAutomatedUnderwritingPayloadBuilder()
+
+    payload = builder.build_from_zillow_property(
+        listing_url=REQUEST_URL,
+        zillow_property=_zillow_property(),
+    )
+
+    assert payload.street == "727 N Pine St"
+    assert payload.city == "San Antonio"
+    assert payload.state == "TX"
+    # popped before persisting, so they never reach uw_details.zillow_property
+    stored = payload.details.zillow_property.model_dump()
+    assert "street" not in stored
+    assert "city" not in stored
+    assert "state" not in stored
+
+
+def test_build_from_zillow_property_does_not_mutate_input():
+    builder = NonAutomatedUnderwritingPayloadBuilder()
+    zillow_property = _zillow_property()
+
+    builder.build_from_zillow_property(
+        listing_url=REQUEST_URL,
+        zillow_property=zillow_property,
+    )
+
+    assert zillow_property["street"] == "727 N Pine St"
 
 
 def test_build_from_zillow_property_seeds_default_financing_and_taxes():
