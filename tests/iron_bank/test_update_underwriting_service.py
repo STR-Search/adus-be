@@ -608,6 +608,251 @@ async def test_update_deal_status_succeeds_when_payload_build_raises():
     assert webhook.payloads == []
 
 
+class FakeWebhookListingsService:
+    """scheduled_listings reader shaped for _transform_zillow_property."""
+
+    def __init__(self, listing=None):
+        self.listing = listing
+        self.requested_zpid = None
+
+    async def get_by_zpid(self, zpid: str):
+        self.requested_zpid = zpid
+        return self.listing
+
+    async def set_remove_listing(self, zpid: str, remove: bool) -> None:
+        pass
+
+
+class FakeWebhookListingDetailsService:
+    def __init__(self, details=None):
+        self.details = details
+        self.requested_zpid = None
+
+    async def get_by_zpid(self, zpid: str):
+        self.requested_zpid = zpid
+        return self.details
+
+
+def _webhook_listing():
+    return SimpleNamespace(
+        zpid="2078451",
+        detail_url="https://zillow.com/homedetails/2078451",
+        img_src="https://photos.zillow.com/a.jpg",
+        unformatted_price=525000,
+        price="$525,000",
+        address="1 Main St, Austin, TX",
+        beds=4,
+        baths=Decimal("3.5"),
+        area=2400,
+        home_status="FOR_SALE",
+    )
+
+
+@pytest.mark.asyncio
+async def test_webhook_payload_hydrates_zillow_property_for_automated_underwriting():
+    """Automated rows persist no zillow_property — the webhook hydrates it live."""
+    webhook = FakeN8nWebhookService()
+    listings_service = FakeWebhookListingsService(_webhook_listing())
+    details_service = FakeWebhookListingDetailsService(
+        SimpleNamespace(original_photos=[{"url": "a.jpg"}], lot_size_sqft=8700)
+    )
+    underwriting = _webhook_underwriting(is_automated=True, detail=None)
+    service = UpdateUnderwritingService(
+        FakeUnderwritingRepository(underwriting),
+        listings_service=listings_service,
+        listing_details_service=details_service,
+        n8n_webhook_service=webhook,
+    )
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    assert listings_service.requested_zpid == "2078451"
+    assert details_service.requested_zpid == "2078451"
+    zillow_property = webhook.payloads[0]["details"]["zillow_property"]
+    assert zillow_property["id"] == "2078451"
+    assert zillow_property["bedrooms"] == 4
+    assert zillow_property["area"] == 2400
+    assert zillow_property["price"] == "525000"
+    assert zillow_property["lot_size_sqft"] == "8700"
+    assert zillow_property["original_photos"] == [{"url": "a.jpg"}]
+
+
+@pytest.mark.asyncio
+async def test_webhook_payload_hydration_overlays_existing_details():
+    """Hydration fills zillow_property without clobbering the stored details."""
+    webhook = FakeN8nWebhookService()
+    underwriting = _webhook_underwriting(
+        is_automated=True,
+        detail=SimpleNamespace(
+            purchase_details={"purchase_price": 525000},
+            y1_coc_incl_tax_savings=None,
+            forecasted_revenue=None,
+            cleaning_cost=None,
+            property_taxes=None,
+            zillow_property=None,
+            analyst_notes="looks good",
+        ),
+    )
+    service = UpdateUnderwritingService(
+        FakeUnderwritingRepository(underwriting),
+        listings_service=FakeWebhookListingsService(_webhook_listing()),
+        listing_details_service=FakeWebhookListingDetailsService(),
+        n8n_webhook_service=webhook,
+    )
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    details = webhook.payloads[0]["details"]
+    assert details["analyst_notes"] == "looks good"
+    assert details["purchase_details"] == {"purchase_price": 525000}
+    assert details["zillow_property"]["bedrooms"] == 4
+    # No listing_details row → the optional fields stay null rather than blowing up.
+    assert details["zillow_property"]["lot_size_sqft"] is None
+
+
+@pytest.mark.asyncio
+async def test_webhook_payload_keeps_stored_zillow_property_when_not_automated():
+    """Non-automated rows read zillow_property off uw_details — no live lookup."""
+    webhook = FakeN8nWebhookService()
+    listings_service = FakeWebhookListingsService(_webhook_listing())
+    underwriting = _webhook_underwriting(
+        is_automated=False,
+        detail=SimpleNamespace(
+            purchase_details=None,
+            y1_coc_incl_tax_savings=None,
+            forecasted_revenue=None,
+            cleaning_cost=None,
+            property_taxes=None,
+            zillow_property={"id": "2078451", "bedrooms": 6},
+            analyst_notes=None,
+        ),
+    )
+    service = UpdateUnderwritingService(
+        FakeUnderwritingRepository(underwriting),
+        listings_service=listings_service,
+        listing_details_service=FakeWebhookListingDetailsService(),
+        n8n_webhook_service=webhook,
+    )
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    assert listings_service.requested_zpid is None
+    assert webhook.payloads[0]["details"]["zillow_property"]["bedrooms"] == 6
+
+
+@pytest.mark.asyncio
+async def test_webhook_payload_omits_zillow_property_when_listing_missing():
+    """A zpid with no scheduled_listings row must not break the webhook."""
+    webhook = FakeN8nWebhookService()
+    underwriting = _webhook_underwriting(is_automated=True, detail=None)
+    service = UpdateUnderwritingService(
+        FakeUnderwritingRepository(underwriting),
+        listings_service=FakeWebhookListingsService(None),
+        listing_details_service=FakeWebhookListingDetailsService(),
+        n8n_webhook_service=webhook,
+    )
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    assert len(webhook.payloads) == 1
+    # details stays null, exactly as it did before hydration existed.
+    assert webhook.payloads[0]["details"] is None
+
+
+class FakeLabelReferenceDataService:
+    """reference_data_service wired the way the router wires it."""
+
+    def __init__(self, label_map=None):
+        self.label_map = label_map or {}
+        self.requested_domain = None
+
+    async def get_label_map(self, domain=None, set_codes=None):
+        self.requested_domain = domain
+        return self.label_map
+
+    async def validate_active_option(self, domain, set_code, key) -> None:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_webhook_payload_resolves_reference_data_labels():
+    """Tag slugs are stored, but n8n needs the human labels alongside them."""
+    webhook = FakeN8nWebhookService()
+    reference_data = FakeLabelReferenceDataService(
+        {
+            ("execution_type", "light_reno"): "Light Renovation",
+            ("view_quality", "lake"): "Lake View",
+            ("market_type", "mountain"): "Mountain",
+            ("market_type", "lake"): "Lake",
+            # ("seasonality", "summer_peak") deliberately absent — retired slug.
+        }
+    )
+    underwriting = _webhook_underwriting(
+        execution_type="light_reno",
+        view_quality="lake",
+        market_type=["mountain", "lake"],
+        seasonality=["summer_peak"],
+    )
+    service = UpdateUnderwritingService(
+        FakeUnderwritingRepository(underwriting),
+        reference_data_service=reference_data,
+        n8n_webhook_service=webhook,
+    )
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    assert reference_data.requested_domain == "iron_bank"
+    payload = webhook.payloads[0]
+    assert payload["execution_type_label"] == "Light Renovation"
+    assert payload["view_quality_label"] == "Lake View"
+    assert payload["market_type_label"] == ["Mountain", "Lake"]
+    # Retired slug drops out of the list rather than raising.
+    assert payload["seasonality_label"] == []
+    # Slugs still travel alongside the labels.
+    assert payload["execution_type"] == "light_reno"
+    # Computed in code from the row's deal_status, not from reference data —
+    # present either way. (The fake repo returns the row unmutated, hence the
+    # pre-update status here.)
+    assert payload["deal_status_label"] == "Analyst Completed"
+
+
+@pytest.mark.asyncio
+async def test_webhook_payload_labels_are_null_without_reference_data_service():
+    webhook = FakeN8nWebhookService()
+    service = UpdateUnderwritingService(
+        FakeUnderwritingRepository(_webhook_underwriting(execution_type="light_reno")),
+        n8n_webhook_service=webhook,
+    )
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.PRESENT_TO_CLIENTS,
+        actor_user_id=9,
+    )
+
+    assert webhook.payloads[0]["execution_type_label"] is None
+
+
 @pytest.mark.asyncio
 async def test_update_deal_status_does_not_fire_for_other_statuses():
     webhook = FakeN8nWebhookService()
