@@ -17,12 +17,9 @@ from app.iron_bank.schemas.get_underwriting import (
     UserRef,
     ZillowProperty,
 )
-from app.iron_bank.schemas.underwriting import (
-    MULTI_SELECT_TAG_FIELDS,
-    SINGLE_SELECT_TAG_FIELDS,
-    UnderwritingRead,
-)
+from app.iron_bank.schemas.underwriting import UnderwritingRead
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
+from app.iron_bank.services.reference_label_resolver import apply_reference_labels
 
 
 class GetUnderwritingService:
@@ -316,34 +313,8 @@ class GetUnderwritingService:
     async def _populate_reference_labels(
         self, results: list[GetUnderwritingResult]
     ) -> None:
-        """Resolve ``<field>_label`` for each tag slug from reference data.
-
-        Fetches the ``(set_code, slug) → label`` map once for the whole batch;
-        no-op when no reference-data service is configured. Single-select fields
-        resolve to one label, multi-select fields to a list of labels (one per
-        slug). Unknown/retired slugs simply leave the label ``None`` (single) or
-        drop out of the list (multi).
-        """
-        if self.reference_data_service is None or not results:
-            return
-        label_map = await self.reference_data_service.get_label_map(domain="iron_bank")
-        for result in results:
-            for field in SINGLE_SELECT_TAG_FIELDS:
-                slug = getattr(result, field, None)
-                if slug is not None:
-                    setattr(result, f"{field}_label", label_map.get((field, slug)))
-            for field in MULTI_SELECT_TAG_FIELDS:
-                slugs = getattr(result, field, None)
-                if slugs:
-                    setattr(
-                        result,
-                        f"{field}_label",
-                        [
-                            label_map[(field, slug)]
-                            for slug in slugs
-                            if (field, slug) in label_map
-                        ],
-                    )
+        """Resolve ``<field>_label`` for each tag slug from reference data."""
+        await apply_reference_labels(results, self.reference_data_service)
 
     def _to_result(self, underwriting) -> GetUnderwritingResult:
         return GetUnderwritingResult.model_validate(

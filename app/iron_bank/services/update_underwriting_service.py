@@ -15,6 +15,7 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingTaxes,
     UnderwritingRealtorDetail,
     UserRef,
+    ZillowProperty,
 )
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
 from app.iron_bank.schemas.underwriting import UnderwritingRead
@@ -22,6 +23,8 @@ from app.iron_bank.schemas.update_underwriting import (
     UpdateUnderwritingPayload,
     UpdateUnderwritingResult,
 )
+from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
+from app.iron_bank.services.reference_label_resolver import apply_reference_labels
 from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
 from app.iron_bank.services.underwriting_calculator import UnderwritingCalculator
 
@@ -43,6 +46,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         calculator: UnderwritingCalculator | None = None,
         market_service=None,
         listings_service=None,
+        listing_details_service=None,
         cleaned_data_service=None,
         reference_data_service=None,
         user_repository=None,
@@ -56,6 +60,9 @@ class UpdateUnderwritingService(SaveUnderwritingService):
             cleaned_data_service=cleaned_data_service,
             reference_data_service=reference_data_service,
         )
+        # Only used to hydrate zillow_property for the webhook payload, the way
+        # GetUnderwritingService does on the full read.
+        self.listing_details_service = listing_details_service
         self.user_repository = user_repository
         # Optional by design: only the HTTP deal-status path wires this in, so
         # machine-driven flows (e.g. ReconcileUnderwritingPriceJob) can never
@@ -286,8 +293,19 @@ class UpdateUnderwritingService(SaveUnderwritingService):
 
             # Add details child table.
             detail = getattr(underwriting, "detail", None)
-            if detail:
-                result_data["details"] = GetUnderwritingDetails.model_validate(detail)
+            details = GetUnderwritingDetails.model_validate(detail) if detail else None
+
+            # Automated underwritings persist nothing on uw_details.zillow_property,
+            # so hydrate it live the way the full read does. Non-automated rows
+            # already carry the stored value picked up from `detail` above.
+            zillow_property = await self._hydrate_zillow_property(underwriting)
+            if zillow_property is not None:
+                if details is None:
+                    details = GetUnderwritingDetails()
+                details.zillow_property = zillow_property
+
+            if details is not None:
+                result_data["details"] = details
 
             # Add taxes child table.
             taxes = getattr(underwriting, "taxes", None)
@@ -319,6 +337,12 @@ class UpdateUnderwritingService(SaveUnderwritingService):
 
             row = GetUnderwritingResult.model_validate(result_data)
 
+            # Resolve the reference-data tag labels (market_type_label et al).
+            # They aren't DB columns, so they arrive null off the ORM row — the
+            # read path fills them the same way via _populate_reference_labels.
+            # (deal_status_label needs nothing here: it's a computed_field.)
+            await apply_reference_labels([row], self.reference_data_service)
+
             # mode="json" keeps Decimal as a string ("525000.00") rather than
             # coercing to float the way jsonable_encoder would.
             await self.n8n_webhook_service.send(payload=row.model_dump(mode="json"))
@@ -327,6 +351,39 @@ class UpdateUnderwritingService(SaveUnderwritingService):
                 "iron_bank.deal_status.webhook_failed",
                 underwriting_id=underwriting.id,
             )
+
+    async def _hydrate_zillow_property(self, underwriting) -> ZillowProperty | None:
+        """Live-hydrate ``zillow_property`` for an automated underwriting.
+
+        Mirrors ``GetUnderwritingService``'s automated read path: fetch the
+        scheduled listing (plus its details) by zpid, transform it, and coerce
+        to the ``ZillowProperty`` response contract. Returns ``None`` when the
+        row isn't automated, has no zpid, or has no matching listing — the
+        webhook body then simply omits the field, as it did before.
+        """
+        zpid = getattr(underwriting, "zpid", None)
+        if (
+            not getattr(underwriting, "is_automated", None)
+            or not zpid
+            or self.listings_service is None
+            or self.listing_details_service is None
+        ):
+            return None
+
+        listing = await self.listings_service.get_by_zpid(zpid)
+        if listing is None:
+            logger.warning(
+                "iron_bank.deal_status.listing_not_found",
+                underwriting_id=underwriting.id,
+                zpid=zpid,
+                detail="no listing found for zpid — webhook zillow_property will be unavailable",
+            )
+            return None
+
+        listing_details = await self.listing_details_service.get_by_zpid(zpid)
+        return ZillowProperty.model_validate(
+            PrepareUwDataService()._transform_zillow_property(listing, listing_details)
+        )
 
     async def _sync_listing_removal(self, existing, deal_status: DealStatus) -> None:
         """Mirror the delete_zillow status onto the linked scheduled listing.

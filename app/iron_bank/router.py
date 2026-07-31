@@ -148,8 +148,14 @@ def get_update_underwriting_controller(
     from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.services.market_service import MarketService
     from app.users.repositories.user_repository import UserRepository
+    from app.zillow.repositories.scheduled_listing_details_repository import (
+        ScheduledListingDetailsRepository,
+    )
     from app.zillow.repositories.scheduled_listings_repository import (
         ScheduledListingsRepository,
+    )
+    from app.zillow.services.scheduled_listing_details_service import (
+        ScheduledListingDetailsService,
     )
     from app.zillow.services.scheduled_listings_service import ScheduledListingsService
 
@@ -162,6 +168,9 @@ def get_update_underwriting_controller(
                 RealtorRepository(db),
             ),
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
+            listing_details_service=ScheduledListingDetailsService(
+                ScheduledListingDetailsRepository(db)
+            ),
             cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
             reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
             user_repository=UserRepository(db),
