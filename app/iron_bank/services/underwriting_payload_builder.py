@@ -51,6 +51,9 @@ class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
             "is_automated": True,
             "listing_url": zillow_property.get("url"),
             "property_address": zillow_property.get("address"),
+            "street": prepared.get("street"),
+            "city": prepared.get("city"),
+            "state": prepared.get("state"),
             "details": self._build_details(
                 purchase_price=purchase_price,
                 config=config,

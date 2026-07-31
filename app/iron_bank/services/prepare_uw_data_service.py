@@ -64,6 +64,7 @@ class PrepareUwDataService:
                 listing_details.original_photos if listing_details else None
             ),
             "lot_size_sqft": listing_details.lot_size_sqft if listing_details else None,
+            "description": listing_details.description if listing_details else None,
         }
 
     def _transform_opex_costs(self, opex_by_bedrooms, opex_by_size) -> dict:
@@ -206,6 +207,9 @@ class PrepareUwDataService:
                 "zillow_property": self._transform_zillow_property(
                     listing, listing_details
                 ),
+                "street": listing.address_street,
+                "city": listing.address_city,
+                "state": listing.address_state,
                 "opex": self._transform_opex_costs(opex_by_bedrooms, opex_by_size),
                 "construction_amenities": amenities,
                 "construction_remodeling": [

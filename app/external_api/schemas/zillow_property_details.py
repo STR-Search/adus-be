@@ -22,3 +22,4 @@ class ZillowPropertyDetails(BaseModel):
     living_area: int | None = None
     lot_size_sqft: float | None = None
     original_photos: list | None = None
+    description: str | None = None

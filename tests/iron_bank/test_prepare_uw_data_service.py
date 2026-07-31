@@ -18,6 +18,9 @@ def _listing():
         price=485000,
         unformatted_price=None,
         address="123 Pine Ridge Rd",
+        address_street="123 Pine Ridge Rd",
+        address_city="Gatlinburg",
+        address_state="TN",
         beds=4,
         baths=3,
         area=1800,
@@ -76,7 +79,9 @@ class TestPrepare:
         kwargs = dict(
             listing=_listing(),
             listing_details=SimpleNamespace(
-                original_photos=["a.jpg"], lot_size_sqft=21780
+                original_photos=["a.jpg"],
+                lot_size_sqft=21780,
+                description="Cabin in the woods.",
             ),
             market=SimpleNamespace(
                 market_name="Smoky Mountains",
@@ -124,6 +129,7 @@ class TestPrepare:
             "area": 1800,
             "original_photos": ["a.jpg"],
             "lot_size_sqft": 21780,
+            "description": "Cabin in the woods.",
         }
 
     def test_prefers_unformatted_price_when_available(self):

@@ -654,7 +654,11 @@ async def test_webhook_payload_hydrates_zillow_property_for_automated_underwriti
     webhook = FakeN8nWebhookService()
     listings_service = FakeWebhookListingsService(_webhook_listing())
     details_service = FakeWebhookListingDetailsService(
-        SimpleNamespace(original_photos=[{"url": "a.jpg"}], lot_size_sqft=8700)
+        SimpleNamespace(
+            original_photos=[{"url": "a.jpg"}],
+            lot_size_sqft=8700,
+            description="Cabin in the woods.",
+        )
     )
     underwriting = _webhook_underwriting(is_automated=True, detail=None)
     service = UpdateUnderwritingService(
@@ -679,6 +683,7 @@ async def test_webhook_payload_hydrates_zillow_property_for_automated_underwriti
     assert zillow_property["price"] == "525000"
     assert zillow_property["lot_size_sqft"] == "8700"
     assert zillow_property["original_photos"] == [{"url": "a.jpg"}]
+    assert zillow_property["description"] == "Cabin in the woods."
 
 
 @pytest.mark.asyncio

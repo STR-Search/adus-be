@@ -37,6 +37,7 @@ class ZillowProperty(BaseModel):
     area: int | None = None
     original_photos: list | None = None
     lot_size_sqft: Decimal | None = None
+    description: str | None = None
 
 
 class GetUnderwritingDetails(BaseModel):

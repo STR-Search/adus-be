@@ -23,6 +23,14 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         listing_url: str,
         zillow_property: dict[str, Any],
     ) -> SaveUnderwritingPayload:
+        # street/city/state ride along on the fetched dict but belong on the
+        # underwritings row's own columns, not in the stored zillow_property
+        # blob — lift them out before the rest is persisted on uw_details.
+        zillow_property = dict(zillow_property)
+        street = zillow_property.pop("street", None)
+        city = zillow_property.pop("city", None)
+        state = zillow_property.pop("state", None)
+
         purchase_price = self._money_to_decimal(zillow_property.get("price"))
 
         details = (
@@ -45,6 +53,9 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
             "is_automated": False,
             "listing_url": listing_url,
             "property_address": zillow_property.get("address"),
+            "street": street,
+            "city": city,
+            "state": state,
             "purchase_price": purchase_price,
             "details": details,
             "taxes": self._build_taxes({}) if purchase_price is not None else None,
