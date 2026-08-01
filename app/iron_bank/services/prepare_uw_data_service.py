@@ -1,5 +1,7 @@
+from decimal import Decimal
+
 from app.iron_bank.defaults import UW_CONFIG_DEFAULTS
-from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
+from app.iron_bank.schemas.prepare_uw import MarketContext, PrepareUwDataResult
 
 
 class PrepareUwDataService:
@@ -41,6 +43,12 @@ class PrepareUwDataService:
         CONSOLIDATED_SHIPPING_OPTION_ID,
         STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID,
     )
+
+    # A non-automated underwriting can be created without a market. We still owe
+    # the analyst the full set of opex and rehab rows to fill in, so the shape is
+    # borrowed from this market and every amount is then zeroed out. See
+    # to_template_market_context.
+    TEMPLATE_MARKET_ID = 1
 
     def normalize_sqft(self, area: int | None) -> int | None:
         if area is None:
@@ -173,6 +181,103 @@ class PrepareUwDataService:
             return []
         return [ref.id for ref in market.must_have_amenities or []]
 
+    def prepare_market_context(
+        self,
+        *,
+        market,
+        market_id: int | None,
+        opex_by_bedrooms,
+        opex_by_size,
+        construction_amenities: list,
+        construction_remodeling: list,
+        fred,
+        str_cribs_fee=None,
+    ) -> MarketContext:
+        """Assemble the market-derived half of a draft underwriting.
+
+        Property-agnostic on purpose: the opex/amenity rows have already been
+        looked up by bedrooms and sqft upstream, so nothing here needs the
+        listing itself. Both the automated flow (via ``prepare``) and the
+        non-automated create-from-URL flow build their opex and rehab line items
+        off this.
+        """
+        amenities = self.build_amenities_options(
+            opex_by_bedrooms, construction_amenities, str_cribs_fee
+        )
+
+        config = UW_CONFIG_DEFAULTS.model_dump()
+        if fred is not None:
+            fred_rate = fred.value / 100
+            config["fred"] = {"value": fred_rate, "date": fred.date}
+            # Underwrite at 0.35% above the current FRED 30y fixed rate.
+            config["interest_rate"] = fred_rate + self._INTEREST_RATE_SPREAD_OVER_FRED
+        self._apply_opex_config_values(config, opex_by_bedrooms, opex_by_size)
+
+        return MarketContext.model_validate(
+            {
+                "market_name": market.market_name if market else None,
+                "market_id": market_id,
+                "market_slug": market.market_slug if market else None,
+                "opex": self._transform_opex_costs(opex_by_bedrooms, opex_by_size),
+                "construction_amenities": amenities,
+                "construction_remodeling": [
+                    r.model_dump() for r in construction_remodeling
+                ],
+                "must_have_amenity_ids": self._must_have_amenity_ids(market),
+                "config": config,
+            }
+        )
+
+    @classmethod
+    def to_template_market_context(cls, context: MarketContext) -> MarketContext:
+        """Strip a real market's figures out of a context, keeping its shape.
+
+        Used when a non-automated underwriting is created without a market. The
+        caller loads the context for ``TEMPLATE_MARKET_ID`` — so the opex and
+        amenity rows exist and are keyed to the property's bedrooms/sqft — and
+        this zeroes every amount so the analyst fills them in from scratch:
+
+        - all opex amounts (cleaning, pool/hot tub, absolute rows, the property
+          tax rate) become 0, with the keys kept so every row still renders
+        - ``must_have_amenity_ids`` is dropped; a market-less deal has none
+        - the three always-seeded amenity options (furnishings, consolidated
+          shipping, the STR Cribs fee) keep their names and ids but lose their
+          prices. The rest of the catalog passes through untouched — it is the
+          analyst's picklist, not seeded line items.
+        - market-derived config (land assumptions, appreciation) reverts to
+          defaults; the live FRED rate and the interest rate derived from it are
+          not market-specific, so they stay.
+
+        The identity fields are nulled last: the resulting underwriting is
+        genuinely market-less, not silently attached to the template market.
+        """
+        zero = Decimal("0")
+        template = context.model_copy(deep=True)
+
+        template.opex.cleaning.fee = zero
+        template.opex.cleaning.num_of_turns = zero
+        template.opex.ranged.pool_hot_tub.low = zero
+        template.opex.ranged.pool_hot_tub.high = zero
+        template.opex.property_tax_pct = zero
+        template.opex.absolute = {key: zero for key in template.opex.absolute}
+
+        template.must_have_amenity_ids = []
+        for option in template.construction_amenities:
+            if option.id in cls.SEEDED_AMENITY_OPTION_IDS:
+                option.price_tier_1 = zero
+                option.price_tier_2 = zero
+                option.price_tier_3 = zero
+
+        defaults = UW_CONFIG_DEFAULTS.model_copy()
+        defaults.fred = template.config.fred
+        defaults.interest_rate = template.config.interest_rate
+        template.config = defaults
+
+        template.market_id = None
+        template.market_name = None
+        template.market_slug = None
+        return template
+
     def prepare(
         self,
         *,
@@ -187,35 +292,25 @@ class PrepareUwDataService:
         fred,
         str_cribs_fee=None,
     ) -> PrepareUwDataResult:
-        amenities = self.build_amenities_options(
-            opex_by_bedrooms, construction_amenities, str_cribs_fee
+        context = self.prepare_market_context(
+            market=market,
+            market_id=market_id,
+            opex_by_bedrooms=opex_by_bedrooms,
+            opex_by_size=opex_by_size,
+            construction_amenities=construction_amenities,
+            construction_remodeling=construction_remodeling,
+            fred=fred,
+            str_cribs_fee=str_cribs_fee,
         )
-
-        config = UW_CONFIG_DEFAULTS.model_dump()
-        if fred is not None:
-            fred_rate = fred.value / 100
-            config["fred"] = {"value": fred_rate, "date": fred.date}
-            # Underwrite at 0.35% above the current FRED 30y fixed rate.
-            config["interest_rate"] = fred_rate + self._INTEREST_RATE_SPREAD_OVER_FRED
-        self._apply_opex_config_values(config, opex_by_bedrooms, opex_by_size)
 
         return PrepareUwDataResult.model_validate(
             {
-                "market_name": market.market_name if market else None,
-                "market_id": market_id,
-                "market_slug": market.market_slug if market else None,
+                **context.model_dump(),
                 "zillow_property": self._transform_zillow_property(
                     listing, listing_details
                 ),
                 "street": listing.address_street,
                 "city": listing.address_city,
                 "state": listing.address_state,
-                "opex": self._transform_opex_costs(opex_by_bedrooms, opex_by_size),
-                "construction_amenities": amenities,
-                "construction_remodeling": [
-                    r.model_dump() for r in construction_remodeling
-                ],
-                "must_have_amenity_ids": self._must_have_amenity_ids(market),
-                "config": config,
             }
         )

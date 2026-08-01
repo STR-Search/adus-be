@@ -121,16 +121,40 @@ def get_save_underwriting_controller(
 def get_create_underwriting_from_url_controller(
     db: AsyncSession = Depends(get_db),
 ) -> CreateUnderwritingFromUrlController:
+    from app.airbnb_public.repositories.cleaned_data_repository import (
+        CleanedDataRepository,
+    )
+    from app.airbnb_public.services.cleaned_data_service import CleanedDataService
     from app.external_api.services.zillow_property_service import (
         ZillowPropertyService,
     )
+    from app.markets.repositories.construction_repository import (
+        ConstructionAmenitiesRepository,
+    )
+    from app.markets.repositories.market_repository import MarketRepository
+    from app.markets.repositories.realtor_repository import RealtorRepository
+    from app.markets.services.market_service import MarketService
 
     repository = UnderwritingRepository(db)
     return CreateUnderwritingFromUrlController(
         CreateUnderwritingFromUrlService(
             zillow_property_service=ZillowPropertyService(),
-            save_service=SaveUnderwritingService(repository),
+            # market_service + cleaned_data_service let the save estimate
+            # forecasted revenue from Airbnb comps now that this flow carries a
+            # market_id; bedrooms come off the stored zillow_property. No
+            # listings_service — a live-fetched property has no
+            # scheduled_listings row (hence the null zpid column).
+            save_service=SaveUnderwritingService(
+                repository,
+                market_service=MarketService(
+                    MarketRepository(db),
+                    ConstructionAmenitiesRepository(db),
+                    RealtorRepository(db),
+                ),
+                cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
+            ),
             underwriting_reader=repository,
+            market_context_reader=PrepareUwDataJob.from_session(db),
         )
     )
 
@@ -353,7 +377,9 @@ async def create_underwriting_from_url(
         get_create_underwriting_from_url_controller
     ),
 ):
-    return await controller.create_from_url(url=payload.url)
+    return await controller.create_from_url(
+        url=payload.url, market_id=payload.market_id
+    )
 
 
 @router.put(
