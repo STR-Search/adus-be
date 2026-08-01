@@ -243,3 +243,106 @@ class TestPrepare:
         assert result["opex"]["absolute"] == {}
         assert result["construction_amenities"][0]["price_tier_1"] is None
         assert result["config"]["fred"] == {"value": 0.065, "date": "2024-06-01"}
+
+
+class TestToTemplateMarketContext:
+    """Market-less non-automated deals: keep every row, zero every amount."""
+
+    def _context(self, **overrides):
+        kwargs = dict(
+            market=SimpleNamespace(
+                market_name="Smoky Mountains",
+                market_slug="smoky-mountains",
+                must_have_amenities=[SimpleNamespace(id=1, amenity_name="Hot Tub")],
+            ),
+            market_id=1,
+            opex_by_bedrooms=_opex_by_bedrooms(),
+            opex_by_size=_opex_by_size(),
+            construction_amenities=[
+                FakeSchema(
+                    amenity_name="Hot Tub",
+                    id=1,
+                    location=None,
+                    notes=None,
+                    price_tier_1=8000,
+                    price_tier_2=12000,
+                    price_tier_3=15000,
+                )
+            ],
+            construction_remodeling=[FakeSchema(id=1, category="Flooring")],
+            fred=SimpleNamespace(value=6.5, date="2026-06-01"),
+            str_cribs_fee=SimpleNamespace(fee=9500),
+        )
+        kwargs.update(overrides)
+        return PrepareUwDataService().prepare_market_context(**kwargs)
+
+    def _template(self, **overrides):
+        return PrepareUwDataService.to_template_market_context(self._context(**overrides))
+
+    def test_clears_market_identity_so_the_deal_is_market_less(self):
+        template = self._template()
+        assert template.market_id is None
+        assert template.market_name is None
+        assert template.market_slug is None
+
+    def test_zeroes_every_opex_amount_but_keeps_the_rows(self):
+        source = self._context()
+        template = self._template()
+
+        # same keys as the real market, so every row still renders for the analyst
+        assert set(template.opex.absolute) == set(source.opex.absolute)
+        assert source.opex.absolute["internet"] == Decimal("100")
+        assert all(value == Decimal("0") for value in template.opex.absolute.values())
+
+        assert template.opex.cleaning.fee == Decimal("0")
+        assert template.opex.cleaning.num_of_turns == Decimal("0")
+        assert template.opex.ranged.pool_hot_tub.low == Decimal("0")
+        assert template.opex.ranged.pool_hot_tub.high == Decimal("0")
+        assert template.opex.property_tax_pct == Decimal("0")
+
+    def test_zeroes_only_the_three_seeded_amenity_options(self):
+        template = self._template()
+        by_id = {option.id: option for option in template.construction_amenities}
+
+        for option_id in PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS:
+            option = by_id[option_id]
+            assert option.price_tier_1 == Decimal("0")
+            assert option.price_tier_2 == Decimal("0")
+            assert option.price_tier_3 == Decimal("0")
+        # names survive — only the prices are stripped
+        assert by_id[PrepareUwDataService.FURNISHINGS_OPTION_ID].amenity_name == (
+            "Furnishings"
+        )
+        assert by_id[
+            PrepareUwDataService.STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID
+        ].amenity_name == "STR Cribs - Project Management"
+
+        # the rest of the catalog is the analyst's picklist, left untouched
+        assert by_id[1].price_tier_2 == Decimal("12000")
+
+    def test_drops_must_have_amenities(self):
+        assert self._context().must_have_amenity_ids == [1]
+        assert self._template().must_have_amenity_ids == []
+
+    def test_reverts_market_derived_config_but_keeps_the_live_fred_rate(self):
+        source = self._context()
+        template = self._template()
+
+        # the template market's land assumption must not leak into a
+        # market-less template
+        assert source.config.land_assumptions == 0.2
+        # appreciation is pinned to the rate the forecast falls back to for a
+        # market-less deal, not the 0.04 config default
+        assert source.config.annual_re_appreciation_pct == 0.045
+        assert template.config.annual_re_appreciation_pct == 0.0425
+        # FRED and the rate derived from it are not market-specific
+        assert template.config.fred.value == 0.065
+        assert template.config.interest_rate == source.config.interest_rate
+
+    def test_does_not_mutate_the_source_context(self):
+        source = self._context()
+        PrepareUwDataService.to_template_market_context(source)
+
+        assert source.market_id == 1
+        assert source.opex.cleaning.fee == Decimal("275")
+        assert source.must_have_amenity_ids == [1]

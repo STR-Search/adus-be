@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.external_api.services.external_api_service import ExternalApiService
-from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
+from app.iron_bank.schemas.prepare_uw import MarketContext, PrepareUwDataResult
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 from app.markets.repositories.construction_repository import (
     ConstructionAmenitiesRepository,
@@ -71,6 +71,59 @@ class PrepareUwDataJob:
             external_api_service=ExternalApiService(),
             uw_data_service=PrepareUwDataService(),
         )
+
+    async def build_market_context(
+        self,
+        *,
+        market_id: int | None,
+        bedrooms: int | None,
+        area: int | None,
+    ) -> MarketContext:
+        """Fetch everything a draft underwriting derives from its market.
+
+        Shared by both entry points: ``run`` (automated, market from the
+        listing's preset) and the non-automated create-from-URL flow, which
+        passes the analyst's ``market_id`` along with the bedrooms/sqft off the
+        live Zillow fetch.
+
+        A ``market_id`` of ``None`` means the analyst created the deal without a
+        market. Rather than return nothing we load ``TEMPLATE_MARKET_ID`` — so
+        the opex and amenity rows for this property's size exist — and hand back
+        a zeroed copy for them to fill in.
+        """
+        is_template = market_id is None
+        lookup_market_id = (
+            self.uw_data_service.TEMPLATE_MARKET_ID if is_template else market_id
+        )
+        sqft = self.uw_data_service.normalize_sqft(area)
+
+        market = await self.market_service.get_by_id(lookup_market_id)
+        opex_by_bedrooms = await self.opex_by_bedrooms_service.get_by_market_and_bedrooms(
+            bedrooms=bedrooms, market_id=lookup_market_id
+        )
+        opex_by_size = await self.opex_by_size_service.get_by_market_and_sqft(
+            sqft=sqft, market_id=lookup_market_id
+        )
+        construction_amenities = await self.construction_amenities_service.get_all()
+        construction_remodeling = await self.construction_remodeling_service.get_all()
+        str_cribs_fee = (
+            await self.str_cribs_service.get_by_area(area) if area is not None else None
+        )
+        fred = await self.external_api_service.get_30y_fixed_rate()
+
+        context = self.uw_data_service.prepare_market_context(
+            market=market,
+            market_id=lookup_market_id,
+            opex_by_bedrooms=opex_by_bedrooms,
+            opex_by_size=opex_by_size,
+            construction_amenities=construction_amenities,
+            construction_remodeling=construction_remodeling,
+            fred=fred,
+            str_cribs_fee=str_cribs_fee,
+        )
+        if is_template:
+            return self.uw_data_service.to_template_market_context(context)
+        return context
 
     async def run(self, zpid: str) -> PrepareUwDataResult:
         listing = await self.listings_service.get_by_zpid(zpid)

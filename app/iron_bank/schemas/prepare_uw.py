@@ -34,17 +34,19 @@ class PreparedOpex(BaseModel):
     property_tax_pct: Decimal | None = None
 
 
-class PrepareUwDataResult(BaseModel):
+class MarketContext(BaseModel):
+    """Everything a draft underwriting derives from its market, minus the property.
+
+    Split out of ``PrepareUwDataResult`` so both entry points can share it: the
+    automated flow keys it off the scheduled listing's preset market, while the
+    non-automated create-from-URL flow gets it from the caller's ``market_id``
+    (or a zeroed template when there is none). Carries no property data, so it
+    is independent of where the listing came from.
+    """
+
     market_name: str | None = None
     market_id: int | None = None
     market_slug: str | None = None
-    zillow_property: ZillowProperty
-    # Address parts kept alongside ``zillow_property`` rather than inside it:
-    # they land on the underwritings row's own street/city/state columns, so
-    # they're not part of the ZillowProperty response contract.
-    street: str | None = None
-    city: str | None = None
-    state: str | None = None
     opex: PreparedOpex
     construction_amenities: list[ConstructionAmenityOption]
     construction_remodeling: list[ConstructionRemodelingOption]
@@ -53,3 +55,13 @@ class PrepareUwDataResult(BaseModel):
     # optimization item per id.
     must_have_amenity_ids: list[int] = Field(default_factory=list)
     config: UwConfigSchema
+
+
+class PrepareUwDataResult(MarketContext):
+    zillow_property: ZillowProperty
+    # Address parts kept alongside ``zillow_property`` rather than inside it:
+    # they land on the underwritings row's own street/city/state columns, so
+    # they're not part of the ZillowProperty response contract.
+    street: str | None = None
+    city: str | None = None
+    state: str | None = None

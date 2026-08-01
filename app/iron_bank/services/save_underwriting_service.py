@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Any, Protocol
 
 import structlog
@@ -44,7 +45,20 @@ class CleanedDataRevenueReader(Protocol):
     ) -> RevenuePotentialPercentiles | None: ...
 
 
+class OpexByBedroomsReader(Protocol):
+    """Satisfied by ``app.markets.services.opex_service.OpexByBedroomsService``."""
+
+    async def get_by_market_and_bedrooms(
+        self, bedrooms: int, market_id: int | None = None
+    ) -> Any | None: ...
+
+
 class SaveUnderwritingService:
+    # Fallback annual RE appreciation, used when the market's own rate can't be
+    # resolved (no opex row, or no opex reader wired). 4.25% is the most common
+    # rate across seeded markets, which range 4.00%-5.50%.
+    _DEFAULT_ANNUAL_RE_APPRECIATION_PCT = Decimal("0.0425")
+
     _CHILD_FIELDS = {
         "details",
         "taxes",
@@ -61,6 +75,7 @@ class SaveUnderwritingService:
         listings_service: ListingReader | None = None,
         cleaned_data_service: CleanedDataRevenueReader | None = None,
         reference_data_service: ReferenceDataValidator | None = None,
+        opex_service: OpexByBedroomsReader | None = None,
     ):
         self.repository = repository
         self.calculator = calculator or UnderwritingCalculator()
@@ -68,6 +83,9 @@ class SaveUnderwritingService:
         self.listings_service = listings_service
         self.cleaned_data_service = cleaned_data_service
         self.reference_data_service = reference_data_service
+        # Supplies the market's annual RE appreciation rate for the forecast;
+        # without it the fallback constant applies.
+        self.opex_service = opex_service
 
     async def save(self, payload: SaveUnderwritingPayload) -> SaveUnderwritingResult:
         data = payload.model_dump(exclude_unset=True)
@@ -353,7 +371,10 @@ class SaveUnderwritingService:
         forecasted_revenue_input = ForecastedRevenueInput.model_validate(
             {
                 "co_hosting_fee_pct": 0,
-                "annual_re_appreciation_pct": 0.0425,
+                "annual_re_appreciation_pct": await self._resolve_appreciation_pct(
+                    market_id=market_id,
+                    bedrooms=bedrooms,
+                ),
                 "scenarios": {
                     "low": {"forecasted_revenue": percentiles.low},
                     "mid": {"forecasted_revenue": percentiles.mid},
@@ -370,6 +391,50 @@ class SaveUnderwritingService:
             high_forecasted_revenue=forecasted_revenue_input.scenarios.high.forecasted_revenue,
         )
         return forecasted_revenue_input
+
+    async def _resolve_appreciation_pct(
+        self,
+        *,
+        market_id: int | None,
+        bedrooms: int | None,
+    ) -> Decimal:
+        """The market's annual RE appreciation rate, keyed like the comps lookup.
+
+        ``markets.opex_by_bedrooms.appreciation`` is stored as a fraction (the
+        seeder divides the CSV percentage by 100), so it drops straight into
+        ``annual_re_appreciation_pct`` with no conversion. It is keyed by
+        (market, bedrooms) — the same key the Airbnb comps use — though in
+        practice nearly every market sets one rate across all bedroom counts.
+
+        Falls back to ``_DEFAULT_ANNUAL_RE_APPRECIATION_PCT`` whenever the rate
+        can't be resolved: no opex reader wired, no row for this
+        market/bedrooms, or a null ``appreciation`` on the row. A missing rate
+        must not cost us the whole forecast.
+        """
+        if self.opex_service is None or market_id is None or bedrooms is None:
+            return self._DEFAULT_ANNUAL_RE_APPRECIATION_PCT
+
+        opex = await self.opex_service.get_by_market_and_bedrooms(
+            bedrooms=bedrooms, market_id=market_id
+        )
+        appreciation = getattr(opex, "appreciation", None) if opex else None
+        if appreciation is None:
+            logger.info(
+                "_resolve_appreciation_pct: no market appreciation rate — using the "
+                "default",
+                market_id=market_id,
+                bedrooms=bedrooms,
+                default_pct=self._DEFAULT_ANNUAL_RE_APPRECIATION_PCT,
+            )
+            return self._DEFAULT_ANNUAL_RE_APPRECIATION_PCT
+
+        logger.debug(
+            "_resolve_appreciation_pct: using the market's appreciation rate",
+            market_id=market_id,
+            bedrooms=bedrooms,
+            appreciation_pct=appreciation,
+        )
+        return appreciation
 
     def _apply_calculated_underwriting_fields(
         self,

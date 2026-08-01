@@ -71,6 +71,15 @@ import app.iron_bank.models  # noqa: F401 — ensures all models are registered 
 router = APIRouter(prefix="/iron-bank", tags=["iron_bank"])
 
 
+def _opex_by_bedrooms_service(db: AsyncSession):
+    """Supplies the market's annual RE appreciation rate to the save/update path."""
+    from app.markets.repositories.market_repository import MarketRepository
+    from app.markets.repositories.opex_repository import OpexByBedroomsRepository
+    from app.markets.services.opex_service import OpexByBedroomsService
+
+    return OpexByBedroomsService(OpexByBedroomsRepository(db), MarketRepository(db))
+
+
 def get_deal_status_controller() -> DealStatusController:
     return DealStatusController(DealStatusService())
 
@@ -114,6 +123,7 @@ def get_save_underwriting_controller(
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
             cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
             reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
+            opex_service=_opex_by_bedrooms_service(db),
         )
     )
 
@@ -121,16 +131,41 @@ def get_save_underwriting_controller(
 def get_create_underwriting_from_url_controller(
     db: AsyncSession = Depends(get_db),
 ) -> CreateUnderwritingFromUrlController:
+    from app.airbnb_public.repositories.cleaned_data_repository import (
+        CleanedDataRepository,
+    )
+    from app.airbnb_public.services.cleaned_data_service import CleanedDataService
     from app.external_api.services.zillow_property_service import (
         ZillowPropertyService,
     )
+    from app.markets.repositories.construction_repository import (
+        ConstructionAmenitiesRepository,
+    )
+    from app.markets.repositories.market_repository import MarketRepository
+    from app.markets.repositories.realtor_repository import RealtorRepository
+    from app.markets.services.market_service import MarketService
 
     repository = UnderwritingRepository(db)
     return CreateUnderwritingFromUrlController(
         CreateUnderwritingFromUrlService(
             zillow_property_service=ZillowPropertyService(),
-            save_service=SaveUnderwritingService(repository),
+            # market_service + cleaned_data_service let the save estimate
+            # forecasted revenue from Airbnb comps now that this flow carries a
+            # market_id; bedrooms come off the stored zillow_property. No
+            # listings_service — a live-fetched property has no
+            # scheduled_listings row (hence the null zpid column).
+            save_service=SaveUnderwritingService(
+                repository,
+                market_service=MarketService(
+                    MarketRepository(db),
+                    ConstructionAmenitiesRepository(db),
+                    RealtorRepository(db),
+                ),
+                cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
+                opex_service=_opex_by_bedrooms_service(db),
+            ),
             underwriting_reader=repository,
+            market_context_reader=PrepareUwDataJob.from_session(db),
         )
     )
 
@@ -175,6 +210,7 @@ def get_update_underwriting_controller(
             reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
             user_repository=UserRepository(db),
             n8n_webhook_service=N8nWebhookService(),
+            opex_service=_opex_by_bedrooms_service(db),
         )
     )
 
@@ -353,7 +389,9 @@ async def create_underwriting_from_url(
         get_create_underwriting_from_url_controller
     ),
 ):
-    return await controller.create_from_url(url=payload.url)
+    return await controller.create_from_url(
+        url=payload.url, market_id=payload.market_id
+    )
 
 
 @router.put(
