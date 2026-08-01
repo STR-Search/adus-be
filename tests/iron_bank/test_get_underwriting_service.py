@@ -220,6 +220,7 @@ async def test_get_all_batch_hydrates_automated_zillow_into_details():
             "123": SimpleNamespace(
                 original_photos=["https://photos.zillowstatic.com/photo-1.jpg"],
                 lot_size_sqft=21780,
+                description="Cabin in the woods.",
             )
         }
     )
@@ -245,6 +246,7 @@ async def test_get_all_batch_hydrates_automated_zillow_into_details():
         "area": 1800,
         "original_photos": ["https://photos.zillowstatic.com/photo-1.jpg"],
         "lot_size_sqft": Decimal("21780"),
+        "description": "Cabin in the woods.",
     }
     # non-automated item keeps its stored zillow_property (coerced to schema)
     assert result.data[1].details.zillow_property.id == "copied"
@@ -326,6 +328,7 @@ class StubListingDetailsService:
         return SimpleNamespace(
             original_photos=["https://photos.zillowstatic.com/photo-1.jpg"],
             lot_size_sqft=21780,
+            description="Cabin in the woods.",
         )
 
 
@@ -395,6 +398,7 @@ async def test_get_edit_context_automated_hydrates_zillow_from_listing():
         "area": 1800,
         "original_photos": ["https://photos.zillowstatic.com/photo-1.jpg"],
         "lot_size_sqft": Decimal("21780"),
+        "description": "Cabin in the woods.",
     }
     furnishings = result.data.contextual.construction_amenities[0]
     assert furnishings.amenity_name == "Furnishings"

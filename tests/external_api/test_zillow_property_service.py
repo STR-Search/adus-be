@@ -29,6 +29,7 @@ SAMPLE_PROPERTY = {
             },
         }
     ],
+    "description": "Charming bungalow near downtown.",
     "year_built": 1927,  # extra field — must be tolerated, not mapped
 }
 
@@ -55,11 +56,15 @@ def test_to_zillow_property_maps_canonical_shape():
         "thumbnail": "https://photos.zillowstatic.com/fp/a-d_d.jpg",
         "price": 389000.0,
         "address": "727 N Pine St, San Antonio, TX 78202",
+        "street": "727 N Pine St",
+        "city": "San Antonio",
+        "state": "TX",
         "bedrooms": 5,
         "bathrooms": 4.0,
         "area": 4608,
         "original_photos": SAMPLE_PROPERTY["original_photos"],
         "lot_size_sqft": 10698.0,
+        "description": "Charming bungalow near downtown.",
     }
 
 

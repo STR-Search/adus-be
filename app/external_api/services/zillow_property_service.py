@@ -22,7 +22,10 @@ class ZillowPropertyService:
     and calls ``POST /api/property-details`` for a property URL. Returns the
     property mapped into the canonical ``ZillowProperty`` dict shape (the same
     shape produced by ``PrepareUwDataService._transform_zillow_property``) so
-    it can be persisted on ``uw_details.zillow_property``.
+    it can be persisted on ``uw_details.zillow_property``, plus the
+    ``street``/``city``/``state`` address parts. Those parts are not part of
+    the ``ZillowProperty`` contract — the payload builder lifts them onto the
+    underwritings row's own columns and drops them before storing the blob.
     """
 
     def __init__(self):
@@ -47,8 +50,9 @@ class ZillowPropertyService:
     async def fetch_property_details(self, *, url: str) -> dict[str, Any] | None:
         """Fetch and map a single property by its Zillow URL.
 
-        Returns the canonical ``ZillowProperty`` dict, or ``None`` if the
-        client is not configured or the request ultimately fails.
+        Returns the canonical ``ZillowProperty`` dict plus address parts, or
+        ``None`` if the client is not configured or the request ultimately
+        fails.
         """
         if not self._is_configured():
             logger.warning(
@@ -162,11 +166,15 @@ class ZillowPropertyService:
             "thumbnail": self._first_photo_url(details.original_photos),
             "price": details.price,
             "address": self._compose_address(details),
+            "street": details.street_address,
+            "city": details.city,
+            "state": details.state,
             "bedrooms": details.bedrooms,
             "bathrooms": details.bathrooms,
             "area": details.living_area,
             "original_photos": details.original_photos,
             "lot_size_sqft": details.lot_size_sqft,
+            "description": details.description,
         }
 
     @staticmethod

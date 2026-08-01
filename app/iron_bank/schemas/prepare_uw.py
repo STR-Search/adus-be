@@ -39,6 +39,12 @@ class PrepareUwDataResult(BaseModel):
     market_id: int | None = None
     market_slug: str | None = None
     zillow_property: ZillowProperty
+    # Address parts kept alongside ``zillow_property`` rather than inside it:
+    # they land on the underwritings row's own street/city/state columns, so
+    # they're not part of the ZillowProperty response contract.
+    street: str | None = None
+    city: str | None = None
+    state: str | None = None
     opex: PreparedOpex
     construction_amenities: list[ConstructionAmenityOption]
     construction_remodeling: list[ConstructionRemodelingOption]
