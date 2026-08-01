@@ -50,6 +50,11 @@ class PrepareUwDataService:
     # to_template_market_context.
     TEMPLATE_MARKET_ID = 1
 
+    # Appreciation for a market-less deal. Kept in step with
+    # SaveUnderwritingService._DEFAULT_ANNUAL_RE_APPRECIATION_PCT, which the
+    # forecast falls back to when there is no market rate to read.
+    TEMPLATE_ANNUAL_RE_APPRECIATION_PCT = 0.0425
+
     def normalize_sqft(self, area: int | None) -> int | None:
         if area is None:
             return None
@@ -244,9 +249,11 @@ class PrepareUwDataService:
           shipping, the STR Cribs fee) keep their names and ids but lose their
           prices. The rest of the catalog passes through untouched — it is the
           analyst's picklist, not seeded line items.
-        - market-derived config (land assumptions, appreciation) reverts to
-          defaults; the live FRED rate and the interest rate derived from it are
-          not market-specific, so they stay.
+        - market-derived config reverts to defaults, except appreciation, which
+          is pinned to ``TEMPLATE_ANNUAL_RE_APPRECIATION_PCT`` to match the rate
+          the forecast falls back to for a market-less deal. The live FRED rate
+          and the interest rate derived from it are not market-specific, so they
+          stay.
 
         The identity fields are nulled last: the resulting underwriting is
         genuinely market-less, not silently attached to the template market.
@@ -271,6 +278,7 @@ class PrepareUwDataService:
         defaults = UW_CONFIG_DEFAULTS.model_copy()
         defaults.fred = template.config.fred
         defaults.interest_rate = template.config.interest_rate
+        defaults.annual_re_appreciation_pct = cls.TEMPLATE_ANNUAL_RE_APPRECIATION_PCT
         template.config = defaults
 
         template.market_id = None

@@ -9,8 +9,10 @@ from app.iron_bank.services.underwriting_payload_builder import (
 )
 from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
 from app.markets.repositories.market_repository import MarketRepository
+from app.markets.repositories.opex_repository import OpexByBedroomsRepository
 from app.markets.repositories.realtor_repository import RealtorRepository
 from app.markets.services.market_service import MarketService
+from app.markets.services.opex_service import OpexByBedroomsService
 from app.workflows.prepare_uw_data_job import PrepareUwDataJob
 from app.zillow.repositories.scheduled_listings_repository import (
     ScheduledListingsRepository,
@@ -51,6 +53,9 @@ class PrepareAndSaveUnderwritingJob:
                     ScheduledListingsRepository(db)
                 ),
                 cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
+                opex_service=OpexByBedroomsService(
+                    OpexByBedroomsRepository(db), MarketRepository(db)
+                ),
             ),
             underwriting_repository=underwriting_repository,
         )

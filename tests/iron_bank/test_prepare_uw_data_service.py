@@ -328,11 +328,13 @@ class TestToTemplateMarketContext:
         source = self._context()
         template = self._template()
 
-        # market 1's land/appreciation assumptions must not leak into a
+        # the template market's land assumption must not leak into a
         # market-less template
         assert source.config.land_assumptions == 0.2
+        # appreciation is pinned to the rate the forecast falls back to for a
+        # market-less deal, not the 0.04 config default
         assert source.config.annual_re_appreciation_pct == 0.045
-        assert template.config.annual_re_appreciation_pct == 0.04
+        assert template.config.annual_re_appreciation_pct == 0.0425
         # FRED and the rate derived from it are not market-specific
         assert template.config.fred.value == 0.065
         assert template.config.interest_rate == source.config.interest_rate

@@ -62,7 +62,9 @@ def _market_context(market_id=3, **overrides):
             furnishings_high=60000,
             consolidated_shipping=18225,
             property_taxes=Decimal("0.012"),
-            internet=100,
+            # land_value and appreciation live on the bedrooms row, not by size
+            land_value=0.25,
+            appreciation=0.045,
         ),
         opex_by_size=FakeSchema(
             id=7,
@@ -70,8 +72,7 @@ def _market_context(market_id=3, **overrides):
             market_slug="smoky-mountains",
             bedrooms=None,
             sqft=4500,
-            land_value=0.25,
-            appreciation=0.045,
+            internet=100,
             utilities=350,
         ),
         construction_amenities=[

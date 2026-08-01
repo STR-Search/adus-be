@@ -51,6 +51,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         reference_data_service=None,
         user_repository=None,
         n8n_webhook_service=None,
+        opex_service=None,
     ):
         super().__init__(
             repository=repository,
@@ -59,6 +60,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
             listings_service=listings_service,
             cleaned_data_service=cleaned_data_service,
             reference_data_service=reference_data_service,
+            opex_service=opex_service,
         )
         # Only used to hydrate zillow_property for the webhook payload, the way
         # GetUnderwritingService does on the full read.

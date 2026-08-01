@@ -59,6 +59,18 @@ class FakeCleanedDataService:
         return SimpleNamespace(low=self.low, mid=self.mid, high=self.high)
 
 
+class FakeOpexByBedroomsService:
+    """Supplies markets.opex_by_bedrooms.appreciation for the forecast."""
+
+    def __init__(self, appreciation=Decimal("0.055"), row_exists=True):
+        self.row = SimpleNamespace(appreciation=appreciation) if row_exists else None
+        self.request = None
+
+    async def get_by_market_and_bedrooms(self, bedrooms, market_id=None):
+        self.request = {"bedrooms": bedrooms, "market_id": market_id}
+        return self.row
+
+
 @pytest.mark.asyncio
 async def test_save_persists_is_automated():
     repository = FakeUnderwritingRepository()
@@ -272,6 +284,96 @@ async def test_save_builds_missing_forecasted_revenue_from_airbnb_percentiles():
     assert repository.underwriting_data["l_cash_on_cash"] == Decimal("0.4339")
     assert repository.underwriting_data["m_cash_on_cash"] == Decimal("0.5120")
     assert repository.underwriting_data["h_cash_on_cash"] == Decimal("0.5901")
+
+
+def _forecast_payload(market_id=3):
+    return SaveUnderwritingPayload.model_validate(
+        {
+            "is_automated": False,
+            "zpid": "12345",
+            "market_id": market_id,
+            "purchase_price": 1000000,
+            "details": {
+                "purchase_details": {
+                    "purchase_price": 1000000,
+                    "down_payment_pct": Decimal("0.20"),
+                    "interest_rate": Decimal("0"),
+                    "mortgage_years": 10,
+                    "closing_costs_pct": Decimal("0.03"),
+                }
+            },
+            "operating_expenses": [{"expense": "Utilities", "monthly": 1000}],
+        }
+    )
+
+
+async def _saved_appreciation_pct(opex_service, market_id=3):
+    """Save with the Airbnb estimate path and report the appreciation used."""
+    repository = FakeUnderwritingRepository()
+    service = SaveUnderwritingService(
+        repository,
+        market_service=FakeMarketService(),
+        listings_service=FakeListingsService(),
+        cleaned_data_service=FakeCleanedDataService(),
+        opex_service=opex_service,
+    )
+    await service.save(_forecast_payload(market_id))
+    return repository.detail_data["forecasted_revenue"]["annual_re_appreciation_pct"]
+
+
+@pytest.mark.asyncio
+async def test_forecast_uses_the_market_appreciation_rate():
+    opex_service = FakeOpexByBedroomsService(appreciation=Decimal("0.055"))
+
+    pct = await _saved_appreciation_pct(opex_service)
+
+    # keyed the same way the Airbnb comps are: (market, bedrooms)
+    assert opex_service.request == {"bedrooms": 4, "market_id": 3}
+    # the market's own rate, not the 0.0425 fallback
+    assert pct == 0.055
+
+
+@pytest.mark.asyncio
+async def test_forecast_falls_back_when_the_market_has_no_appreciation_rate():
+    pct = await _saved_appreciation_pct(
+        FakeOpexByBedroomsService(appreciation=None)
+    )
+
+    assert pct == 0.0425
+
+
+@pytest.mark.asyncio
+async def test_forecast_falls_back_when_there_is_no_opex_row():
+    pct = await _saved_appreciation_pct(
+        FakeOpexByBedroomsService(row_exists=False)
+    )
+
+    assert pct == 0.0425
+
+
+@pytest.mark.asyncio
+async def test_forecast_falls_back_when_no_opex_service_is_wired():
+    # the fallback keeps machine-driven flows that skip the dep working
+    assert await _saved_appreciation_pct(None) == 0.0425
+
+
+@pytest.mark.asyncio
+async def test_forecast_skips_the_appreciation_lookup_without_a_market():
+    opex_service = FakeOpexByBedroomsService()
+
+    repository = FakeUnderwritingRepository()
+    service = SaveUnderwritingService(
+        repository,
+        market_service=FakeMarketService(),
+        listings_service=FakeListingsService(),
+        cleaned_data_service=FakeCleanedDataService(),
+        opex_service=opex_service,
+    )
+    await service.save(_forecast_payload(market_id=None))
+
+    # a market-less deal gets no forecast at all, so nothing to look up
+    assert opex_service.request is None
+    assert "forecasted_revenue" not in repository.detail_data
 
 
 @pytest.mark.asyncio
