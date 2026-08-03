@@ -26,13 +26,14 @@ class N8nWebhookService:
 
     def __init__(
         self,
-        url: str | None = None,
-        enabled: bool | None = None,
+        *,
+        url: str,
+        enabled: bool,
         timeout_seconds: int | None = None,
     ):
         config = get_config()
-        self.url = config.N8N_WEBHOOK_URL if url is None else url
-        self.enabled = config.N8N_WEBHOOK_ENABLED if enabled is None else enabled
+        self.url = url
+        self.enabled = enabled
         self.timeout_seconds = (
             config.N8N_WEBHOOK_TIMEOUT_SECONDS
             if timeout_seconds is None
@@ -46,7 +47,7 @@ class N8nWebhookService:
         if not self.url:
             logger.warning(
                 "external_api.n8n_webhook.not_configured",
-                detail="N8N_WEBHOOK_ENABLED is true but N8N_WEBHOOK_URL is empty",
+                detail="webhook is enabled but its URL is empty",
             )
             return False
 

@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_config
 from app.core.database import get_db
 from app.core.reference_data.repository import ReferenceDataRepository
 from app.core.reference_data.service import ReferenceDataService
@@ -194,6 +195,7 @@ def get_update_underwriting_controller(
     )
     from app.zillow.services.scheduled_listings_service import ScheduledListingsService
 
+    config = get_config()
     return UpdateUnderwritingController(
         UpdateUnderwritingService(
             UnderwritingRepository(db),
@@ -209,7 +211,14 @@ def get_update_underwriting_controller(
             cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
             reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
             user_repository=UserRepository(db),
-            n8n_webhook_service=N8nWebhookService(),
+            present_to_clients_webhook_service=N8nWebhookService(
+                url=config.N8N_WEBHOOK_PRESENT_TO_CLIENTS_URL,
+                enabled=config.N8N_WEBHOOK_PRESENT_TO_CLIENTS_ENABLED,
+            ),
+            analyst_completed_webhook_service=N8nWebhookService(
+                url=config.N8N_WEBHOOK_ANALYST_COMPLETED_URL,
+                enabled=config.N8N_WEBHOOK_ANALYST_COMPLETED_ENABLED,
+            ),
             opex_service=_opex_by_bedrooms_service(db),
         )
     )
