@@ -406,7 +406,7 @@ async def test_update_skips_revenue_when_no_bedrooms_source():
     assert "forecasted_revenue" not in repository.update_kwargs["detail_data"]
 
 
-# --- n8n automation webhook on present_to_clients -------------------------
+# --- n8n automation webhooks on deal-status transitions -------------------
 
 
 class FakeN8nWebhookService:
@@ -419,6 +419,50 @@ class FakeN8nWebhookService:
             raise RuntimeError("n8n unreachable")
         self.payloads.append(payload)
         return True
+
+
+@pytest.mark.asyncio
+async def test_update_deal_status_routes_each_webhook_status_to_its_own_service():
+    present_to_clients_webhook = FakeN8nWebhookService()
+    analyst_completed_webhook = FakeN8nWebhookService()
+    repository = FakeUnderwritingRepository(
+        _webhook_underwriting(deal_status=DealStatus.ANALYST_STARTED)
+    )
+    service = UpdateUnderwritingService(
+        repository,
+        present_to_clients_webhook_service=present_to_clients_webhook,
+        analyst_completed_webhook_service=analyst_completed_webhook,
+    )
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.ANALYST_COMPLETED,
+        actor_user_id=9,
+    )
+
+    assert len(analyst_completed_webhook.payloads) == 1
+    assert analyst_completed_webhook.payloads[0]["id"] == 42
+    assert present_to_clients_webhook.payloads == []
+
+
+@pytest.mark.asyncio
+async def test_update_deal_status_does_not_refire_analyst_completed_webhook():
+    analyst_completed_webhook = FakeN8nWebhookService()
+    repository = FakeUnderwritingRepository(
+        _webhook_underwriting(deal_status=DealStatus.ANALYST_COMPLETED)
+    )
+    service = UpdateUnderwritingService(
+        repository,
+        analyst_completed_webhook_service=analyst_completed_webhook,
+    )
+
+    await service.update_deal_status(
+        underwriting_id=42,
+        deal_status=DealStatus.ANALYST_COMPLETED,
+        actor_user_id=9,
+    )
+
+    assert analyst_completed_webhook.payloads == []
 
 
 def _webhook_underwriting(**overrides):
@@ -443,7 +487,9 @@ def _webhook_underwriting(**overrides):
 async def test_update_deal_status_fires_webhook_on_present_to_clients():
     webhook = FakeN8nWebhookService()
     repository = FakeUnderwritingRepository(_webhook_underwriting())
-    service = UpdateUnderwritingService(repository, n8n_webhook_service=webhook)
+    service = UpdateUnderwritingService(
+        repository, present_to_clients_webhook_service=webhook
+    )
 
     await service.update_deal_status(
         underwriting_id=42,
@@ -495,7 +541,9 @@ async def test_webhook_payload_hydrates_realtor_details_from_market():
     )
     repository = FakeUnderwritingRepository(_webhook_underwriting())
     service = UpdateUnderwritingService(
-        repository, market_service=market_service, n8n_webhook_service=webhook
+        repository,
+        market_service=market_service,
+        present_to_clients_webhook_service=webhook,
     )
 
     await service.update_deal_status(
@@ -568,7 +616,8 @@ async def test_webhook_payload_includes_child_tables_from_orm_rows():
         ],
     )
     service = UpdateUnderwritingService(
-        FakeUnderwritingRepository(underwriting), n8n_webhook_service=webhook
+        FakeUnderwritingRepository(underwriting),
+        present_to_clients_webhook_service=webhook,
     )
 
     await service.update_deal_status(
@@ -595,7 +644,7 @@ async def test_update_deal_status_succeeds_when_payload_build_raises():
     service = UpdateUnderwritingService(
         repository,
         market_service=FakeRealtorMarketService(fail=True),
-        n8n_webhook_service=webhook,
+        present_to_clients_webhook_service=webhook,
     )
 
     result = await service.update_deal_status(
@@ -665,7 +714,7 @@ async def test_webhook_payload_hydrates_zillow_property_for_automated_underwriti
         FakeUnderwritingRepository(underwriting),
         listings_service=listings_service,
         listing_details_service=details_service,
-        n8n_webhook_service=webhook,
+        present_to_clients_webhook_service=webhook,
     )
 
     await service.update_deal_status(
@@ -706,7 +755,7 @@ async def test_webhook_payload_hydration_overlays_existing_details():
         FakeUnderwritingRepository(underwriting),
         listings_service=FakeWebhookListingsService(_webhook_listing()),
         listing_details_service=FakeWebhookListingDetailsService(),
-        n8n_webhook_service=webhook,
+        present_to_clients_webhook_service=webhook,
     )
 
     await service.update_deal_status(
@@ -744,7 +793,7 @@ async def test_webhook_payload_keeps_stored_zillow_property_when_not_automated()
         FakeUnderwritingRepository(underwriting),
         listings_service=listings_service,
         listing_details_service=FakeWebhookListingDetailsService(),
-        n8n_webhook_service=webhook,
+        present_to_clients_webhook_service=webhook,
     )
 
     await service.update_deal_status(
@@ -766,7 +815,7 @@ async def test_webhook_payload_omits_zillow_property_when_listing_missing():
         FakeUnderwritingRepository(underwriting),
         listings_service=FakeWebhookListingsService(None),
         listing_details_service=FakeWebhookListingDetailsService(),
-        n8n_webhook_service=webhook,
+        present_to_clients_webhook_service=webhook,
     )
 
     await service.update_deal_status(
@@ -817,7 +866,7 @@ async def test_webhook_payload_resolves_reference_data_labels():
     service = UpdateUnderwritingService(
         FakeUnderwritingRepository(underwriting),
         reference_data_service=reference_data,
-        n8n_webhook_service=webhook,
+        present_to_clients_webhook_service=webhook,
     )
 
     await service.update_deal_status(
@@ -846,7 +895,7 @@ async def test_webhook_payload_labels_are_null_without_reference_data_service():
     webhook = FakeN8nWebhookService()
     service = UpdateUnderwritingService(
         FakeUnderwritingRepository(_webhook_underwriting(execution_type="light_reno")),
-        n8n_webhook_service=webhook,
+        present_to_clients_webhook_service=webhook,
     )
 
     await service.update_deal_status(
@@ -862,7 +911,9 @@ async def test_webhook_payload_labels_are_null_without_reference_data_service():
 async def test_update_deal_status_does_not_fire_for_other_statuses():
     webhook = FakeN8nWebhookService()
     repository = FakeUnderwritingRepository(_webhook_underwriting())
-    service = UpdateUnderwritingService(repository, n8n_webhook_service=webhook)
+    service = UpdateUnderwritingService(
+        repository, present_to_clients_webhook_service=webhook
+    )
 
     await service.update_deal_status(
         underwriting_id=42,
@@ -879,7 +930,9 @@ async def test_update_deal_status_does_not_refire_when_already_present_to_client
     repository = FakeUnderwritingRepository(
         _webhook_underwriting(deal_status=DealStatus.PRESENT_TO_CLIENTS)
     )
-    service = UpdateUnderwritingService(repository, n8n_webhook_service=webhook)
+    service = UpdateUnderwritingService(
+        repository, present_to_clients_webhook_service=webhook
+    )
 
     await service.update_deal_status(
         underwriting_id=42,
@@ -895,7 +948,8 @@ async def test_update_deal_status_succeeds_when_webhook_raises():
     """An n8n outage must never break an approver's status change."""
     repository = FakeUnderwritingRepository(_webhook_underwriting())
     service = UpdateUnderwritingService(
-        repository, n8n_webhook_service=FakeN8nWebhookService(fail=True)
+        repository,
+        present_to_clients_webhook_service=FakeN8nWebhookService(fail=True),
     )
 
     result = await service.update_deal_status(

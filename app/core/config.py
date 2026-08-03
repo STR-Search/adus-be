@@ -26,13 +26,13 @@ class Config(BaseSettings):
     SENTRY_ENABLED: bool = False
     SENTRY_DSN: str = ""
 
-    # n8n automation webhook, fired when an underwriting reaches
-    # present_to_clients. n8n distinguishes environments by URL path
-    # (/webhook-test/<uuid> vs /webhook/<uuid>, same uuid), so this is set per
-    # environment rather than branched on APP_ENV in code. Disabled by default
-    # so no environment starts firing events by surprise.
-    N8N_WEBHOOK_URL: str = ""
-    N8N_WEBHOOK_ENABLED: bool = False
+    # n8n automation webhooks, fired on selected deal-status transitions.
+    # Each workflow is independently configurable so it can be tested or
+    # disabled without affecting the other.
+    N8N_WEBHOOK_PRESENT_TO_CLIENTS_URL: str = ""
+    N8N_WEBHOOK_PRESENT_TO_CLIENTS_ENABLED: bool = False
+    N8N_WEBHOOK_ANALYST_COMPLETED_URL: str = ""
+    N8N_WEBHOOK_ANALYST_COMPLETED_ENABLED: bool = False
     N8N_WEBHOOK_TIMEOUT_SECONDS: int = 10
 
     # Log the original DBAPI error (message + SQL + params) at the engine
