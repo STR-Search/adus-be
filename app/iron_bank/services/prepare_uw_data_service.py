@@ -40,8 +40,8 @@ class PrepareUwDataService:
     # Display names for the three synthetic options. The opex columns they read
     # from still use the older wording (furnishings_*, consolidated_shipping).
     FURNISHINGS_OPTION_NAME = "Furniture / Decor / Essentials"
-    CONSOLIDATED_SHIPPING_OPTION_NAME = "Install/Staging/Warehousing"
-    STR_CRIBS_PROJECT_MANAGEMENT_OPTION_NAME = "Design/Project Management"
+    CONSOLIDATED_SHIPPING_OPTION_NAME = "Install / Staging / Warehousing"
+    STR_CRIBS_PROJECT_MANAGEMENT_OPTION_NAME = "Design / Project Management"
     # Seeded on every underwriting regardless of market, in this order.
     SEEDED_AMENITY_OPTION_IDS = (
         FURNISHINGS_OPTION_ID,
