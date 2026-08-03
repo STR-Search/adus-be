@@ -82,8 +82,12 @@ class FakeExternalApiService:
 
 
 class RecordingUwDataService:
+    TEMPLATE_MARKET_ID = 1
+
     def __init__(self):
         self.received = None
+        self.received_context_kwargs = None
+        self.templated = None
 
     def normalize_sqft(self, area):
         return 2000 if area is not None else None
@@ -91,6 +95,14 @@ class RecordingUwDataService:
     def prepare(self, **kwargs):
         self.received = kwargs
         return {"prepared": True}
+
+    def prepare_market_context(self, **kwargs):
+        self.received_context_kwargs = kwargs
+        return {"context": True}
+
+    def to_template_market_context(self, context):
+        self.templated = context
+        return {"context": True, "template": True}
 
 
 def _listing(preset=SimpleNamespace(market_id=3)):
@@ -165,6 +177,68 @@ async def test_skips_market_lookup_when_listing_has_no_preset():
         "bedrooms": 4,
         "market_id": None,
     }
+
+
+class TestBuildMarketContext:
+    """The non-automated create-from-URL flow's entry point: no listing, the
+    market comes from the caller."""
+
+    @pytest.mark.asyncio
+    async def test_fetches_market_data_for_the_given_market_and_property_size(self):
+        uw_service = RecordingUwDataService()
+        market = SimpleNamespace(market_name="Smokies", market_slug="smokies")
+        job, deps = _job(listing=None, market=market, uw_service=uw_service)
+
+        context = await job.build_market_context(market_id=3, bedrooms=5, area=1800)
+
+        assert context == {"context": True}
+        assert deps["market_service"].requested_id == 3
+        assert deps["opex_by_bedrooms_service"].called_with == {
+            "bedrooms": 5,
+            "market_id": 3,
+        }
+        assert deps["opex_by_size_service"].called_with == {
+            "sqft": 2000,
+            "market_id": 3,
+        }
+        assert deps["str_cribs_service"].requested_area == 1800
+        assert uw_service.received_context_kwargs["market"] is market
+        assert uw_service.received_context_kwargs["market_id"] == 3
+        # no market_id was missing, so no template transform
+        assert uw_service.templated is None
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_the_template_market_when_market_id_is_none(self):
+        uw_service = RecordingUwDataService()
+        job, deps = _job(listing=None, uw_service=uw_service)
+
+        context = await job.build_market_context(market_id=None, bedrooms=5, area=1800)
+
+        # the shape is loaded from the template market...
+        assert deps["market_service"].requested_id == 1
+        assert deps["opex_by_bedrooms_service"].called_with == {
+            "bedrooms": 5,
+            "market_id": 1,
+        }
+        assert deps["opex_by_size_service"].called_with == {
+            "sqft": 2000,
+            "market_id": 1,
+        }
+        # ...then zeroed out before it is handed back
+        assert uw_service.templated == {"context": True}
+        assert context == {"context": True, "template": True}
+
+    @pytest.mark.asyncio
+    async def test_skips_the_str_cribs_lookup_without_an_area(self):
+        job, deps = _job(listing=None)
+
+        await job.build_market_context(market_id=3, bedrooms=None, area=None)
+
+        assert deps["str_cribs_service"].requested_area is None
+        assert deps["opex_by_size_service"].called_with == {
+            "sqft": None,
+            "market_id": 3,
+        }
 
 
 def test_from_session_wires_real_services():

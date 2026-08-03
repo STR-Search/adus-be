@@ -12,9 +12,11 @@ class CreateUnderwritingFromUrlController:
     def __init__(self, service: CreateUnderwritingFromUrlService):
         self.service = service
 
-    async def create_from_url(self, *, url: str) -> SaveUnderwritingResult:
+    async def create_from_url(
+        self, *, url: str, market_id: int | None = None
+    ) -> SaveUnderwritingResult:
         try:
-            return await self.service.create(url=url)
+            return await self.service.create(url=url, market_id=market_id)
         except UnderwritingAlreadyExistsError as e:
             raise HTTPException(
                 status_code=409,
