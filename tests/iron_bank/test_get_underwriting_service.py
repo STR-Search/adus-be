@@ -401,7 +401,7 @@ async def test_get_edit_context_automated_hydrates_zillow_from_listing():
         "description": "Cabin in the woods.",
     }
     furnishings = result.data.contextual.construction_amenities[0]
-    assert furnishings.amenity_name == "Furnishings"
+    assert furnishings.amenity_name == "Furniture / Decor / Essentials"
     assert furnishings.price_tier_1 == Decimal("1000")
     assert furnishings.price_tier_3 == Decimal("2000")
 
@@ -449,7 +449,7 @@ async def test_get_edit_context_non_automated_reads_stored_zillow_property():
     assert zillow_property.price == Decimal("510000")
     # furnishings still resolve from opex via the stored bedrooms count
     furnishings = result.data.contextual.construction_amenities[0]
-    assert furnishings.amenity_name == "Furnishings"
+    assert furnishings.amenity_name == "Furniture / Decor / Essentials"
     assert furnishings.price_tier_1 == Decimal("1000")
 
 
@@ -463,5 +463,5 @@ async def test_get_edit_context_no_zpid_yields_no_zillow_property():
     # no zpid → nothing hydrated, details stays absent
     assert result.data.underwriting.details is None
     furnishings = result.data.contextual.construction_amenities[0]
-    assert furnishings.amenity_name == "Furnishings"
+    assert furnishings.amenity_name == "Furniture / Decor / Essentials"
     assert furnishings.price_tier_1 is None

@@ -213,7 +213,10 @@ class TestWithMarketContext:
 
     def test_seeds_operating_expenses_from_market_opex(self):
         payload = self._build()
-        by_expense = {item.expense_name: item.monthly_amount for item in payload.operating_expenses}
+        by_expense = {
+            item.expense_name: item.monthly_amount
+            for item in payload.operating_expenses
+        }
 
         assert by_expense["Cleaning"] == Decimal("10450")  # 275 x 38 turns
         assert by_expense["Pool/Hot Tub Maintenance"] == Decimal("1200")
@@ -240,18 +243,20 @@ class TestWithMarketContext:
         payload = self._build()
 
         assert [item.category for item in payload.optimization_list] == [
-            "Furnishings",
-            "Consolidated Shipping",
-            "STR Cribs - Project Management",
+            "Furniture / Decor / Essentials",
+            "Install/Staging/Warehousing",
+            "Design/Project Management",
             "Hot Tub",
         ]
         by_category = {item.category: item for item in payload.optimization_list}
         # tier-2 pricing, matching the automated flow
-        assert by_category["Furnishings"].total_price == Decimal("40000")
-        assert by_category["Consolidated Shipping"].total_price == Decimal("18225")
-        assert by_category["STR Cribs - Project Management"].total_price == Decimal(
-            "9500"
+        assert by_category["Furniture / Decor / Essentials"].total_price == Decimal(
+            "40000"
         )
+        assert by_category["Install/Staging/Warehousing"].total_price == Decimal(
+            "18225"
+        )
+        assert by_category["Design/Project Management"].total_price == Decimal("9500")
         assert by_category["Hot Tub"].total_price == Decimal("12000")
         assert by_category["Hot Tub"].tier == "Mid"
         assert by_category["Hot Tub"].metric == "flat"
@@ -291,7 +296,10 @@ class TestWithTemplateMarketContext:
 
     def test_seeds_every_opex_row_at_zero(self):
         payload = self._build()
-        by_expense = {item.expense_name: item.monthly_amount for item in payload.operating_expenses}
+        by_expense = {
+            item.expense_name: item.monthly_amount
+            for item in payload.operating_expenses
+        }
 
         # same row set as a real market...
         assert set(by_expense) == {
@@ -309,9 +317,9 @@ class TestWithTemplateMarketContext:
 
         # must-have amenities belong to a market, so a market-less deal has none
         assert [item.category for item in payload.optimization_list] == [
-            "Furnishings",
-            "Consolidated Shipping",
-            "STR Cribs - Project Management",
+            "Furniture / Decor / Essentials",
+            "Install/Staging/Warehousing",
+            "Design/Project Management",
         ]
         for item in payload.optimization_list:
             assert item.total_price == Decimal("0")
