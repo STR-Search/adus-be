@@ -37,6 +37,11 @@ class PrepareUwDataService:
     FURNISHINGS_OPTION_ID = 0
     CONSOLIDATED_SHIPPING_OPTION_ID = -1
     STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID = -2
+    # Display names for the three synthetic options. The opex columns they read
+    # from still use the older wording (furnishings_*, consolidated_shipping).
+    FURNISHINGS_OPTION_NAME = "Furniture / Decor / Essentials"
+    CONSOLIDATED_SHIPPING_OPTION_NAME = "Install/Staging/Warehousing"
+    STR_CRIBS_PROJECT_MANAGEMENT_OPTION_NAME = "Design/Project Management"
     # Seeded on every underwriting regardless of market, in this order.
     SEEDED_AMENITY_OPTION_IDS = (
         FURNISHINGS_OPTION_ID,
@@ -132,7 +137,7 @@ class PrepareUwDataService:
         opex_by_bedrooms, construction_amenities: list, str_cribs_fee=None
     ) -> list[dict]:
         furnishings = {
-            "amenity_name": "Furnishings",
+            "amenity_name": PrepareUwDataService.FURNISHINGS_OPTION_NAME,
             "id": PrepareUwDataService.FURNISHINGS_OPTION_ID,
             "location": None,
             "notes": None,
@@ -147,7 +152,7 @@ class PrepareUwDataService:
             ),
         }
         consolidated_shipping = {
-            "amenity_name": "Consolidated Shipping",
+            "amenity_name": PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_NAME,
             "id": PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID,
             "location": None,
             "notes": None,
@@ -162,7 +167,9 @@ class PrepareUwDataService:
             ),
         }
         str_cribs_project_management = {
-            "amenity_name": "STR Cribs - Project Management",
+            "amenity_name": (
+                PrepareUwDataService.STR_CRIBS_PROJECT_MANAGEMENT_OPTION_NAME
+            ),
             "id": PrepareUwDataService.STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID,
             "location": None,
             "notes": None,

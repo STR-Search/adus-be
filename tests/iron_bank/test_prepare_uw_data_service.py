@@ -169,7 +169,7 @@ class TestPrepare:
     def test_prepends_furnishings_amenity_from_opex(self):
         amenities = self._prepare().model_dump()["construction_amenities"]
         assert amenities[0] == {
-            "amenity_name": "Furnishings",
+            "amenity_name": "Furniture / Decor / Essentials",
             "id": 0,
             "location": None,
             "notes": None,
@@ -182,7 +182,7 @@ class TestPrepare:
     def test_prepends_consolidated_shipping_amenity_from_opex(self):
         amenities = self._prepare().model_dump()["construction_amenities"]
         assert amenities[1] == {
-            "amenity_name": "Consolidated Shipping",
+            "amenity_name": "Install/Staging/Warehousing",
             "id": -1,
             "location": None,
             "notes": None,
@@ -277,7 +277,9 @@ class TestToTemplateMarketContext:
         return PrepareUwDataService().prepare_market_context(**kwargs)
 
     def _template(self, **overrides):
-        return PrepareUwDataService.to_template_market_context(self._context(**overrides))
+        return PrepareUwDataService.to_template_market_context(
+            self._context(**overrides)
+        )
 
     def test_clears_market_identity_so_the_deal_is_market_less(self):
         template = self._template()
@@ -311,11 +313,14 @@ class TestToTemplateMarketContext:
             assert option.price_tier_3 == Decimal("0")
         # names survive — only the prices are stripped
         assert by_id[PrepareUwDataService.FURNISHINGS_OPTION_ID].amenity_name == (
-            "Furnishings"
+            "Furniture / Decor / Essentials"
         )
-        assert by_id[
-            PrepareUwDataService.STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID
-        ].amenity_name == "STR Cribs - Project Management"
+        assert (
+            by_id[
+                PrepareUwDataService.STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID
+            ].amenity_name
+            == "Design/Project Management"
+        )
 
         # the rest of the catalog is the analyst's picklist, left untouched
         assert by_id[1].price_tier_2 == Decimal("12000")
