@@ -74,18 +74,14 @@ async def test_send_returns_false_when_n8n_rejects(monkeypatch, no_backoff):
     assert len(attempts) == module._MAX_ATTEMPTS
 
 
-def test_falls_back_to_config_when_args_omitted(monkeypatch):
+def test_uses_shared_timeout_config_when_timeout_is_omitted(monkeypatch):
     monkeypatch.setattr(
         module,
         "get_config",
-        lambda: SimpleNamespace(
-            N8N_WEBHOOK_URL="https://config.test/hook",
-            N8N_WEBHOOK_ENABLED=True,
-            N8N_WEBHOOK_TIMEOUT_SECONDS=7,
-        ),
+        lambda: SimpleNamespace(N8N_WEBHOOK_TIMEOUT_SECONDS=7),
     )
 
-    service = N8nWebhookService()
+    service = N8nWebhookService(url="https://config.test/hook", enabled=True)
 
     assert service.url == "https://config.test/hook"
     assert service.enabled is True

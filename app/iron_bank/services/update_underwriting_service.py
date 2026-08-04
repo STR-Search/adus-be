@@ -50,7 +50,8 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         cleaned_data_service=None,
         reference_data_service=None,
         user_repository=None,
-        n8n_webhook_service=None,
+        present_to_clients_webhook_service=None,
+        analyst_completed_webhook_service=None,
         opex_service=None,
     ):
         super().__init__(
@@ -69,7 +70,8 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         # Optional by design: only the HTTP deal-status path wires this in, so
         # machine-driven flows (e.g. ReconcileUnderwritingPriceJob) can never
         # fire a client-facing automation.
-        self.n8n_webhook_service = n8n_webhook_service
+        self.present_to_clients_webhook_service = present_to_clients_webhook_service
+        self.analyst_completed_webhook_service = analyst_completed_webhook_service
 
     async def update(
         self,
@@ -232,18 +234,19 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         # Only now is the row committed — safe to announce it externally. The
         # previous-status check stops a repeated PATCH (double-click, client
         # retry) from notifying clients twice about the same deal.
-        if (
-            deal_status == DealStatus.PRESENT_TO_CLIENTS
-            and previous_status != DealStatus.PRESENT_TO_CLIENTS
-        ):
-            await self._trigger_n8n_webhook(underwriting)
+        webhook_service = {
+            DealStatus.PRESENT_TO_CLIENTS: self.present_to_clients_webhook_service,
+            DealStatus.ANALYST_COMPLETED: self.analyst_completed_webhook_service,
+        }.get(deal_status)
+        if previous_status != deal_status and webhook_service is not None:
+            await self._trigger_n8n_webhook(underwriting, webhook_service)
 
         return UpdateDealStatusResult(
             underwriting_id=underwriting.id,
             deal_status=underwriting.deal_status,
         )
 
-    async def _trigger_n8n_webhook(self, underwriting) -> None:
+    async def _trigger_n8n_webhook(self, underwriting, webhook_service) -> None:
         """POST full underwriting data (parent + children + resolved refs) to n8n webhook.
 
         Never raises. The status write has already committed, so an n8n outage
@@ -254,9 +257,6 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         ``GetUnderwritingService`` returns for the full read, including child
         tables (details, taxes, opex, comps) and resolved user/realtor references.
         """
-        if self.n8n_webhook_service is None:
-            return
-
         # The whole body is guarded, not just the send: building the payload
         # touches the DB and several schemas, and a failure there must not 500
         # a status change that has already committed.
@@ -347,7 +347,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
 
             # mode="json" keeps Decimal as a string ("525000.00") rather than
             # coercing to float the way jsonable_encoder would.
-            await self.n8n_webhook_service.send(payload=row.model_dump(mode="json"))
+            await webhook_service.send(payload=row.model_dump(mode="json"))
         except Exception:
             logger.exception(
                 "iron_bank.deal_status.webhook_failed",
