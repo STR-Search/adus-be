@@ -1,8 +1,6 @@
 from datetime import datetime
 
-from datetime import datetime
-
-from sqlalchemy import DateTime, Index, DateTime, Integer, String, text, text
+from sqlalchemy import DateTime, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,6 +26,7 @@ class MarketKeysMaster(Base):
     market_name_current: Mapped[str | None] = mapped_column(String)
     market_status: Mapped[str | None] = mapped_column(String)
     analyst_owner: Mapped[str | None] = mapped_column(String)
+    market_notes: Mapped[str | None] = mapped_column(Text)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     map_config: Mapped[dict | None] = mapped_column(JSONB)
     filters: Mapped[dict | None] = mapped_column(JSONB)

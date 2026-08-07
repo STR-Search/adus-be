@@ -93,6 +93,7 @@ class MarketService:
             market_name_current=market.market_name_current,
             market_status=market.market_status,
             analyst_owner=market.analyst_owner,
+            market_notes=market.market_notes,
             map_config=market.map_config,
             filters=market.filters,
             must_have_amenities=self._resolve_amenities(market.must_have_amenities, amenity_name_map),
