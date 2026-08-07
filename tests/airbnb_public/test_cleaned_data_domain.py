@@ -77,3 +77,51 @@ async def test_cleaned_data_service_returns_none_when_missing() -> None:
 
     assert repository.seen_id == 99
     assert data is None
+
+
+class StubPercentilesRepository:
+    def __init__(self, percentiles: tuple):
+        self.percentiles = percentiles
+
+    async def get_by_id(self, cleaned_data_id: int) -> CleanedData | None:
+        return None
+
+    async def get_revenue_potential_percentiles(self, *, key_market, bedrooms):
+        return self.percentiles
+
+
+@pytest.mark.asyncio
+async def test_revenue_percentiles_returns_values_when_all_finite() -> None:
+    service = CleanedDataService(StubPercentilesRepository((100.0, 200.0, 300.0)))
+
+    result = await service.get_revenue_potential_percentiles(
+        key_market="Indianapolis IN - FINAL",
+        bedrooms=4,
+    )
+
+    assert (result.low, result.mid, result.high) == (100.0, 200.0, 300.0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "percentiles",
+    [
+        (100.0, float("nan"), float("nan")),
+        (100.0, 200.0, float("inf")),
+        (float("nan"), float("nan"), float("nan")),
+        (100.0, None, 300.0),
+    ],
+)
+async def test_revenue_percentiles_returns_none_for_non_finite_values(
+    percentiles: tuple,
+) -> None:
+    """Postgres float columns can hold NaN, which percentile_cont propagates;
+    non-finite values must never reach the Pydantic underwriting schemas."""
+    service = CleanedDataService(StubPercentilesRepository(percentiles))
+
+    result = await service.get_revenue_potential_percentiles(
+        key_market="Indianapolis IN - FINAL",
+        bedrooms=4,
+    )
+
+    assert result is None
