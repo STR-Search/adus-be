@@ -38,13 +38,18 @@ class BatchPrepareAndSaveUnderwritingsJob:
         skipped_no_purchase_price = 0
         failed = 0
 
-        for listing in listings:
+        # Read the zpids up front: a rollback below expires every ORM instance
+        # in the session, and re-reading an expired attribute would trigger a
+        # lazy load outside the async context (MissingGreenlet).
+        zpids = [listing.zpid for listing in listings]
+
+        for zpid in zpids:
             try:
-                result = await self.prepare_and_save_job.run(listing.zpid)
+                result = await self.prepare_and_save_job.run(zpid)
             except Exception as exc:
                 logger.exception(
                     "iron_bank.batch_prepare.listing_failed",
-                    zpid=listing.zpid,
+                    zpid=zpid,
                 )
                 # A failed listing may have aborted the transaction; roll back
                 # so the remaining listings run on a clean session.
@@ -52,7 +57,7 @@ class BatchPrepareAndSaveUnderwritingsJob:
                 failed += 1
                 results.append(
                     {
-                        "zpid": listing.zpid,
+                        "zpid": zpid,
                         "status": "failed",
                         "error": str(exc),
                     }
