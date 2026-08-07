@@ -92,6 +92,7 @@ def upgrade() -> None:
         sa.Column("market_name_current", sa.String(), nullable=True),
         sa.Column("market_status", sa.String(), nullable=True),
         sa.Column("analyst_owner", sa.String(), nullable=True),
+        sa.Column("market_notes", sa.Text(), nullable=True),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("map_config", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("filters", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
