@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import Float, cast, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.airbnb_public.models.cleaned_data import CleanedData
@@ -35,6 +35,10 @@ class CleanedDataRepository:
             .where(CleanedData.key_market == key_market)
             .where(CleanedData.bedrooms == bedrooms)
             .where(CleanedData.revenue_potential.is_not(None))
+            # Postgres float columns can hold NaN, and NaN sorts above every
+            # real value — so percentile_cont returns NaN for the upper
+            # percentiles unless those rows are excluded here.
+            .where(CleanedData.revenue_potential != cast(literal("NaN"), Float))
         )
         row = result.one()
         return row.low, row.mid, row.high

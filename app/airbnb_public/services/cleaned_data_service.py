@@ -1,3 +1,4 @@
+import math
 from typing import Protocol
 
 from app.airbnb_public.models.cleaned_data import CleanedData
@@ -38,6 +39,8 @@ class CleanedDataService:
             key_market=key_market,
             bedrooms=bedrooms,
         )
-        if low is None or mid is None or high is None:
+        # NaN/inf can survive the aggregate when the source column holds them,
+        # and they are not valid downstream (Pydantic rejects non-finite floats).
+        if any(v is None or not math.isfinite(v) for v in (low, mid, high)):
             return None
         return RevenuePotentialPercentiles(low=low, mid=mid, high=high)
