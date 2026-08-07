@@ -161,6 +161,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                 "pool_type": "in_ground",
                 "primary_guest_avatar": "family_stays",
                 "loom_vid": "https://loom.com/share/abc123",
+                "deal_pitch": "https://loom.com/share/pitch456",
                 "video_walkthrough": "https://youtube.com/watch?v=xwalk001",
                 "survey": "https://typeform.com/survey/deal-001",
                 "note": (
