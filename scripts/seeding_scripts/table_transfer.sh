@@ -8,12 +8,16 @@
 
 set -euo pipefail
 
-SCHEMA="zillow"
+SCHEMA="iron_bank"
 
 # Add tables in dependency order: referenced/parent tables first.
 TABLES=(
-  "scheduled_listings"
-  "scheduled_listing_details"
+  "underwritings"
+"uw_comp_sets"
+"uw_details"
+"uw_operating_expenses"
+"uw_optimization_items"
+"uw_taxes"
 )
 
 DUMP_DIR="$(mktemp -d)"
