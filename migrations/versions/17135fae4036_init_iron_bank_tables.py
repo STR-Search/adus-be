@@ -91,6 +91,7 @@ def upgrade() -> None:
         sa.Column("primary_guest_avatar", sa.String(length=50), nullable=True),
         sa.Column("listing_url", sa.Text(), nullable=True),
         sa.Column("loom_vid", sa.Text(), nullable=True),
+        sa.Column("deal_pitch", sa.Text(), nullable=True),
         sa.Column("video_walkthrough", sa.Text(), nullable=True),
         sa.Column("survey", sa.Text(), nullable=True),
         sa.Column("note", sa.Text(), nullable=True),

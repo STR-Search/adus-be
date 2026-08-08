@@ -67,6 +67,7 @@ class UpdateUnderwritingPayload(BaseModel):
     primary_guest_avatar: str | None = None
     listing_url: str | None = None
     loom_vid: str | None = None
+    deal_pitch: str | None = None
     video_walkthrough: str | None = None
     survey: str | None = None
     note: str | None = None

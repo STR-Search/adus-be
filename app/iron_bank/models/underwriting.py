@@ -139,6 +139,7 @@ class Underwriting(Base):
 
     listing_url = Column(Text, nullable=True)
     loom_vid = Column(Text, nullable=True)
+    deal_pitch = Column(Text, nullable=True)
     video_walkthrough = Column(Text, nullable=True)
     survey = Column(Text, nullable=True)
     note = Column(Text, nullable=True)
