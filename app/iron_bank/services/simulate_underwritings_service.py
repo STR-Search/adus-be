@@ -274,9 +274,10 @@ class SimulateUnderwritingsService(GetUnderwritingService):
     ) -> None:
         """In-place sort mirroring the SQL path's semantics.
 
-        Postgres null placement (nulls sort as largest: first on DESC, last on
-        ASC) and the ``id DESC`` tiebreaker, so switching simulation on/off
-        never reshuffles rows the simulation didn't affect.
+        Matches the repository's ``nullslast()`` in both directions (rows
+        missing the metric always sort to the bottom) and the ``id DESC``
+        tiebreaker, so switching simulation on/off never reshuffles rows the
+        simulation didn't affect.
         """
 
         def sort_value(row: _SimulatedRow) -> Decimal | int | None:
@@ -287,10 +288,10 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         def key(row: _SimulatedRow):
             value = sort_value(row)
             if value is None:
-                # Nulls as largest: rank 0 on DESC (first), 2 on ASC (last).
-                null_rank, sortable = (0 if descending else 2), Decimal("0")
+                # Nulls last regardless of direction: rank 1 sorts after 0.
+                null_rank, sortable = 1, Decimal("0")
             else:
-                null_rank, sortable = 1, (-value if descending else value)
+                null_rank, sortable = 0, (-value if descending else value)
             return (null_rank, sortable, -row.id)
 
         rows.sort(key=key)
