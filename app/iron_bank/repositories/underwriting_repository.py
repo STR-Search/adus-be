@@ -101,8 +101,14 @@ class UnderwritingRepository:
         # resolves a known column. id is appended as a stable tiebreaker for
         # the nullable/non-unique sort columns, keeping pagination deterministic.
         sort_column = getattr(Underwriting, sort_by.value)
+        # nullslast() in BOTH directions: Postgres treats NULL as larger than
+        # any value, so a bare DESC defaults to NULLS FIRST and buries the real
+        # top performers under blank rows. Rows missing the metric belong at the
+        # bottom whichever way the column is sorted.
         primary = (
-            sort_column.desc() if sort_order == SortOrder.DESC else sort_column.asc()
+            sort_column.desc().nullslast()
+            if sort_order == SortOrder.DESC
+            else sort_column.asc().nullslast()
         )
 
         result = await self.db.execute(

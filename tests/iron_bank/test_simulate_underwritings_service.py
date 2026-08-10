@@ -321,8 +321,8 @@ async def test_sorts_on_simulated_values_with_null_and_stored_fallbacks():
         sort_order=SortOrder.DESC,
     )
 
-    # Postgres DESC semantics: nulls first, then values descending.
-    assert [row.id for row in result.data] == [2, 3, 1]
+    # nullslast() in both directions: values descending, then nulls.
+    assert [row.id for row in result.data] == [3, 1, 2]
 
     result = await _get_all_simulated(
         service,
