@@ -1,4 +1,5 @@
 import math
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -15,6 +16,33 @@ from app.iron_bank.models import (
     UnderwritingOptimizationItem,
     UnderwritingTax,
 )
+
+
+def _date_range_conditions(column, minimum: date | None, maximum: date | None) -> list:
+    """Half-open day-range conditions for a ``timestamptz`` column.
+
+    The bounds arrive as calendar dates but the columns store instants, so a
+    naive ``column <= maximum`` would compare against midnight and silently
+    drop everything later that day — making min == max return nothing. The
+    upper bound is therefore exclusive-of-the-next-day (``< max + 1 day``),
+    which makes ``max`` fully inclusive and ``min == max`` mean "that one day".
+
+    Bounds are anchored to UTC explicitly rather than left as bare dates for
+    Postgres to cast, so results don't shift with the session's TimeZone.
+    """
+    conditions = []
+    if minimum is not None:
+        conditions.append(
+            column >= datetime.combine(minimum, time.min, tzinfo=timezone.utc)
+        )
+    if maximum is not None:
+        conditions.append(
+            column
+            < datetime.combine(
+                maximum + timedelta(days=1), time.min, tzinfo=timezone.utc
+            )
+        )
+    return conditions
 
 
 class UnderwritingRepository:
@@ -52,6 +80,10 @@ class UnderwritingRepository:
         max_total_oop: Decimal | None = None,
         min_l_cash_on_cash: Decimal | None = None,
         max_l_cash_on_cash: Decimal | None = None,
+        min_created_at: date | None = None,
+        max_created_at: date | None = None,
+        min_deal_approved: date | None = None,
+        max_deal_approved: date | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
     ) -> tuple[list[Underwriting], int, int]:
@@ -90,6 +122,15 @@ class UnderwritingRepository:
             query = query.where(Underwriting.l_cash_on_cash >= min_l_cash_on_cash)
         if max_l_cash_on_cash is not None:
             query = query.where(Underwriting.l_cash_on_cash <= max_l_cash_on_cash)
+        for condition in (
+            *_date_range_conditions(
+                Underwriting.created_at, min_created_at, max_created_at
+            ),
+            *_date_range_conditions(
+                Underwriting.deal_approved, min_deal_approved, max_deal_approved
+            ),
+        ):
+            query = query.where(condition)
 
         total: int = (
             await self.db.execute(select(func.count()).select_from(query.subquery()))
@@ -137,6 +178,10 @@ class UnderwritingRepository:
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
+        min_created_at: date | None = None,
+        max_created_at: date | None = None,
+        min_deal_approved: date | None = None,
+        max_deal_approved: date | None = None,
     ) -> list[Any]:
         """Lean full-set fetch of per-row simulation inputs.
 
@@ -199,6 +244,17 @@ class UnderwritingRepository:
             query = query.where(Underwriting.purchase_price >= min_purchase_price)
         if max_purchase_price is not None:
             query = query.where(Underwriting.purchase_price <= max_purchase_price)
+        # Dates are untouched by simulation, so they filter in SQL like the
+        # non-simulated path rather than in Python afterwards.
+        for condition in (
+            *_date_range_conditions(
+                Underwriting.created_at, min_created_at, max_created_at
+            ),
+            *_date_range_conditions(
+                Underwriting.deal_approved, min_deal_approved, max_deal_approved
+            ),
+        ):
+            query = query.where(condition)
 
         result = await self.db.execute(query)
         return list(result.all())

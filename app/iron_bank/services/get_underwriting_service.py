@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -164,6 +165,10 @@ class GetUnderwritingService:
         max_total_oop: Decimal | None = None,
         min_l_cash_on_cash: Decimal | None = None,
         max_l_cash_on_cash: Decimal | None = None,
+        min_created_at: date | None = None,
+        max_created_at: date | None = None,
+        min_deal_approved: date | None = None,
+        max_deal_approved: date | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
     ) -> GetUnderwritingsResult:
@@ -182,6 +187,10 @@ class GetUnderwritingService:
             max_total_oop=max_total_oop,
             min_l_cash_on_cash=min_l_cash_on_cash,
             max_l_cash_on_cash=max_l_cash_on_cash,
+            min_created_at=min_created_at,
+            max_created_at=max_created_at,
+            min_deal_approved=min_deal_approved,
+            max_deal_approved=max_deal_approved,
             sort_by=sort_by,
             sort_order=sort_order,
         )

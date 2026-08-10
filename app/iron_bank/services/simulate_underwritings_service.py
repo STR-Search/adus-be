@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -83,6 +84,10 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         max_total_oop: Decimal | None = None,
         min_l_cash_on_cash: Decimal | None = None,
         max_l_cash_on_cash: Decimal | None = None,
+        min_created_at: date | None = None,
+        max_created_at: date | None = None,
+        min_deal_approved: date | None = None,
+        max_deal_approved: date | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
         interest_rate: Decimal | None = None,
@@ -97,6 +102,10 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             search=search,
             min_purchase_price=min_purchase_price,
             max_purchase_price=max_purchase_price,
+            min_created_at=min_created_at,
+            max_created_at=max_created_at,
+            min_deal_approved=min_deal_approved,
+            max_deal_approved=max_deal_approved,
         )
 
         simulated_rows = [
