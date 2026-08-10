@@ -11,12 +11,9 @@ class Config(BaseSettings):
     CORS_ORIGINS: str = "*"
     FRED_API_KEY: str = ""
 
-    # Zillow property-details API (Supabase-authenticated)
+    # Zillow property-details API (API-key authenticated)
     ZILLOW_API_BASE: str = ""
-    SUPABASE_URL: str = ""
-    SUPABASE_ANON_KEY: str = ""
-    SERVICE_EMAIL: str = ""
-    SERVICE_PASSWORD: str = ""
+    ZILLOW_API_KEY: str = ""
 
     # Clerk JWT verification
     CLERK_ISSUER: str = ""  # e.g. https://intent-snapper-24.clerk.accounts.dev

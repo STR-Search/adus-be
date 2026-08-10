@@ -11,15 +11,14 @@ logger = structlog.get_logger(__name__)
 
 # Scraping upstream is synchronous and can take a while.
 _REQUEST_TIMEOUT_SECONDS = 180
-_AUTH_TIMEOUT_SECONDS = 30
 _MAX_ATTEMPTS = 3
 
 
 class ZillowPropertyService:
     """Client for the external Zillow property-details API.
 
-    Authenticates against Supabase with a service account (password grant)
-    and calls ``POST /api/property-details`` for a property URL. Returns the
+    Authenticates with a static API key and calls
+    ``POST /api/property-details`` for a property URL. Returns the
     property mapped into the canonical ``ZillowProperty`` dict shape (the same
     shape produced by ``PrepareUwDataService._transform_zillow_property``) so
     it can be persisted on ``uw_details.zillow_property``, plus the
@@ -31,21 +30,10 @@ class ZillowPropertyService:
     def __init__(self):
         config = get_config()
         self.api_base = config.ZILLOW_API_BASE.rstrip("/")
-        self.supabase_url = config.SUPABASE_URL.rstrip("/")
-        self.supabase_anon_key = config.SUPABASE_ANON_KEY
-        self.service_email = config.SERVICE_EMAIL
-        self.service_password = config.SERVICE_PASSWORD
+        self.api_key = config.ZILLOW_API_KEY
 
     def _is_configured(self) -> bool:
-        return all(
-            (
-                self.api_base,
-                self.supabase_url,
-                self.supabase_anon_key,
-                self.service_email,
-                self.service_password,
-            )
-        )
+        return all((self.api_base, self.api_key))
 
     async def fetch_property_details(self, *, url: str) -> dict[str, Any] | None:
         """Fetch and map a single property by its Zillow URL.
@@ -61,56 +49,20 @@ class ZillowPropertyService:
             )
             return None
 
-        access_token = await self._get_access_token()
-        if access_token is None:
-            return None
-
-        details = await self._post_property_details(url=url, access_token=access_token)
+        details = await self._post_property_details(url=url)
         if details is None:
             return None
 
         return self._to_zillow_property(details, url=url)
 
-    async def _get_access_token(self) -> str | None:
-        token_url = f"{self.supabase_url}/auth/v1/token?grant_type=password"
-        for attempt in range(_MAX_ATTEMPTS):
-            try:
-                async with httpx.AsyncClient(timeout=_AUTH_TIMEOUT_SECONDS) as client:
-                    response = await client.post(
-                        token_url,
-                        headers={
-                            "apikey": self.supabase_anon_key,
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "email": self.service_email,
-                            "password": self.service_password,
-                        },
-                    )
-                if response.status_code == 200:
-                    token = response.json().get("access_token")
-                    if token:
-                        return token
-                logger.warning(
-                    "external_api.zillow_property.auth_failed",
-                    status_code=response.status_code,
-                    attempt=attempt,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "external_api.zillow_property.auth_error",
-                    error=str(exc),
-                    attempt=attempt,
-                )
-            await asyncio.sleep(0.4 + attempt * 0.4)
-
-        logger.error("external_api.zillow_property.auth_exhausted")
-        return None
-
     async def _post_property_details(
-        self, *, url: str, access_token: str
+        self, *, url: str
     ) -> ZillowPropertyDetails | None:
         endpoint = f"{self.api_base}/api/property-details"
+        headers = {
+            "X-API-KEY": self.api_key,
+            "Content-Type": "application/json",
+        }
         for attempt in range(_MAX_ATTEMPTS):
             try:
                 async with httpx.AsyncClient(
@@ -118,14 +70,19 @@ class ZillowPropertyService:
                 ) as client:
                     response = await client.post(
                         endpoint,
-                        headers={
-                            "Authorization": f"Bearer {access_token}",
-                            "Content-Type": "application/json",
-                        },
+                        headers=headers,
                         json={"url": url},
                     )
                 if response.status_code == 200:
                     return self._first_property(response.json(), url=url)
+                if response.status_code in (401, 403):
+                    # A static key won't heal on retry — fail fast.
+                    logger.error(
+                        "external_api.zillow_property.auth_rejected",
+                        status_code=response.status_code,
+                        url=url,
+                    )
+                    return None
                 logger.warning(
                     "external_api.zillow_property.fetch_failed",
                     status_code=response.status_code,
