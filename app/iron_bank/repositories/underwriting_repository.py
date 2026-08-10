@@ -206,6 +206,12 @@ class UnderwritingRepository:
                 Underwriting.operating_expense_total,
                 # Read by the service to skip legacy sheet deals.
                 Underwriting.source,
+                # Not used in the recalculation — carried so the service can
+                # sort on them. Every UnderwritingSortBy value must be
+                # selected here or the Python sorter has nothing to read.
+                Underwriting.sheet_number,
+                Underwriting.created_at,
+                Underwriting.deal_approved,
                 UnderwritingDetail.purchase_details,
                 UnderwritingDetail.forecasted_revenue,
                 UnderwritingTax.tax_savings,
