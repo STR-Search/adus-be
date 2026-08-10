@@ -39,6 +39,10 @@ PROPERTY_URL = (
 )
 
 
+async def _no_sleep(_seconds):
+    return None
+
+
 def _service() -> ZillowPropertyService:
     # __init__ only reads config defaults (empty strings); that's fine for
     # exercising the pure mapping helpers.
@@ -118,11 +122,78 @@ async def test_fetch_returns_none_when_not_configured():
     # short-circuits without making any network call.
     service = _service()
     service.api_base = ""
-    service.supabase_url = ""
-    service.supabase_anon_key = ""
-    service.service_email = ""
-    service.service_password = ""
+    service.api_key = ""
 
     result = await service.fetch_property_details(url=PROPERTY_URL)
 
     assert result is None
+
+
+class _StubResponse:
+    def __init__(self, status_code: int):
+        self.status_code = status_code
+
+    def json(self):  # pragma: no cover - never reached for error codes
+        return {"data": []}
+
+
+class _StubClient:
+    """Stands in for ``httpx.AsyncClient``, counting POSTs."""
+
+    def __init__(self, status_code: int, calls: list):
+        self._status_code = status_code
+        self._calls = calls
+
+    def __call__(self, *args, **kwargs):
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc_info):
+        return False
+
+    async def post(self, endpoint, **kwargs):
+        self._calls.append(endpoint)
+        return _StubResponse(self._status_code)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [401, 403])
+async def test_fetch_does_not_retry_when_key_is_rejected(monkeypatch, status_code):
+    # A static API key can't become valid mid-loop, so a rejection must fail
+    # fast rather than burn all _MAX_ATTEMPTS.
+    calls: list = []
+    monkeypatch.setattr(
+        "app.external_api.services.zillow_property_service.httpx.AsyncClient",
+        _StubClient(status_code, calls),
+    )
+    service = _service()
+    service.api_base = "https://zillow.example.com"
+    service.api_key = "bad-key"
+
+    result = await service.fetch_property_details(url=PROPERTY_URL)
+
+    assert result is None
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_fetch_retries_on_server_error(monkeypatch):
+    calls: list = []
+    monkeypatch.setattr(
+        "app.external_api.services.zillow_property_service.httpx.AsyncClient",
+        _StubClient(500, calls),
+    )
+    monkeypatch.setattr(
+        "app.external_api.services.zillow_property_service.asyncio.sleep",
+        _no_sleep,
+    )
+    service = _service()
+    service.api_base = "https://zillow.example.com"
+    service.api_key = "good-key"
+
+    result = await service.fetch_property_details(url=PROPERTY_URL)
+
+    assert result is None
+    assert len(calls) == 3
