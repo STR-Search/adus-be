@@ -79,6 +79,11 @@ class Underwriting(Base):
         ForeignKey("users.users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    owner_id = Column(
+        Integer,
+        ForeignKey("users.users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     deal_status = Column(String(50), nullable=True)
     deal_added = Column(

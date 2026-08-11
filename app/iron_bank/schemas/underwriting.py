@@ -40,6 +40,7 @@ class UnderwritingBase(BaseModel):
     sheet_number: int | None = None
     analyst_id: int | None = None
     approver_id: int | None = None
+    owner_id: int | None = None
     deal_status: DealStatus | None = None
     deal_added: datetime | None = None
     deal_submitted: datetime | None = None
