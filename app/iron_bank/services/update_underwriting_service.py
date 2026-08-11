@@ -268,13 +268,17 @@ class UpdateUnderwritingService(SaveUnderwritingService):
                 if (value := getattr(underwriting, field, None)) is not None
             }
 
-            # Resolve analyst and approver.
+            # Resolve analyst, approver, and owner.
             if self.user_repository is not None:
-                user_ids = set()
-                if underwriting.analyst_id is not None:
-                    user_ids.add(underwriting.analyst_id)
-                if underwriting.approver_id is not None:
-                    user_ids.add(underwriting.approver_id)
+                user_ids = {
+                    user_id
+                    for user_id in (
+                        underwriting.analyst_id,
+                        underwriting.approver_id,
+                        underwriting.owner_id,
+                    )
+                    if user_id is not None
+                }
                 if user_ids:
                     users = await self.user_repository.get_by_ids(user_ids)
                     refs = {user.id: UserRef.model_validate(user) for user in users}
@@ -282,6 +286,8 @@ class UpdateUnderwritingService(SaveUnderwritingService):
                         result_data["analyst"] = refs.get(underwriting.analyst_id)
                     if underwriting.approver_id is not None:
                         result_data["approver"] = refs.get(underwriting.approver_id)
+                    if underwriting.owner_id is not None:
+                        result_data["owner"] = refs.get(underwriting.owner_id)
 
             # Resolve realtor details for the market.
             if underwriting.market_id is not None and self.market_service is not None:
