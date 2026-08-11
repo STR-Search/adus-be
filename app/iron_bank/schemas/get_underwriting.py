@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -183,6 +184,12 @@ class GetUnderwritingsQuery(BaseModel):
     max_total_oop: Decimal | None = Field(None, ge=0)
     min_l_cash_on_cash: Decimal | None = None
     max_l_cash_on_cash: Decimal | None = None
+    # Calendar dates (YYYY-MM-DD), both ends inclusive: min == max selects that
+    # single day. Bounds are interpreted in UTC against the stored timestamps.
+    min_created_at: date | None = None
+    max_created_at: date | None = None
+    min_deal_approved: date | None = None
+    max_deal_approved: date | None = None
     sort_by: UnderwritingSortBy = UnderwritingSortBy.ID
     sort_order: SortOrder = SortOrder.DESC
     # Simulation mode: when either override is present, list metrics are
@@ -216,6 +223,22 @@ class GetUnderwritingsQuery(BaseModel):
         ):
             raise ValueError(
                 "min_l_cash_on_cash must be less than or equal to max_l_cash_on_cash"
+            )
+        if (
+            self.min_created_at is not None
+            and self.max_created_at is not None
+            and self.min_created_at > self.max_created_at
+        ):
+            raise ValueError(
+                "min_created_at must be less than or equal to max_created_at"
+            )
+        if (
+            self.min_deal_approved is not None
+            and self.max_deal_approved is not None
+            and self.min_deal_approved > self.max_deal_approved
+        ):
+            raise ValueError(
+                "min_deal_approved must be less than or equal to max_deal_approved"
             )
         return self
 

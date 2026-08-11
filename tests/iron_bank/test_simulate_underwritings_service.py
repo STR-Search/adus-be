@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -6,6 +7,7 @@ import pytest
 from app.iron_bank.enums import SortOrder, UnderwritingSortBy
 from app.iron_bank.services.simulate_underwritings_service import (
     SimulateUnderwritingsService,
+    _SimulatedRow,
 )
 
 
@@ -68,10 +70,16 @@ def _row(
     purchase_details="default",
     forecasted_revenue="default",
     tax_savings=Decimal("5000"),
+    sheet_number=None,
+    created_at=None,
+    deal_approved=None,
 ):
     return SimpleNamespace(
         id=id,
         source=source,
+        sheet_number=sheet_number,
+        created_at=created_at,
+        deal_approved=deal_approved,
         purchase_price=purchase_price,
         total_oop=total_oop,
         l_cash_on_cash=l_cash_on_cash,
@@ -87,6 +95,15 @@ def _row(
         ),
         tax_savings=tax_savings,
     )
+
+
+def _sorted_ids(rows, *, sort_by, sort_order):
+    """Run the service's in-place sorter over `_SimulatedRow`s directly."""
+    ordered = list(rows)
+    SimulateUnderwritingsService._sort(
+        ordered, sort_by=sort_by, sort_order=sort_order
+    )
+    return [row.id for row in ordered]
 
 
 def _item(id=1, **fields):
@@ -415,3 +432,55 @@ async def test_simulated_flag_serializes_only_in_simulation_mode():
     ).model_dump()
     assert "simulation" not in plain
     assert "simulated" not in plain["data"][0]
+
+
+def _sortable(id, **fields):
+    return _SimulatedRow(
+        id=id,
+        simulated=False,
+        purchase_price=None,
+        total_oop=None,
+        l_cash_on_cash=None,
+        **fields,
+    )
+
+
+@pytest.mark.parametrize("sort_by", list(UnderwritingSortBy))
+@pytest.mark.parametrize("sort_order", list(SortOrder))
+def test_every_sort_key_is_carried_on_simulated_rows(sort_by, sort_order):
+    # _sort resolves sort_by.value with getattr, so any enum member missing
+    # from _SimulatedRow raises AttributeError at request time. Parametrizing
+    # over the enum means a newly added member fails here, not in production.
+    # Only crash-freedom and row preservation are asserted — per-column
+    # ordering is covered by the dedicated tests below.
+    ids = _sorted_ids(
+        [_sortable(1), _sortable(2)], sort_by=sort_by, sort_order=sort_order
+    )
+    assert sorted(ids) == [1, 2]
+
+
+@pytest.mark.parametrize("column", ["created_at", "deal_approved"])
+def test_datetime_columns_sort_in_both_directions(column):
+    # Direction must not be implemented by negating the value: -datetime is a
+    # TypeError. Nulls stay last regardless of direction.
+    early = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    late = datetime(2026, 8, 9, tzinfo=timezone.utc)
+    rows = [
+        _sortable(1, **{column: early}),
+        _sortable(2, **{column: None}),
+        _sortable(3, **{column: late}),
+    ]
+    sort_by = UnderwritingSortBy(column)
+
+    assert _sorted_ids(rows, sort_by=sort_by, sort_order=SortOrder.DESC) == [3, 1, 2]
+    assert _sorted_ids(rows, sort_by=sort_by, sort_order=SortOrder.ASC) == [1, 3, 2]
+
+
+def test_datetime_ties_break_by_id_desc_in_both_directions():
+    same = datetime(2026, 8, 5, tzinfo=timezone.utc)
+    rows = [_sortable(1, created_at=same), _sortable(5, created_at=same), _sortable(3, created_at=same)]
+
+    for order in SortOrder:
+        assert _sorted_ids(
+            rows, sort_by=UnderwritingSortBy.CREATED_AT, sort_order=order
+        ) == [5, 3, 1]

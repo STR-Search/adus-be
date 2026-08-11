@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -45,6 +46,11 @@ class _SimulatedRow:
     purchase_details: dict[str, Any] | None = None
     forecasted_revenue: dict[str, Any] | None = None
     y1_coc_incl_tax_savings: dict[str, Any] | None = None
+    # Sort-only passthroughs: untouched by simulation, but every
+    # UnderwritingSortBy value must exist here for _sort's getattr.
+    sheet_number: int | None = None
+    created_at: datetime | None = None
+    deal_approved: datetime | None = None
 
 
 class SimulateUnderwritingsService(GetUnderwritingService):
@@ -83,6 +89,10 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         max_total_oop: Decimal | None = None,
         min_l_cash_on_cash: Decimal | None = None,
         max_l_cash_on_cash: Decimal | None = None,
+        min_created_at: date | None = None,
+        max_created_at: date | None = None,
+        min_deal_approved: date | None = None,
+        max_deal_approved: date | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
         interest_rate: Decimal | None = None,
@@ -97,6 +107,10 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             search=search,
             min_purchase_price=min_purchase_price,
             max_purchase_price=max_purchase_price,
+            min_created_at=min_created_at,
+            max_created_at=max_created_at,
+            min_deal_approved=min_deal_approved,
+            max_deal_approved=max_deal_approved,
         )
 
         simulated_rows = [
@@ -162,6 +176,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             purchase_price=row.purchase_price,
             total_oop=row.total_oop,
             l_cash_on_cash=row.l_cash_on_cash,
+            **self._sort_passthroughs(row),
         )
 
         try:
@@ -249,7 +264,21 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             purchase_details=purchase_details,
             forecasted_revenue=forecasted_revenue,
             y1_coc_incl_tax_savings=y1_coc_incl_tax_savings,
+            **self._sort_passthroughs(row),
         )
+
+    @staticmethod
+    def _sort_passthroughs(row: Any) -> dict[str, Any]:
+        """Columns carried through untouched purely so ``_sort`` can read them.
+
+        Kept in one place so adding an ``UnderwritingSortBy`` member is a
+        single edit here plus the repository's select list.
+        """
+        return {
+            "sheet_number": row.sheet_number,
+            "created_at": row.created_at,
+            "deal_approved": row.deal_approved,
+        }
 
     @staticmethod
     def _passes_bounds(
@@ -278,9 +307,18 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         missing the metric always sort to the bottom) and the ``id DESC``
         tiebreaker, so switching simulation on/off never reshuffles rows the
         simulation didn't affect.
+
+        Direction comes from ``reverse=``, not from negating the value: the
+        sort columns include datetimes (``created_at``, ``deal_approved``) and
+        ``-datetime`` is a TypeError. Two passes exploit sort stability — the
+        id pass runs first and survives as the tiebreaker within equal keys.
+        The null rank flips with the direction so nulls stay last either way,
+        and it also keeps the placeholder from ever being compared against a
+        real value (tuples only compare their second element when the first
+        ties, and nulls never share a rank with values).
         """
 
-        def sort_value(row: _SimulatedRow) -> Decimal | int | None:
+        def sort_value(row: _SimulatedRow) -> Any:
             return getattr(row, sort_by.value)
 
         descending = sort_order == SortOrder.DESC
@@ -288,13 +326,11 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         def key(row: _SimulatedRow):
             value = sort_value(row)
             if value is None:
-                # Nulls last regardless of direction: rank 1 sorts after 0.
-                null_rank, sortable = 1, Decimal("0")
-            else:
-                null_rank, sortable = 0, (-value if descending else value)
-            return (null_rank, sortable, -row.id)
+                return (0 if descending else 1, 0)
+            return (1 if descending else 0, value)
 
-        rows.sort(key=key)
+        rows.sort(key=lambda row: -row.id)
+        rows.sort(key=key, reverse=descending)
 
     @staticmethod
     def _overlay_simulated(result, row: _SimulatedRow) -> None:

@@ -22,11 +22,17 @@ class UnderwritingSource(StrEnum):
 
 
 class UnderwritingSortBy(StrEnum):
+    # Values are ORM attribute names on ``Underwriting`` — the repository and
+    # the simulation sorter both resolve them with getattr, so a value that
+    # isn't a real column (or isn't carried on ``_SimulatedRow``) breaks at
+    # request time, not import time.
     ID = "id"
     PURCHASE_PRICE = "purchase_price"
     TOTAL_OOP = "total_oop"
     L_CASH_ON_CASH = "l_cash_on_cash"
     SHEET_NUMBER = "sheet_number"
+    CREATED_AT = "created_at"
+    DEAL_APPROVED = "deal_approved"
 
 
 class SortOrder(StrEnum):
