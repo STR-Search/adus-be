@@ -62,15 +62,15 @@ class MarketRepository:
         page: int,
         page_size: int,
         market_status: str | None = None,
-        analyst_owner: str | None = None,
+        analyst_owner_id: int | None = None,
         search: str | None = None,
     ) -> tuple[list[MarketKeysMaster], int, int]:
         query = select(MarketKeysMaster).where(MarketKeysMaster.deleted_at.is_(None))
 
         if market_status is not None:
             query = query.where(MarketKeysMaster.market_status == market_status)
-        if analyst_owner is not None:
-            query = query.where(MarketKeysMaster.analyst_owner == analyst_owner)
+        if analyst_owner_id is not None:
+            query = query.where(MarketKeysMaster.analyst_owner_id == analyst_owner_id)
         if search:
             pattern = f"%{search}%"
             query = query.where(
@@ -78,7 +78,6 @@ class MarketRepository:
                     MarketKeysMaster.market_name.ilike(pattern),
                     MarketKeysMaster.market_name_current.ilike(pattern),
                     MarketKeysMaster.market_slug.ilike(pattern),
-                    MarketKeysMaster.analyst_owner.ilike(pattern),
                 )
             )
 

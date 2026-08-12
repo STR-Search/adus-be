@@ -16,7 +16,10 @@ from sqlalchemy.dialects import postgresql
 revision: str = "b35b5049dbae"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = ("markets",)
-depends_on: Union[str, Sequence[str], None] = None
+# market_keys_master.analyst_owner_id references users.users, so the users
+# branch must reach b7e9a21cb997 (create users table) before this runs. The
+# branches are otherwise independent and carry no ordering guarantee.
+depends_on: Union[str, Sequence[str], None] = ("b7e9a21cb997",)
 
 
 def upgrade() -> None:
@@ -91,7 +94,7 @@ def upgrade() -> None:
         sa.Column("market_name", sa.String(), nullable=True),
         sa.Column("market_name_current", sa.String(), nullable=True),
         sa.Column("market_status", sa.String(), nullable=True),
-        sa.Column("analyst_owner", sa.String(), nullable=True),
+        sa.Column("analyst_owner_id", sa.Integer(), nullable=True),
         sa.Column("market_notes", sa.Text(), nullable=True),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("map_config", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
@@ -112,6 +115,9 @@ def upgrade() -> None:
             sa.DateTime(timezone=True),
             server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=True,
+        ),
+        sa.ForeignKeyConstraint(
+            ["analyst_owner_id"], ["users.users.id"], ondelete="SET NULL"
         ),
         sa.PrimaryKeyConstraint("id"),
         schema="markets",
