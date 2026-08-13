@@ -100,6 +100,7 @@ class CompSetInput(BaseModel):
     revenue: Decimal | None = None
     bedrooms: int | None = None
     sleeps: int | None = None
+    is_favourite: bool = False
 
 
 class SaveUnderwritingPayload(UnderwritingBase):
@@ -276,6 +277,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "revenue": 112400,
                         "bedrooms": 4,
                         "sleeps": 10,
+                        "is_favourite": True,
                     },
                     {
                         "listing_url": (

@@ -412,6 +412,7 @@ class GetUnderwritingService:
             "revenue": comp.revenue,
             "bedrooms": comp.bedrooms,
             "sleeps": comp.sleeps,
+            "is_favourite": comp.is_favourite,
         }
 
     async def _zillow_from_listing(self, underwriting) -> tuple[Any, Any]:
