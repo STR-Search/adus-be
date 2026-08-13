@@ -163,6 +163,12 @@ def upgrade() -> None:
         sa.Column("revenue", sa.Numeric(precision=12, scale=2), nullable=True),
         sa.Column("bedrooms", sa.Integer(), nullable=True),
         sa.Column("sleeps", sa.Integer(), nullable=True),
+        sa.Column(
+            "is_favourite",
+            sa.Boolean(),
+            server_default=sa.text("false"),
+            nullable=False,
+        ),
         sa.Column("sort_order", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"

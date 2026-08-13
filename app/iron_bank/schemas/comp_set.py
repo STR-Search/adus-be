@@ -8,6 +8,7 @@ class CompSetBase(BaseModel):
     revenue: Decimal | None = None
     bedrooms: int | None = None
     sleeps: int | None = None
+    is_favourite: bool = False
 
 class CompSetCreate(CompSetBase):
     pass
