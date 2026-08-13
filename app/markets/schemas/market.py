@@ -3,6 +3,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.users.schemas.user import UserSummary
+
 from .common import BaseResponse
 
 
@@ -27,7 +29,11 @@ class MarketKeysMasterSchema(BaseResponse):
     market_name: str | None = None
     market_name_current: str | None = None
     market_status: str | None = None
-    analyst_owner: str | None = None
+    analyst_owner_id: int | None = None
+    # Resolved users.users reference for analyst_owner_id. Populated by
+    # MarketService; stays None when the id is unset or points at a
+    # soft-deleted user (the raw id still carries the stored value).
+    analyst_owner: UserSummary | None = None
     market_notes: str | None = None
     map_config: dict[str, Any] | None = None
     filters: dict[str, Any] | None = None
@@ -43,7 +49,7 @@ class MarketCreateSchema(BaseModel):
     market_name: str | None = None
     market_name_current: str | None = None
     market_status: str | None = None
-    analyst_owner: str | None = None
+    analyst_owner_id: int | None = None
     market_notes: str | None = None
     map_config: dict[str, Any] | None = None
     filters: dict[str, Any] | None = None
@@ -54,7 +60,7 @@ class MarketCreateSchema(BaseModel):
 
 class MarketUpdateSchema(BaseModel):
     market_status: str | None = None
-    analyst_owner: str | None = None
+    analyst_owner_id: int | None = None
     market_notes: str | None = None
     map_config: dict[str, Any] | None = None
     filters: dict[str, Any] | None = None
