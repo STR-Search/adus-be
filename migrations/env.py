@@ -84,6 +84,7 @@ async def run_async_migrations() -> None:
         connect_args={
             "prepared_statement_cache_size": 0,
             "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
+            "statement_cache_size": 0,
         },
     )
     async with connectable.connect() as connection:
