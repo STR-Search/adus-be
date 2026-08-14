@@ -19,12 +19,21 @@ config = get_config()
 #
 # The cost of transaction mode: consecutive statements on one client connection
 # may land on different backends, which breaks asyncpg's use of server-side
-# prepared statements. Both connect_args below are required, not tuning —
-#   - prepared_statement_cache_size=0: a cached statement's backend is gone by
-#     the next checkout (InvalidSQLStatementNameError).
-#   - prepared_statement_name_func: asyncpg's default names are sequential
-#     (__asyncpg_stmt_1__), so two clients multiplexed onto one backend collide
+# prepared statements. All three connect_args below are required, not tuning.
+# Note that the first two are SQLAlchemy's and the third is asyncpg's own —
+# they are separate caches, and disabling only SQLAlchemy's is not enough:
+#   - prepared_statement_cache_size=0 (SQLAlchemy): a cached statement's backend
+#     is gone by the next checkout (InvalidSQLStatementNameError).
+#   - prepared_statement_name_func (SQLAlchemy): asyncpg's default names are
+#     sequential (__asyncpg_stmt_1__) and every connection restarts the counter
+#     at 1, so two clients multiplexed onto one backend collide
 #     (DuplicatePreparedStatementError).
+#   - statement_cache_size=0 (asyncpg): the name func above only covers
+#     statements SQLAlchemy prepares. Paths that call asyncpg directly — the
+#     pool_pre_ping liveness check, and type introspection — bypass it and fall
+#     back to the sequential names. With asyncpg's cache disabled those become
+#     *unnamed* statements, which cannot collide (asyncpg/connection.py, where
+#     stmt_name is set to '' unless the cache is in use).
 # See SQLAlchemy's asyncpg dialect docs, "Prepared Statement Name with PGBouncer".
 #
 # pool_pre_ping/pool_recycle guard against handing out a connection Supavisor has
@@ -44,6 +53,7 @@ engine = create_async_engine(
     connect_args={
         "prepared_statement_cache_size": 0,
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
+        "statement_cache_size": 0,
     },
 )
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
