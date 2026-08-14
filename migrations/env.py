@@ -1,5 +1,6 @@
 import asyncio
 from logging.config import fileConfig
+from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import pool, text
@@ -71,6 +72,18 @@ async def run_async_migrations() -> None:
     connectable = create_async_engine(
         get_config().async_database_url,
         poolclass=pool.NullPool,
+        # DATABASE_URL points at the transaction pooler, which does not support
+        # asyncpg's server-side prepared statements — see app/core/database.py
+        # for the full explanation. Without these, migrations fail on the very
+        # first `select pg_catalog.version()`.
+        #
+        # Migrations would be better served by a session-mode connection (long
+        # transactional DDL, no pooler transaction timeout), which is why a
+        # separate MIGRATION_DATABASE_URL on port 5432 is the intended follow-up.
+        connect_args={
+            "prepared_statement_cache_size": 0,
+            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
+        },
     )
     async with connectable.connect() as connection:
         async with connection.begin():

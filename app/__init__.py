@@ -1,3 +1,6 @@
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 import sentry_sdk
 
 import app.core.logger  # noqa: F401 — triggers logging config at startup
@@ -8,6 +11,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_config
+from app.core.database import engine
 from app.core.reference_data.router import router as reference_data_router
 from app.dependencies import get_current_user
 from app.external_api.router import router as external_api_router
@@ -16,6 +20,21 @@ from app.markets.router import router as markets_router
 from app.users.router import router as users_router
 from app.zillow.router import router as zillow_router
 from app.middleware.auth import AuthMiddleware
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
+    """Close pooled DB connections on shutdown.
+
+    Without this, every ``uvicorn --reload`` cycle and every container restart
+    abandons its pooled connections rather than closing them, leaving the
+    upstream pooler to reap the backends on its own (slow) schedule. Stale
+    connections then accumulate against the project's connection ceiling until
+    new ones are refused.
+    """
+    yield
+    await engine.dispose()
+    logger.info("db.engine_disposed")
 
 
 def create_app() -> FastAPI:
@@ -43,6 +62,7 @@ def create_app() -> FastAPI:
         # /openapi.json. FastAPI caches the dependency per request, so handlers
         # that also declare get_current_user reuse this result.
         dependencies=[Depends(get_current_user)],
+        lifespan=lifespan,
     )
 
     application.add_middleware(
