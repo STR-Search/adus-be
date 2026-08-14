@@ -1,5 +1,6 @@
 import asyncio
 from logging.config import fileConfig
+from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import pool, text
@@ -71,6 +72,12 @@ async def run_async_migrations() -> None:
     connectable = create_async_engine(
         get_config().async_database_url,
         poolclass=pool.NullPool,
+        # Same transaction-pooler constraints as the app engine — see
+        # app/core/database.py for why prepared statements must be disabled.
+        connect_args={
+            "prepared_statement_cache_size": 0,
+            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
+        },
     )
     async with connectable.connect() as connection:
         async with connection.begin():
