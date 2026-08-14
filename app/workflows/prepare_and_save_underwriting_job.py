@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.airbnb_public.repositories.cleaned_data_repository import CleanedDataRepository
 from app.airbnb_public.services.cleaned_data_service import CleanedDataService
+from app.external_api.services.external_api_service import ExternalApiService
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
 from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
 from app.iron_bank.services.underwriting_payload_builder import (
@@ -37,10 +38,17 @@ class PrepareAndSaveUnderwritingJob:
         self.underwriting_repository = underwriting_repository
 
     @classmethod
-    def from_session(cls, db: AsyncSession) -> "PrepareAndSaveUnderwritingJob":
+    def from_session(
+        cls,
+        db: AsyncSession,
+        *,
+        external_api_service: ExternalApiService | None = None,
+    ) -> "PrepareAndSaveUnderwritingJob":
         underwriting_repository = UnderwritingRepository(db)
         return cls(
-            prepare_job=PrepareUwDataJob.from_session(db),
+            prepare_job=PrepareUwDataJob.from_session(
+                db, external_api_service=external_api_service
+            ),
             payload_builder=UnderwritingPayloadBuilder(),
             save_service=SaveUnderwritingService(
                 underwriting_repository,

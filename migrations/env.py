@@ -9,15 +9,18 @@ from alembic import context
 
 from app.core.config import get_config
 from app.core.database import Base
-import app.markets.models   # noqa: F401
-import app.iron_bank.models # noqa: F401
-import app.users.models     # noqa: F401
+import app.markets.models  # noqa: F401
+import app.iron_bank.models  # noqa: F401
+import app.users.models  # noqa: F401
 import app.core.reference_data.models  # noqa: F401
 
 TARGET_SCHEMAS = ["markets", "iron_bank", "users", "reference"]
 
 config = context.config
-config.set_main_option("sqlalchemy.url", get_config().async_database_url)
+# Read back by run_migrations_offline only; the online path builds its own engine below.
+config.set_main_option(
+    "sqlalchemy.url", get_config().async_migration_database_url.replace("%", "%%")
+)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -70,16 +73,14 @@ def do_run_migrations(connection):
 
 async def run_async_migrations() -> None:
     connectable = create_async_engine(
-        get_config().async_database_url,
+        get_config().async_migration_database_url,
         poolclass=pool.NullPool,
-        # DATABASE_URL points at the transaction pooler, which does not support
-        # asyncpg's server-side prepared statements — see app/core/database.py
-        # for the full explanation. Without these, migrations fail on the very
-        # first `select pg_catalog.version()`.
-        #
-        # Migrations would be better served by a session-mode connection (long
-        # transactional DDL, no pooler transaction timeout), which is why a
-        # separate MIGRATION_DATABASE_URL on port 5432 is the intended follow-up.
+        # Kept unconditionally because MIGRATION_DATABASE_URL is optional: when it
+        # is unset we fall back to DATABASE_URL and run through the transaction
+        # pooler, which cannot support asyncpg's server-side prepared statements
+        # (see app/core/database.py) and would otherwise fail on the very first
+        # `select pg_catalog.version()`. On a session-mode connection these are
+        # merely redundant — a migration gains nothing from a statement cache.
         connect_args={
             "prepared_statement_cache_size": 0,
             "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",

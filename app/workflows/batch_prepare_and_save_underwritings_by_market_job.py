@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logger import logger
+from app.external_api.services.external_api_service import ExternalApiService
 from app.zillow.repositories.scheduled_listings_repository import (
     ScheduledListingsRepository,
 )
@@ -13,19 +14,28 @@ from app.workflows.prepare_and_save_underwriting_job import (
 class BatchPrepareAndSaveUnderwritingsByMarketJob:
     """Runs the automated UW save workflow for recent active Zillow listings in a market."""
 
-    def __init__(self, *, db, listings_service, prepare_and_save_job):
+    def __init__(
+        self, *, db, listings_service, prepare_and_save_job, external_api_service
+    ):
         self.db = db
         self.listings_service = listings_service
         self.prepare_and_save_job = prepare_and_save_job
+        self.external_api_service = external_api_service
 
     @classmethod
     def from_session(
         cls, db: AsyncSession
     ) -> "BatchPrepareAndSaveUnderwritingsByMarketJob":
+        # One service shared by every listing; see
+        # batch_prepare_and_save_underwritings_job.py.
+        external_api_service = ExternalApiService()
         return cls(
             db=db,
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
-            prepare_and_save_job=PrepareAndSaveUnderwritingJob.from_session(db),
+            prepare_and_save_job=PrepareAndSaveUnderwritingJob.from_session(
+                db, external_api_service=external_api_service
+            ),
+            external_api_service=external_api_service,
         )
 
     async def run(
@@ -35,6 +45,11 @@ class BatchPrepareAndSaveUnderwritingsByMarketJob:
         since_hours: int,
         limit: int | None = None,
     ) -> dict:
+        # Warm the FRED rate before the first query, so this network round-trip
+        # happens with no transaction open — see
+        # batch_prepare_and_save_underwritings_job.py for the full rationale.
+        await self.external_api_service.get_30y_fixed_rate()
+
         listings = await self.listings_service.get_active_since_by_market(
             market_id=market_id,
             since_hours=since_hours,

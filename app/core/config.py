@@ -7,7 +7,15 @@ class Config(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     APP_ENV: str = "development"
+    # Transaction pooler (port 6543). See app/core/database.py.
     DATABASE_URL: str
+    # Alembic's connection, pointing at the SESSION pooler (port 5432) instead.
+    # Session mode gives a migration a dedicated backend for the life of the
+    # connection, so server-side prepared statements work normally, session-level
+    # state (advisory locks, SET) holds, and no pooler transaction timeout can cut
+    # a long DDL statement in half. Optional: falls back to DATABASE_URL, which
+    # still works but carries those caveats.
+    MIGRATION_DATABASE_URL: str = ""
     CORS_ORIGINS: str = "*"
     FRED_API_KEY: str = ""
 
@@ -41,10 +49,24 @@ class Config(BaseSettings):
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"
 
+    @staticmethod
+    def _to_async_url(url: str) -> str:
+        """Point a libpq URL at the asyncpg driver and require TLS.
+
+        ``ssl=require`` is only appended when the URL has no query string of its
+        own — appending blindly would corrupt one that does (e.g. a connection
+        string pasted with ``?sslmode=require`` already on it).
+        """
+        async_url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return async_url if "?" in async_url else f"{async_url}?ssl=require"
+
     @property
     def async_database_url(self) -> str:
-        url = self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-        return f"{url}?ssl=require"
+        return self._to_async_url(self.DATABASE_URL)
+
+    @property
+    def async_migration_database_url(self) -> str:
+        return self._to_async_url(self.MIGRATION_DATABASE_URL or self.DATABASE_URL)
 
 
 @lru_cache(maxsize=1)
