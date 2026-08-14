@@ -18,12 +18,22 @@ class FakeListingDetailsService:
 class FakeReconcileJob:
     def __init__(self, results):
         self.results = results
+        self.requested_zpids = []
 
     async def run(self, zpid):
+        self.requested_zpids.append(zpid)
         result = self.results[zpid]
         if isinstance(result, Exception):
             raise result
         return result
+
+
+class FakeSession:
+    def __init__(self):
+        self.rollback_count = 0
+
+    async def rollback(self):
+        self.rollback_count += 1
 
 
 @pytest.mark.asyncio
@@ -42,12 +52,16 @@ async def test_processes_recent_price_changes_and_returns_summary():
         }
     )
 
+    db = FakeSession()
     summary = await BatchReconcileUnderwritingPricesJob(
+        db=db,
         listing_details_service=details_service,
         reconcile_job=reconcile_job,
     ).run(since_hours=24, limit=500)
 
     assert details_service.called_with == {"since_hours": 24, "limit": 500}
+    # The one failing zpid ("4") must roll the session back.
+    assert db.rollback_count == 1
     assert summary == {
         "found": 4,
         "processed": 4,
@@ -67,3 +81,33 @@ async def test_processes_recent_price_changes_and_returns_summary():
             {"zpid": "4", "status": "failed", "error": "boom"},
         ],
     }
+
+
+@pytest.mark.asyncio
+async def test_rolls_back_and_continues_after_a_mid_batch_failure():
+    """A failure partway through must not take the rest of the batch with it.
+
+    Without the rollback the session stays in an aborted transaction and every
+    subsequent query raises PendingRollbackError, so one transient error would
+    fail the whole run.
+    """
+    details_service = FakeListingDetailsService(["1", "2", "3"])
+    reconcile_job = FakeReconcileJob(
+        {
+            "1": {"zpid": "1", "status": "updated", "underwriting_id": 10},
+            "2": RuntimeError("boom"),
+            "3": {"zpid": "3", "status": "updated", "underwriting_id": 30},
+        }
+    )
+
+    db = FakeSession()
+    summary = await BatchReconcileUnderwritingPricesJob(
+        db=db,
+        listing_details_service=details_service,
+        reconcile_job=reconcile_job,
+    ).run(since_hours=24, limit=None)
+
+    assert reconcile_job.requested_zpids == ["1", "2", "3"]
+    assert db.rollback_count == 1
+    assert summary["updated"] == 2
+    assert summary["failed"] == 1
