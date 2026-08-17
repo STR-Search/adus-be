@@ -39,6 +39,7 @@ class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         payload = {
             "zpid": zillow_property.get("id"),
             "market_id": prepared.get("market_id"),
+            "owner_id": self._resolve_owner_id(prepared),
             "source": UnderwritingSource.ADUS,
             "deal_status": self._DEFAULT_DEAL_STATUS,
             "is_automated": True,

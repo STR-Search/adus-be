@@ -72,7 +72,11 @@ class CreateUnderwritingFromUrlService:
         self.builder = builder or NonAutomatedUnderwritingPayloadBuilder()
 
     async def create(
-        self, *, url: str, market_id: int | None = None
+        self,
+        *,
+        url: str,
+        market_id: int | None = None,
+        current_user_id: int | None = None,
     ) -> SaveUnderwritingResult:
         # Idempotency: the stored listing_url is exactly the request URL, so we
         # can short-circuit before spending an external API call.
@@ -102,6 +106,7 @@ class CreateUnderwritingFromUrlService:
             listing_url=url,
             zillow_property=zillow_property,
             market_context=market_context,
+            current_user_id=current_user_id,
         )
         return await self.save_service.save(payload)
 

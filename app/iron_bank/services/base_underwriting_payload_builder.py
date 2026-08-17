@@ -34,6 +34,18 @@ class BaseUnderwritingPayloadBuilder:
     _AMENITY_METRIC = "flat"
     _POOL_AMENITY_IDS_TO_EXCLUDE = {4, 5, 13, 14}
 
+    def _resolve_owner_id(
+        self, context: dict[str, Any], *, fallback_user_id: int | None = None
+    ) -> int | None:
+        """Pick the owner for a draft underwriting.
+
+        The market's analyst owner (``market_keys_master.analyst_owner_id``,
+        carried on the market context) wins. ``fallback_user_id`` covers the
+        non-automated flow, where a market-less deal — or a market with no
+        analyst assigned — is owned by whoever created it.
+        """
+        return context.get("analyst_owner_id") or fallback_user_id
+
     def _build_details(
         self,
         *,

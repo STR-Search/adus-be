@@ -397,9 +397,12 @@ async def create_underwriting_from_url(
     controller: CreateUnderwritingFromUrlController = Depends(
         get_create_underwriting_from_url_controller
     ),
+    current_user=Depends(get_current_user),
 ):
     return await controller.create_from_url(
-        url=payload.url, market_id=payload.market_id
+        url=payload.url,
+        market_id=payload.market_id,
+        current_user_id=current_user.id,
     )
 
 

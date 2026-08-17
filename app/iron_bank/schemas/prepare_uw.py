@@ -47,6 +47,7 @@ class MarketContext(BaseModel):
     market_name: str | None = None
     market_id: int | None = None
     market_slug: str | None = None
+    analyst_owner_id: int | None = None
     opex: PreparedOpex
     construction_amenities: list[ConstructionAmenityOption]
     construction_remodeling: list[ConstructionRemodelingOption]
