@@ -353,3 +353,27 @@ def test_builds_save_payload_from_prepared_schema():
     assert payload.zpid == "12345"
     assert payload.market_id == 3
     assert payload.purchase_price is None
+
+
+def test_owner_is_the_market_analyst_owner():
+    """Automated deals inherit ownership from their market's analyst."""
+    prepared = {
+        "market_id": 3,
+        "analyst_owner_id": 7,
+        "zillow_property": {"id": "12345", "price": "485000"},
+        "opex": {"cleaning": {}, "absolute": {}},
+        "config": {},
+    }
+
+    assert UnderwritingPayloadBuilder().build(prepared).owner_id == 7
+
+
+def test_owner_is_null_when_the_market_has_no_analyst_owner():
+    prepared = {
+        "market_id": 3,
+        "zillow_property": {"id": "12345", "price": "485000"},
+        "opex": {"cleaning": {}, "absolute": {}},
+        "config": {},
+    }
+
+    assert UnderwritingPayloadBuilder().build(prepared).owner_id is None

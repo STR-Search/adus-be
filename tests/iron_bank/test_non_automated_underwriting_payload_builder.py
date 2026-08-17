@@ -44,6 +44,7 @@ def _market_context(market_id=3, **overrides):
         market=SimpleNamespace(
             market_name="Smoky Mountains",
             market_slug="smoky-mountains",
+            analyst_owner_id=7,
             must_have_amenities=[SimpleNamespace(id=1, amenity_name="Hot Tub")],
         ),
         market_id=market_id,
@@ -244,8 +245,8 @@ class TestWithMarketContext:
 
         assert [item.category for item in payload.optimization_list] == [
             "Furniture / Decor / Essentials",
-            "Install/Staging/Warehousing",
-            "Design/Project Management",
+            "Install / Staging / Warehousing",
+            "Design / Project Management",
             "Hot Tub",
         ]
         by_category = {item.category: item for item in payload.optimization_list}
@@ -253,10 +254,10 @@ class TestWithMarketContext:
         assert by_category["Furniture / Decor / Essentials"].total_price == Decimal(
             "40000"
         )
-        assert by_category["Install/Staging/Warehousing"].total_price == Decimal(
+        assert by_category["Install / Staging / Warehousing"].total_price == Decimal(
             "18225"
         )
-        assert by_category["Design/Project Management"].total_price == Decimal("9500")
+        assert by_category["Design / Project Management"].total_price == Decimal("9500")
         assert by_category["Hot Tub"].total_price == Decimal("12000")
         assert by_category["Hot Tub"].tier == "Mid"
         assert by_category["Hot Tub"].metric == "flat"
@@ -318,8 +319,8 @@ class TestWithTemplateMarketContext:
         # must-have amenities belong to a market, so a market-less deal has none
         assert [item.category for item in payload.optimization_list] == [
             "Furniture / Decor / Essentials",
-            "Install/Staging/Warehousing",
-            "Design/Project Management",
+            "Install / Staging / Warehousing",
+            "Design / Project Management",
         ]
         for item in payload.optimization_list:
             assert item.total_price == Decimal("0")
@@ -335,3 +336,38 @@ class TestWithTemplateMarketContext:
         assert payload.taxes.land_assumptions_pct == Decimal("0.2")
         # the live FRED rate is not market-specific, so it still applies
         assert payload.details.purchase_details.interest_rate == Decimal("0.0685")
+
+
+class TestOwnership:
+    """owner_id: the market's analyst owner, else whoever created the deal."""
+
+    def _build(self, *, context, current_user_id=42):
+        return NonAutomatedUnderwritingPayloadBuilder().build_from_zillow_property(
+            listing_url=REQUEST_URL,
+            zillow_property=_zillow_property(),
+            market_context=context,
+            current_user_id=current_user_id,
+        )
+
+    def test_market_analyst_owner_wins_over_the_creating_user(self):
+        assert self._build(context=_market_context()).owner_id == 7
+
+    def test_falls_back_to_the_creating_user_for_a_market_less_deal(self):
+        template = PrepareUwDataService.to_template_market_context(_market_context())
+
+        assert self._build(context=template).owner_id == 42
+
+    def test_falls_back_to_the_creating_user_when_the_market_has_no_analyst(self):
+        context = _market_context(
+            market=SimpleNamespace(
+                market_name="Smoky Mountains",
+                market_slug="smoky-mountains",
+                analyst_owner_id=None,
+                must_have_amenities=[],
+            )
+        )
+
+        assert self._build(context=context).owner_id == 42
+
+    def test_owner_is_null_without_a_market_context_or_a_user(self):
+        assert self._build(context=None, current_user_id=None).owner_id is None

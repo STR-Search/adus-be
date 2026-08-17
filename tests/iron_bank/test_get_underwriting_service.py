@@ -109,6 +109,7 @@ def _underwriting():
                 revenue=Decimal("112400"),
                 bedrooms=4,
                 sleeps=10,
+                is_favourite=True,
             )
         ],
     )
@@ -145,6 +146,7 @@ async def test_get_underwriting_returns_save_shaped_aggregate():
         {"id": 201, "expense": "Internet", "monthly": Decimal("100")}
     ]
     assert data["comp_set"][0]["listing_url"] == "https://www.airbnb.com/rooms/1"
+    assert data["comp_set"][0]["is_favourite"] is True
 
 
 @pytest.mark.asyncio
