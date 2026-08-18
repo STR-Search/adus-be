@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from uuid import uuid4
 
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -9,7 +10,52 @@ from app.core.logger import logger
 
 config = get_config()
 
-engine = create_async_engine(config.async_database_url, echo=False)
+# DATABASE_URL must point at Supabase's *transaction* pooler (Supavisor, port
+# 6543), not the session pooler on 5432. In session mode every client connection
+# reserves a Postgres backend for as long as it is held, so this pool alone could
+# exhaust the branch's backend allowance while sitting idle. Transaction mode
+# only borrows a backend for the duration of a transaction, which is what makes a
+# normal client-side pool safe here.
+#
+# The cost of transaction mode: consecutive statements on one client connection
+# may land on different backends, which breaks asyncpg's use of server-side
+# prepared statements. All three connect_args below are required, not tuning.
+# Note that the first two are SQLAlchemy's and the third is asyncpg's own —
+# they are separate caches, and disabling only SQLAlchemy's is not enough:
+#   - prepared_statement_cache_size=0 (SQLAlchemy): a cached statement's backend
+#     is gone by the next checkout (InvalidSQLStatementNameError).
+#   - prepared_statement_name_func (SQLAlchemy): asyncpg's default names are
+#     sequential (__asyncpg_stmt_1__) and every connection restarts the counter
+#     at 1, so two clients multiplexed onto one backend collide
+#     (DuplicatePreparedStatementError).
+#   - statement_cache_size=0 (asyncpg): the name func above only covers
+#     statements SQLAlchemy prepares. Paths that call asyncpg directly — the
+#     pool_pre_ping liveness check, and type introspection — bypass it and fall
+#     back to the sequential names. With asyncpg's cache disabled those become
+#     *unnamed* statements, which cannot collide (asyncpg/connection.py, where
+#     stmt_name is set to '' unless the cache is in use).
+# See SQLAlchemy's asyncpg dialect docs, "Prepared Statement Name with PGBouncer".
+#
+# pool_pre_ping/pool_recycle guard against handing out a connection Supavisor has
+# already reaped, which surfaces as "connection was closed in the middle of
+# operation" on the first query after an idle period.
+#
+# Sizing note: background batch jobs (app/workflows/job_runner.py) draw from this
+# same pool and hold a connection for minutes at a time, so max_overflow carries
+# headroom for them on top of request traffic.
+engine = create_async_engine(
+    config.async_database_url,
+    echo=False,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=1800,
+    pool_pre_ping=True,
+    connect_args={
+        "prepared_statement_cache_size": 0,
+        "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
+        "statement_cache_size": 0,
+    },
+)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 # Max chars kept from statement/params in logs — enough to diagnose, bounded so

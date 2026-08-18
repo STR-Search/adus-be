@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.dependencies import get_current_user
+from app.users.controllers.user_controller import UserController
 from app.users.repositories.api_key_repository import ApiKeyRepository
 from app.users.repositories.user_repository import UserRepository
 from app.users.schemas.api_key import (
@@ -11,7 +12,9 @@ from app.users.schemas.api_key import (
     CreateApiKeyPayload,
     CreateApiKeyResult,
 )
+from app.users.schemas.user import UserListResult
 from app.users.services.api_key_service import ApiKeyService
+from app.users.services.user_service import UserService
 import app.users.models  # noqa: F401 — ensures all models are registered with SQLAlchemy
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -19,6 +22,24 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 def get_api_key_service(db: AsyncSession = Depends(get_db)) -> ApiKeyService:
     return ApiKeyService(ApiKeyRepository(db), UserRepository(db))
+
+
+def get_user_controller(db: AsyncSession = Depends(get_db)) -> UserController:
+    return UserController(UserService(UserRepository(db)))
+
+
+@router.get("", response_model=UserListResult, tags=["users"])
+async def list_users(
+    detailed: bool = Query(
+        False,
+        description=(
+            "Return the full user row (clerk_id, timestamps) instead of the "
+            "id/email/name summary."
+        ),
+    ),
+    controller: UserController = Depends(get_user_controller),
+):
+    return await controller.get_users(detailed=detailed)
 
 
 @router.post(

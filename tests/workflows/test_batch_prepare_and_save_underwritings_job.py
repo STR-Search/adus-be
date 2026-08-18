@@ -8,13 +8,28 @@ from app.workflows.batch_prepare_and_save_underwritings_job import (
 
 
 class FakeListingsService:
-    def __init__(self, listings):
+    def __init__(self, listings, call_log=None):
         self.listings = listings
         self.called_with = None
+        self.call_log = call_log if call_log is not None else []
 
     async def get_active_since(self, *, since_hours, limit):
         self.called_with = {"since_hours": since_hours, "limit": limit}
+        self.call_log.append("db_read")
         return self.listings
+
+
+class FakeExternalApiService:
+    """Stands in for the FRED lookup, recording when it runs."""
+
+    def __init__(self, call_log):
+        self.call_log = call_log
+        self.fetch_count = 0
+
+    async def get_30y_fixed_rate(self):
+        self.fetch_count += 1
+        self.call_log.append("fred")
+        return 6.5
 
 
 class FakePrepareAndSaveJob:
@@ -40,13 +55,15 @@ class FakeSession:
 
 @pytest.mark.asyncio
 async def test_processes_recent_listings_and_returns_summary():
+    call_log = []
     listings_service = FakeListingsService(
         [
             SimpleNamespace(zpid="1"),
             SimpleNamespace(zpid="2"),
             SimpleNamespace(zpid="3"),
             SimpleNamespace(zpid="4"),
-        ]
+        ],
+        call_log=call_log,
     )
     prepare_and_save_job = FakePrepareAndSaveJob(
         {
@@ -58,14 +75,20 @@ async def test_processes_recent_listings_and_returns_summary():
     )
 
     db = FakeSession()
+    external_api_service = FakeExternalApiService(call_log)
     summary = await BatchPrepareAndSaveUnderwritingsJob(
         db=db,
         listings_service=listings_service,
         prepare_and_save_job=prepare_and_save_job,
+        external_api_service=external_api_service,
     ).run(since_hours=24, limit=500)
 
     assert listings_service.called_with == {"since_hours": 24, "limit": 500}
     assert prepare_and_save_job.requested_zpids == ["1", "2", "3", "4"]
+    # The FRED lookup must be warmed once, before the first query — a network
+    # wait inside an open transaction pins a backend on the transaction pooler.
+    assert call_log == ["fred", "db_read"]
+    assert external_api_service.fetch_count == 1
     # The one failing listing ("3") must roll the session back so the rest
     # of the batch runs on a clean transaction.
     assert db.rollback_count == 1

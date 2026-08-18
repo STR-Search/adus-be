@@ -55,7 +55,18 @@ class PrepareUwDataJob:
         self.uw_data_service = uw_data_service
 
     @classmethod
-    def from_session(cls, db: AsyncSession) -> "PrepareUwDataJob":
+    def from_session(
+        cls,
+        db: AsyncSession,
+        *,
+        external_api_service: ExternalApiService | None = None,
+    ) -> "PrepareUwDataJob":
+        """Build the job for one session.
+
+        ``external_api_service`` memoizes its FRED lookup per instance, so a
+        batch caller passes one in to share a single fetch across every listing
+        and to warm it before the first transaction opens.
+        """
         market_repo = MarketRepository(db)
         return cls(
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
@@ -68,7 +79,7 @@ class PrepareUwDataJob:
             construction_amenities_service=ConstructionAmenitiesService(ConstructionAmenitiesRepository(db)),
             construction_remodeling_service=ConstructionRemodelingService(ConstructionRemodelingRepository(db)),
             str_cribs_service=StrCribsFeeDetailsService(StrCribsFeeDetailsRepository(db)),
-            external_api_service=ExternalApiService(),
+            external_api_service=external_api_service or ExternalApiService(),
             uw_data_service=PrepareUwDataService(),
         )
 

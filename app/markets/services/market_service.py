@@ -11,6 +11,7 @@ from app.markets.schemas.market import (
     MarketUpdateSchema,
     RealtorRefSchema,
 )
+from app.users.schemas.user import UserSummary
 
 
 class MarketService:
@@ -19,10 +20,14 @@ class MarketService:
         repository: MarketRepository,
         amenities_repository: ConstructionAmenitiesRepository,
         realtor_repository: RealtorRepository,
+        user_repository=None,
     ):
         self.repository = repository
         self.amenities_repository = amenities_repository
         self.realtor_repository = realtor_repository
+        # Optional: callers that only need market data (the underwriting jobs)
+        # construct the service without it, and analyst_owner stays unresolved.
+        self.user_repository = user_repository
 
     async def _get_amenity_name_map(self) -> dict[int, str | None]:
         records = await self.amenities_repository.get_all()
@@ -35,8 +40,22 @@ class MarketService:
             for record in records
         }
 
-    async def _get_lookup_maps(self) -> tuple[dict[int, str | None], dict[int, RealtorRefSchema]]:
-        return await self._get_amenity_name_map(), await self._get_realtor_map()
+    async def _get_user_map(self) -> dict[int, UserSummary]:
+        # No-op without a user repository; soft-deleted users are excluded by
+        # the repository, so their ids simply fail to resolve.
+        if self.user_repository is None:
+            return {}
+        records = await self.user_repository.get_all()
+        return {record.id: UserSummary.model_validate(record) for record in records}
+
+    async def _get_lookup_maps(
+        self,
+    ) -> tuple[dict[int, str | None], dict[int, RealtorRefSchema], dict[int, UserSummary]]:
+        return (
+            await self._get_amenity_name_map(),
+            await self._get_realtor_map(),
+            await self._get_user_map(),
+        )
 
     async def _validate_amenity_ids(self, data: dict) -> None:
         ids: set[int] = set()
@@ -85,6 +104,7 @@ class MarketService:
         market: MarketKeysMaster,
         amenity_name_map: dict[int, str | None],
         realtor_map: dict[int, RealtorRefSchema],
+        user_map: dict[int, UserSummary] | None = None,
     ) -> MarketKeysMasterSchema:
         return MarketKeysMasterSchema(
             id=market.id,
@@ -92,7 +112,8 @@ class MarketService:
             market_name=market.market_name,
             market_name_current=market.market_name_current,
             market_status=market.market_status,
-            analyst_owner=market.analyst_owner,
+            analyst_owner_id=market.analyst_owner_id,
+            analyst_owner=(user_map or {}).get(market.analyst_owner_id),
             market_notes=market.market_notes,
             map_config=market.map_config,
             filters=market.filters,
@@ -158,17 +179,18 @@ class MarketService:
         page: int,
         page_size: int,
         market_status: str | None = None,
-        analyst_owner: str | None = None,
+        analyst_owner_id: int | None = None,
         search: str | None = None,
     ) -> tuple[list[MarketKeysMasterSchema], int, int]:
         items, total, pages = await self.repository.get_paginated(
             page=page,
             page_size=page_size,
             market_status=market_status,
-            analyst_owner=analyst_owner,
+            analyst_owner_id=analyst_owner_id,
             search=search,
         )
-        amenity_name_map, realtor_map = await self._get_lookup_maps()
+        amenity_name_map, realtor_map, user_map = await self._get_lookup_maps()
         return [
-            self._to_schema(item, amenity_name_map, realtor_map) for item in items
+            self._to_schema(item, amenity_name_map, realtor_map, user_map)
+            for item in items
         ], total, pages

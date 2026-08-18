@@ -18,7 +18,8 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
     one, financing and tax terms are seeded with defaults and no line items are
     produced. The fetched ``zillow_property`` is stored on ``uw_details``
     (``is_automated=False``), so it is read back from storage rather than
-    hydrated live. Does not fetch data or persist anything.
+    hydrated live. Ownership follows the market's analyst owner when there is
+    one, otherwise ``current_user_id``. Does not fetch data or persist anything.
     """
 
     def build_from_zillow_property(
@@ -27,6 +28,7 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         listing_url: str,
         zillow_property: dict[str, Any],
         market_context: MarketContext | None = None,
+        current_user_id: int | None = None,
     ) -> SaveUnderwritingPayload:
         # street/city/state ride along on the fetched dict but belong on the
         # underwritings row's own columns, not in the stored zillow_property
@@ -72,6 +74,11 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
             # Null for a template (market-less) deal — see
             # to_template_market_context, which clears the identity fields.
             "market_id": context.get("market_id"),
+            # A market-less (template) deal has no analyst owner to inherit, so
+            # it falls to the analyst who created it.
+            "owner_id": self._resolve_owner_id(
+                context, fallback_user_id=current_user_id
+            ),
             "property_address": zillow_property.get("address"),
             "street": street,
             "city": city,

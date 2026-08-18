@@ -97,10 +97,11 @@ class GetUnderwritingCompSet(BaseModel):
     revenue: Decimal | None = None
     bedrooms: int | None = None
     sleeps: int | None = None
+    is_favourite: bool = False
 
 
 class UserRef(BaseModel):
-    """Lightweight users.users reference used to resolve analyst_id/approver_id."""
+    """Lightweight users.users reference used to resolve analyst/approver/owner ids."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -128,11 +129,12 @@ class GetUnderwritingResult(UnderwritingRead):
     # row lacked the inputs to simulate (stored values shown instead). Stays
     # None — and out of the payload — on the normal list path.
     simulated: bool | None = None
-    # Resolved users.users references for analyst_id/approver_id, and the
-    # realtors associated with the underwriting's market (via
+    # Resolved users.users references for analyst_id/approver_id/owner_id, and
+    # the realtors associated with the underwriting's market (via
     # market_keys_master.realtor_ids). Populated by the read service.
     analyst: UserRef | None = None
     approver: UserRef | None = None
+    owner: UserRef | None = None
     realtor_details: list[UnderwritingRealtorDetail] = Field(default_factory=list)
     details: GetUnderwritingDetails | None = None
     taxes: GetUnderwritingTaxes | None = None

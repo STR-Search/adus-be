@@ -86,6 +86,7 @@ class TestPrepare:
             market=SimpleNamespace(
                 market_name="Smoky Mountains",
                 market_slug="smoky-mountains",
+                analyst_owner_id=7,
                 must_have_amenities=[SimpleNamespace(id=1, amenity_name="Hot Tub")],
             ),
             market_id=3,
@@ -182,7 +183,7 @@ class TestPrepare:
     def test_prepends_consolidated_shipping_amenity_from_opex(self):
         amenities = self._prepare().model_dump()["construction_amenities"]
         assert amenities[1] == {
-            "amenity_name": "Install/Staging/Warehousing",
+            "amenity_name": "Install / Staging / Warehousing",
             "id": -1,
             "location": None,
             "notes": None,
@@ -203,6 +204,7 @@ class TestPrepare:
         market = SimpleNamespace(
             market_name="Smoky Mountains",
             market_slug="smoky-mountains",
+            analyst_owner_id=7,
             must_have_amenities=None,
         )
         result = self._prepare(market=market).model_dump()
@@ -253,6 +255,7 @@ class TestToTemplateMarketContext:
             market=SimpleNamespace(
                 market_name="Smoky Mountains",
                 market_slug="smoky-mountains",
+                analyst_owner_id=7,
                 must_have_amenities=[SimpleNamespace(id=1, amenity_name="Hot Tub")],
             ),
             market_id=1,
@@ -319,7 +322,7 @@ class TestToTemplateMarketContext:
             by_id[
                 PrepareUwDataService.STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID
             ].amenity_name
-            == "Design/Project Management"
+            == "Design / Project Management"
         )
 
         # the rest of the catalog is the analyst's picklist, left untouched

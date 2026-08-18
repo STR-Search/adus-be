@@ -1,4 +1,15 @@
-from sqlalchemy import Column, Integer, String, Numeric, Text, ForeignKey, select, func
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Integer,
+    String,
+    Numeric,
+    Text,
+    ForeignKey,
+    select,
+    func,
+    text,
+)
 from sqlalchemy.orm import relationship, column_property
 from app.core.database import Base
 
@@ -59,6 +70,9 @@ class UnderwritingCompSet(Base):
     revenue = Column(Numeric(12, 2), nullable=True)
     bedrooms = Column(Integer, nullable=True)
     sleeps = Column(Integer, nullable=True)
+    is_favourite = Column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
     sort_order = Column(Integer, nullable=True)
 
     underwriting = relationship("Underwriting", back_populates="comp_set")

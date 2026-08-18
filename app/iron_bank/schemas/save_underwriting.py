@@ -100,6 +100,7 @@ class CompSetInput(BaseModel):
     revenue: Decimal | None = None
     bedrooms: int | None = None
     sleeps: int | None = None
+    is_favourite: bool = False
 
 
 class SaveUnderwritingPayload(UnderwritingBase):
@@ -112,6 +113,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                 "market_id": 3,
                 "analyst_id": 2,
                 "approver_id": 1,
+                "owner_id": 4,
                 "deal_status": "analyst_started",
                 "deal_added": "2025-03-10T08:00:00Z",
                 "deal_submitted": "2025-03-13T16:30:00Z",
@@ -275,6 +277,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "revenue": 112400,
                         "bedrooms": 4,
                         "sleeps": 10,
+                        "is_favourite": True,
                     },
                     {
                         "listing_url": (

@@ -472,6 +472,7 @@ def _webhook_underwriting(**overrides):
         market_id=7,
         analyst_id=3,
         approver_id=None,
+        owner_id=None,
         deal_status=DealStatus.ANALYST_COMPLETED,
         property_address="1 Main St, Austin, TX",
         listing_url="https://zillow.com/x",

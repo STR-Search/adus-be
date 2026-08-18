@@ -230,6 +230,9 @@ class PrepareUwDataService:
                 "market_name": market.market_name if market else None,
                 "market_id": market_id,
                 "market_slug": market.market_slug if market else None,
+                "analyst_owner_id": (
+                    market.analyst_owner_id if market else None
+                ),
                 "opex": self._transform_opex_costs(opex_by_bedrooms, opex_by_size),
                 "construction_amenities": amenities,
                 "construction_remodeling": [
@@ -291,6 +294,9 @@ class PrepareUwDataService:
         template.market_id = None
         template.market_name = None
         template.market_slug = None
+        # The template market's analyst does not own a market-less deal; the
+        # non-automated builder falls back to the requesting user instead.
+        template.analyst_owner_id = None
         return template
 
     def prepare(

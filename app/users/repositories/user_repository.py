@@ -26,6 +26,19 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_all(self) -> list[User]:
+        """All non-deleted users, ordered by name then id for a stable list."""
+        result = await self.db.execute(
+            select(User)
+            .where(User.is_deleted.is_not(True))
+            .order_by(
+                User.first_name.asc().nullslast(),
+                User.last_name.asc().nullslast(),
+                User.id.asc(),
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_by_ids(self, user_ids: set[int]) -> list[User]:
         if not user_ids:
             return []

@@ -254,7 +254,7 @@ class GetUnderwritingService:
         await self._populate_realtor_details(results)
 
     async def _populate_user_refs(self, results: list[GetUnderwritingResult]) -> None:
-        """Resolve ``analyst`` / ``approver`` from analyst_id / approver_id.
+        """Resolve ``analyst`` / ``approver`` / ``owner`` from their ``*_id``s.
 
         One batched query for the distinct user ids across the page; no-op when
         no user repository is configured. Deleted or unknown ids leave the ref
@@ -262,8 +262,11 @@ class GetUnderwritingService:
         """
         if self.user_repository is None or not results:
             return
-        user_ids = {r.analyst_id for r in results if r.analyst_id is not None} | {
-            r.approver_id for r in results if r.approver_id is not None
+        user_ids = {
+            user_id
+            for result in results
+            for user_id in (result.analyst_id, result.approver_id, result.owner_id)
+            if user_id is not None
         }
         if not user_ids:
             return
@@ -274,6 +277,8 @@ class GetUnderwritingService:
                 result.analyst = refs.get(result.analyst_id)
             if result.approver_id is not None:
                 result.approver = refs.get(result.approver_id)
+            if result.owner_id is not None:
+                result.owner = refs.get(result.owner_id)
 
     async def _populate_realtor_details(
         self, results: list[GetUnderwritingResult]
@@ -407,6 +412,7 @@ class GetUnderwritingService:
             "revenue": comp.revenue,
             "bedrooms": comp.bedrooms,
             "sleeps": comp.sleeps,
+            "is_favourite": comp.is_favourite,
         }
 
     async def _zillow_from_listing(self, underwriting) -> tuple[Any, Any]:

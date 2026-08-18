@@ -29,6 +29,7 @@ def upgrade() -> None:
         sa.Column("market_id", sa.Integer(), nullable=True),
         sa.Column("analyst_id", sa.Integer(), nullable=True),
         sa.Column("approver_id", sa.Integer(), nullable=True),
+        sa.Column("owner_id", sa.Integer(), nullable=True),
         sa.Column("deal_status", sa.String(length=50), nullable=True),
         sa.Column(
             "deal_added",
@@ -126,6 +127,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["approver_id"], ["users.users.id"], ondelete="SET NULL"
         ),
+        sa.ForeignKeyConstraint(["owner_id"], ["users.users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         schema="iron_bank",
     )
@@ -161,6 +163,12 @@ def upgrade() -> None:
         sa.Column("revenue", sa.Numeric(precision=12, scale=2), nullable=True),
         sa.Column("bedrooms", sa.Integer(), nullable=True),
         sa.Column("sleeps", sa.Integer(), nullable=True),
+        sa.Column(
+            "is_favourite",
+            sa.Boolean(),
+            server_default=sa.text("false"),
+            nullable=False,
+        ),
         sa.Column("sort_order", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"
