@@ -249,6 +249,7 @@ async def test_get_all_batch_hydrates_automated_zillow_into_details():
         "original_photos": ["https://photos.zillowstatic.com/photo-1.jpg"],
         "lot_size_sqft": Decimal("21780"),
         "description": "Cabin in the woods.",
+        "lot_size_acres": Decimal("0.50"),
     }
     # non-automated item keeps its stored zillow_property (coerced to schema)
     assert result.data[1].details.zillow_property.id == "copied"
@@ -401,6 +402,7 @@ async def test_get_edit_context_automated_hydrates_zillow_from_listing():
         "original_photos": ["https://photos.zillowstatic.com/photo-1.jpg"],
         "lot_size_sqft": Decimal("21780"),
         "description": "Cabin in the woods.",
+        "lot_size_acres": Decimal("0.50"),
     }
     furnishings = result.data.contextual.construction_amenities[0]
     assert furnishings.amenity_name == "Furniture / Decor / Essentials"

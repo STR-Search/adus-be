@@ -1,11 +1,12 @@
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    computed_field,
     field_serializer,
     model_serializer,
     model_validator,
@@ -27,6 +28,9 @@ def _serialize_plain_decimal(value: Decimal | None) -> str | None:
     return format(value, "f")
 
 
+_SQFT_PER_ACRE = Decimal("43560")
+
+
 class ZillowProperty(BaseModel):
     id: str | None = None
     url: str | None = None
@@ -39,6 +43,20 @@ class ZillowProperty(BaseModel):
     original_photos: list | None = None
     lot_size_sqft: Decimal | None = None
     description: str | None = None
+
+    @computed_field
+    @property
+    def lot_size_acres(self) -> Decimal | None:
+        """``lot_size_sqft`` expressed in acres (2 dp), for every read path.
+
+        Derived rather than stored so the list, detail, and n8n webhook
+        payloads all carry it without any caller doing the conversion.
+        """
+        if self.lot_size_sqft is None:
+            return None
+        return (self.lot_size_sqft / _SQFT_PER_ACRE).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
 
 class GetUnderwritingDetails(BaseModel):
