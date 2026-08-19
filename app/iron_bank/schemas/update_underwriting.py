@@ -31,6 +31,10 @@ class UpdateUnderwritingPayload(BaseModel):
     state: str | None = None
     days_on_market: int | None = None
     sleep_capacity: int | None = None
+    # Sent alongside the FE-placed opex/optimization values when the analyst
+    # changes the bedroom count (see GET /iron-bank/bedroom-context).
+    bedrooms: int | None = None
+    bathrooms: Decimal | None = None
     purchase_price: Decimal | None = None
     total_oop: Decimal | None = None
     prr: Decimal | None = None

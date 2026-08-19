@@ -100,6 +100,8 @@ class Underwriting(Base):
     state = Column(String(50), nullable=True)
     days_on_market = Column(Integer, nullable=True)
     sleep_capacity = Column(Integer, nullable=True)
+    bedrooms = Column(Integer, nullable=True)
+    bathrooms = Column(Numeric(4, 1), nullable=True)
 
     purchase_price = Column(Numeric(12, 2), nullable=True)
     total_oop = Column(Numeric(12, 2), nullable=True)

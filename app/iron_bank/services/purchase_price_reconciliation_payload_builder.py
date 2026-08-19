@@ -43,6 +43,11 @@ class PurchasePriceReconciliationPayloadBuilder:
         forecasted_revenue = underwriting.detail.forecasted_revenue
         payload = {
             "is_automated": underwriting.is_automated,
+            # Carried explicitly: this synthetic payload sets neither zpid nor
+            # details.zillow_property, so SaveUnderwritingService's resolver has
+            # nothing to recover them from.
+            "bedrooms": underwriting.bedrooms,
+            "bathrooms": underwriting.bathrooms,
             "details": {
                 "purchase_details": {
                     "purchase_price": purchase_price,

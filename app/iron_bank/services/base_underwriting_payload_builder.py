@@ -26,6 +26,7 @@ class BaseUnderwritingPayloadBuilder:
     _DEFAULT_DEAL_STATUS = DealStatus.TEMPLATE_GENERATED
     _DEFAULT_SLA_MULTIPLIER_PCT = Decimal("0.36")
     _DEFAULT_BONUS_AMOUNT_PCT = Decimal("1")
+    _MONEY_QUANT = Decimal("0.01")
 
     # Seeded optimization items all price at tier 2 for now; the analyst
     # re-tiers from the amenity catalog in the edit form.
@@ -107,6 +108,15 @@ class BaseUnderwritingPayloadBuilder:
         3. Neither -> None; the item is seeded blank for the team to fill out.
 
         Amounts are annual; OPEX is monthly, so both sources divide by 12.
+        Both are quantized to cents — a rate like 0.0125 would otherwise carry
+        its own scale into the stored blob (0.0125 x 480000 = 6000.0000) and the
+        division would trail even further. The raw figures stay recoverable
+        under "inputs".
+
+        Each amount is rounded from the unrounded annual, not from each other,
+        so neither inherits the other's rounding error; 12 x monthly can
+        therefore differ from annual by up to a cent.
+
         The returned dict is persisted on uw_details.property_taxes so the
         derivation stays auditable (mirrors cleaning_cost): the resolved
         amounts sit at the top level regardless of source, and the
@@ -117,8 +127,8 @@ class BaseUnderwritingPayloadBuilder:
             annual = pct * purchase_price
             return {
                 "source": "opex_property_tax_pct",
-                "annual_amount": annual,
-                "monthly_amount": annual / 12,
+                "annual_amount": self._money(annual),
+                "monthly_amount": self._money(annual / 12),
                 "inputs": {
                     "opex_property_tax_pct": pct,
                     "purchase_price": purchase_price,
@@ -127,11 +137,15 @@ class BaseUnderwritingPayloadBuilder:
         if zillow_annual_tax is not None:
             return {
                 "source": "zillow_annual_tax",
-                "annual_amount": zillow_annual_tax,
-                "monthly_amount": zillow_annual_tax / 12,
+                "annual_amount": self._money(zillow_annual_tax),
+                "monthly_amount": self._money(zillow_annual_tax / 12),
                 "inputs": {},
             }
         return None
+
+    def _money(self, value: Decimal) -> Decimal:
+        """Round to cents, matching ``UnderwritingCalculator._money``."""
+        return value.quantize(self._MONEY_QUANT)
 
     def _build_optimization_list(
         self, context: dict[str, Any], *, zpid: Any = None
@@ -154,7 +168,8 @@ class BaseUnderwritingPayloadBuilder:
                 [
                     *PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS,
                     *(
-                        id for id in (context.get("must_have_amenity_ids") or [])
+                        id
+                        for id in (context.get("must_have_amenity_ids") or [])
                         if id not in self._POOL_AMENITY_IDS_TO_EXCLUDE
                     ),
                 ]
@@ -188,7 +203,14 @@ class BaseUnderwritingPayloadBuilder:
             "tier": self._AMENITY_TIER_LABEL,
         }
 
-    def _build_cleaning_cost(self, cleaning: dict[str, Any]) -> dict[str, Any] | None:
+    def build_cleaning_cost(self, cleaning: dict[str, Any]) -> dict[str, Any] | None:
+        """Resolve the uw_details.cleaning_cost blob from an opex cleaning dict.
+
+        Public alongside ``build_opex_property_taxes``: both are the canonical
+        derivations for their uw_details blob, and the bedroom-context endpoint
+        reuses them so a bedroom change hands the FE exactly the shape creation
+        would have produced.
+        """
         fee = cleaning.get("fee")
         turns = cleaning.get("num_of_turns")
         if fee is None and turns is None:
@@ -242,6 +264,20 @@ class BaseUnderwritingPayloadBuilder:
 
     def _humanize_expense_name(self, value: str) -> str:
         return value.replace("_", " ").title()
+
+    @staticmethod
+    def _as_int(value: Any) -> int | None:
+        """Coerce a Zillow-supplied number to int, or None if it isn't one.
+
+        Mirrors ``CreateUnderwritingFromUrlService._as_int``: the live Zillow
+        fetch can report bedrooms as a float, unlike ``scheduled_listings.beds``.
+        """
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     def _money_to_decimal(self, value: Any) -> Decimal | None:
         return PurchasePriceReconciliationPayloadBuilder.normalize_purchase_price(value)

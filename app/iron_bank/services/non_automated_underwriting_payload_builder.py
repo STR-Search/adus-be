@@ -45,7 +45,7 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         # apply — the same thing an empty config dict yields.
         config = context.get("config") or {}
         opex = context.get("opex") or {}
-        cleaning_cost = self._build_cleaning_cost(opex.get("cleaning") or {})
+        cleaning_cost = self.build_cleaning_cost(opex.get("cleaning") or {})
         property_taxes = self.build_opex_property_taxes(
             property_tax_pct=opex.get("property_tax_pct"),
             purchase_price=purchase_price,
@@ -83,6 +83,8 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
             "street": street,
             "city": city,
             "state": state,
+            "bedrooms": self._as_int(zillow_property.get("bedrooms")),
+            "bathrooms": zillow_property.get("bathrooms"),
             "purchase_price": purchase_price,
             "details": details,
             "taxes": self._build_taxes(config) if purchase_price is not None else None,
