@@ -26,6 +26,9 @@ class BaseUnderwritingPayloadBuilder:
     _DEFAULT_DEAL_STATUS = DealStatus.TEMPLATE_GENERATED
     _DEFAULT_SLA_MULTIPLIER_PCT = Decimal("0.36")
     _DEFAULT_BONUS_AMOUNT_PCT = Decimal("1")
+    # Mirrors UnderwritingCalculator._MONEY_QUANT — the same cents convention,
+    # kept local so the builders don't depend on the calculator.
+    _MONEY_QUANT = Decimal("0.01")
 
     # Seeded optimization items all price at tier 2 for now; the analyst
     # re-tiers from the amenity catalog in the edit form.
@@ -107,6 +110,15 @@ class BaseUnderwritingPayloadBuilder:
         3. Neither -> None; the item is seeded blank for the team to fill out.
 
         Amounts are annual; OPEX is monthly, so both sources divide by 12.
+        Both are quantized to cents — a rate like 0.0125 would otherwise carry
+        its own scale into the stored blob (0.0125 x 480000 = 6000.0000) and the
+        division would trail even further. The raw figures stay recoverable
+        under "inputs".
+
+        Each amount is rounded from the unrounded annual, not from each other,
+        so neither inherits the other's rounding error; 12 x monthly can
+        therefore differ from annual by up to a cent.
+
         The returned dict is persisted on uw_details.property_taxes so the
         derivation stays auditable (mirrors cleaning_cost): the resolved
         amounts sit at the top level regardless of source, and the
@@ -117,8 +129,8 @@ class BaseUnderwritingPayloadBuilder:
             annual = pct * purchase_price
             return {
                 "source": "opex_property_tax_pct",
-                "annual_amount": annual,
-                "monthly_amount": annual / 12,
+                "annual_amount": self._money(annual),
+                "monthly_amount": self._money(annual / 12),
                 "inputs": {
                     "opex_property_tax_pct": pct,
                     "purchase_price": purchase_price,
@@ -127,11 +139,15 @@ class BaseUnderwritingPayloadBuilder:
         if zillow_annual_tax is not None:
             return {
                 "source": "zillow_annual_tax",
-                "annual_amount": zillow_annual_tax,
-                "monthly_amount": zillow_annual_tax / 12,
+                "annual_amount": self._money(zillow_annual_tax),
+                "monthly_amount": self._money(zillow_annual_tax / 12),
                 "inputs": {},
             }
         return None
+
+    def _money(self, value: Decimal) -> Decimal:
+        """Round to cents, matching ``UnderwritingCalculator._money``."""
+        return value.quantize(self._MONEY_QUANT)
 
     def _build_optimization_list(
         self, context: dict[str, Any], *, zpid: Any = None
