@@ -469,3 +469,92 @@ async def test_get_edit_context_no_zpid_yields_no_zillow_property():
     furnishings = result.data.contextual.construction_amenities[0]
     assert furnishings.amenity_name == "Furniture / Decor / Essentials"
     assert furnishings.price_tier_1 is None
+
+
+# --- get_edit_context: opex keys on underwritings.bedrooms ------------------
+#
+# The analyst can add a bedroom during underwriting, so the row's own count --
+# not Zillow's observation -- decides which opex row prices the furnishing and
+# shipping options.
+
+
+class RecordingOpexByBedroomsService:
+    def __init__(self):
+        self.called_with = None
+
+    async def get_by_market_and_bedrooms(self, *, bedrooms: int, market_id: int):
+        self.called_with = {"bedrooms": bedrooms, "market_id": market_id}
+        return StubOpexByBedrooms()
+
+
+@pytest.mark.asyncio
+async def test_edit_context_opex_uses_the_underwriting_bedrooms_not_the_listing():
+    # StubListing.beds is 3; the analyst underwrote it as a 5-bedroom.
+    underwriting = GetUnderwritingResult(
+        id=1, zpid="123", market_id=1, is_automated=True, bedrooms=5
+    )
+    opex_service = RecordingOpexByBedroomsService()
+    service = _make_service(underwriting, opex_service=opex_service)
+
+    await service.get_edit_context(1)
+
+    assert opex_service.called_with == {"bedrooms": 5, "market_id": 1}
+
+
+@pytest.mark.asyncio
+async def test_edit_context_opex_uses_the_underwriting_bedrooms_not_stored_zillow():
+    underwriting = GetUnderwritingResult(
+        id=1,
+        zpid="copied-from-browser",
+        market_id=1,
+        is_automated=False,
+        bedrooms=5,
+        details=GetUnderwritingDetails(
+            zillow_property={"id": "copied-from-browser", "bedrooms": 3}
+        ),
+    )
+    opex_service = RecordingOpexByBedroomsService()
+    service = _make_service(
+        underwriting,
+        listings_service=ExplodingListingsService(),
+        opex_service=opex_service,
+    )
+
+    result = await service.get_edit_context(1)
+
+    assert opex_service.called_with == {"bedrooms": 5, "market_id": 1}
+    # Zillow's original observation is still returned, untouched.
+    assert result.data.underwriting.details.zillow_property.bedrooms == 3
+
+
+@pytest.mark.asyncio
+async def test_edit_context_falls_back_to_zillow_when_the_column_is_null():
+    # Pre-backfill row: no bedrooms column, so the listing's count still works.
+    # Remove this fallback once backfill_underwriting_bedrooms.py has run.
+    underwriting = GetUnderwritingResult(
+        id=1, zpid="123", market_id=1, is_automated=True, bedrooms=None
+    )
+    opex_service = RecordingOpexByBedroomsService()
+    service = _make_service(underwriting, opex_service=opex_service)
+
+    await service.get_edit_context(1)
+
+    assert opex_service.called_with == {"bedrooms": 3, "market_id": 1}
+
+
+@pytest.mark.asyncio
+async def test_edit_context_hydrates_zillow_even_without_a_market():
+    # The market_id guard now sits on the opex lookup alone, so a market-less
+    # deal keeps its photos/address/price and merely loses furnishing prices.
+    underwriting = GetUnderwritingResult(
+        id=1, zpid="123", market_id=None, is_automated=True, bedrooms=5
+    )
+    service = _make_service(underwriting)
+
+    result = await service.get_edit_context(1)
+
+    assert result.data.underwriting.details.zillow_property.address == (
+        "123 Pine Ridge Rd"
+    )
+    furnishings = result.data.contextual.construction_amenities[0]
+    assert furnishings.price_tier_1 is None

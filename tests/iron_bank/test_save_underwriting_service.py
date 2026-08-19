@@ -30,14 +30,17 @@ class FakeMarketService:
 
 
 class FakeListingsService:
-    def __init__(self, beds=4, home_status=None):
+    def __init__(self, beds=4, baths=2.5, home_status=None):
         self.beds = beds
+        self.baths = baths
         self.home_status = home_status
         self.zpid = None
 
     async def get_by_zpid(self, zpid: str):
         self.zpid = zpid
-        return SimpleNamespace(beds=self.beds, home_status=self.home_status)
+        return SimpleNamespace(
+            beds=self.beds, baths=self.baths, home_status=self.home_status
+        )
 
 
 class FakeCleanedDataService:
@@ -490,3 +493,94 @@ def test_forecasted_revenue_requires_all_three_scenarios_when_provided():
                 },
             }
         )
+
+
+# --- bedrooms/bathrooms are persisted on every creation path ----------------
+#
+# The columns are the source of truth from creation onwards, so save() resolves
+# them centrally rather than trusting the payload builders alone -- a direct
+# POST /iron-bank/underwritings must not leave them NULL.
+
+
+@pytest.mark.asyncio
+async def test_save_persists_bedrooms_and_bathrooms_from_the_payload():
+    repository = FakeUnderwritingRepository()
+    service = SaveUnderwritingService(repository)
+    payload = SaveUnderwritingPayload.model_validate(
+        {"is_automated": False, "bedrooms": 5, "bathrooms": "3.5"}
+    )
+
+    await service.save(payload)
+
+    assert repository.underwriting_data["bedrooms"] == 5
+    assert repository.underwriting_data["bathrooms"] == Decimal("3.5")
+
+
+@pytest.mark.asyncio
+async def test_save_falls_back_to_the_stored_zillow_property():
+    repository = FakeUnderwritingRepository()
+    service = SaveUnderwritingService(repository)
+    payload = SaveUnderwritingPayload.model_validate(
+        {
+            "is_automated": False,
+            "details": {"zillow_property": {"bedrooms": 3, "bathrooms": "2.5"}},
+        }
+    )
+
+    await service.save(payload)
+
+    assert repository.underwriting_data["bedrooms"] == 3
+    assert repository.underwriting_data["bathrooms"] == Decimal("2.5")
+
+
+@pytest.mark.asyncio
+async def test_save_falls_back_to_the_scheduled_listing():
+    repository = FakeUnderwritingRepository()
+    service = SaveUnderwritingService(
+        repository, listings_service=FakeListingsService(beds=6, baths=4.5)
+    )
+    payload = SaveUnderwritingPayload.model_validate(
+        {"is_automated": True, "zpid": "12345"}
+    )
+
+    await service.save(payload)
+
+    assert repository.underwriting_data["bedrooms"] == 6
+    # scheduled_listings.baths is a float; the column is Numeric.
+    assert repository.underwriting_data["bathrooms"] == Decimal("4.5")
+
+
+@pytest.mark.asyncio
+async def test_save_prefers_the_payload_over_every_zillow_source():
+    repository = FakeUnderwritingRepository()
+    service = SaveUnderwritingService(
+        repository, listings_service=FakeListingsService(beds=6, baths=4.5)
+    )
+    payload = SaveUnderwritingPayload.model_validate(
+        {
+            "is_automated": True,
+            "zpid": "12345",
+            "bedrooms": 5,
+            "bathrooms": "3.5",
+            "details": {"zillow_property": {"bedrooms": 3, "bathrooms": "2.5"}},
+        }
+    )
+
+    await service.save(payload)
+
+    assert repository.underwriting_data["bedrooms"] == 5
+    assert repository.underwriting_data["bathrooms"] == Decimal("3.5")
+    # Zillow's own observation is still persisted, unchanged.
+    assert repository.detail_data["zillow_property"]["bedrooms"] == 3
+
+
+@pytest.mark.asyncio
+async def test_save_leaves_the_columns_null_when_nothing_can_resolve_them():
+    repository = FakeUnderwritingRepository()
+    service = SaveUnderwritingService(repository)
+    payload = SaveUnderwritingPayload.model_validate({"is_automated": False})
+
+    await service.save(payload)
+
+    assert repository.underwriting_data["bedrooms"] is None
+    assert repository.underwriting_data["bathrooms"] is None
