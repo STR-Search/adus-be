@@ -58,6 +58,36 @@ class MarketContext(BaseModel):
     config: UwConfigSchema
 
 
+class BedroomContext(BaseModel):
+    """The seed values that change when an analyst changes the bedroom count.
+
+    Deliberately narrower than ``MarketContext``: it carries *only* what is
+    keyed on ``(market_id, bedrooms)``, so the FE has nothing it must remember
+    to ignore. Excluded because none of it moves with bedrooms — the remodeling
+    catalog, must-have amenities, the STR Cribs option (keyed on area), the
+    sqft-keyed opex rows (internet / pest control / utilities), and every
+    financing/FRED default.
+
+    The FE merges these into the edit form and PUTs as usual; bedrooms itself
+    has no formula, so the normal recalculation cascade does the rest.
+    """
+
+    bedrooms: int
+    opex: PreparedOpex
+    # Derived server-side rather than left to the FE so the persisted blobs stay
+    # byte-identical to the ones creation produces (same shape, same
+    # source/inputs provenance keys). Placed straight onto uw_details.
+    cleaning_cost: dict[str, Any] | None = None
+    property_taxes: dict[str, Any] | None = None
+    # Only the two bedroom-keyed synthetic options: "Furniture / Decor /
+    # Essentials" (id 0) and "Install / Staging / Warehousing" (id -1). All
+    # three price tiers are returned so a re-tiered analyst choice is honoured
+    # rather than forced back to Mid.
+    furnishing_options: list[ConstructionAmenityOption] = Field(default_factory=list)
+    land_assumptions_pct: Decimal | None = None
+    annual_re_appreciation_pct: Decimal | None = None
+
+
 class PrepareUwDataResult(MarketContext):
     zillow_property: ZillowProperty
     # Address parts kept alongside ``zillow_property`` rather than inside it:
