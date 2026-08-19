@@ -46,7 +46,7 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingsQuery,
     GetUnderwritingsResult,
 )
-from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
+from app.iron_bank.schemas.prepare_uw import BedroomContext, PrepareUwDataResult
 from app.iron_bank.schemas.save_underwriting import (
     SaveUnderwritingPayload,
     SaveUnderwritingResult,
@@ -104,7 +104,9 @@ def get_save_underwriting_controller(
         CleanedDataRepository,
     )
     from app.airbnb_public.services.cleaned_data_service import CleanedDataService
-    from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
+    from app.markets.repositories.construction_repository import (
+        ConstructionAmenitiesRepository,
+    )
     from app.markets.repositories.market_repository import MarketRepository
     from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.services.market_service import MarketService
@@ -179,7 +181,9 @@ def get_update_underwriting_controller(
     )
     from app.airbnb_public.services.cleaned_data_service import CleanedDataService
     from app.external_api.services.n8n_webhook_service import N8nWebhookService
-    from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
+    from app.markets.repositories.construction_repository import (
+        ConstructionAmenitiesRepository,
+    )
     from app.markets.repositories.market_repository import MarketRepository
     from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.services.market_service import MarketService
@@ -294,6 +298,38 @@ async def get_prepare_uw_data(
     controller: PrepareUwDataController = Depends(get_prepare_uw_data_controller),
 ):
     return await controller.get_prepare_uw_data(zpid=zpid)
+
+
+@router.get(
+    "/underwritings/{underwriting_id}/bedroom-context",
+    response_model=BedroomContext,
+    tags=["iron_bank"],
+)
+async def get_bedroom_context(
+    underwriting_id: int,
+    bedrooms: int = Query(...),
+    controller: PrepareUwDataController = Depends(get_prepare_uw_data_controller),
+):
+    """Re-seed an underwriting's bedroom-keyed values for a new bedroom count.
+
+    ``bedrooms`` is the *prospective* count the analyst is considering — not the
+    one stored on the row, which is exactly what this previews changing. The
+    market and purchase price are read off the underwriting itself, so the
+    property-tax blob can never be computed against a stale price the client
+    happened to be holding.
+
+    404s when the underwriting does not exist, has no market, or its market has
+    no opex row at that bedroom count.
+
+    Returns only what is keyed on (market, bedrooms). The FE **merges** the
+    result into the edit form — the sqft-keyed opex rows, the "Design / Project
+    Management" item and the market's must-have amenities are not in the
+    response and must survive untouched — then PUTs as normal.
+    """
+    return await controller.get_bedroom_context(
+        underwriting_id=underwriting_id,
+        bedrooms=bedrooms,
+    )
 
 
 @router.post(
