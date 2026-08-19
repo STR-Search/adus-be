@@ -97,6 +97,12 @@ class SaveUnderwritingService:
         await self._apply_listing_boolean_fields(underwriting_data, payload)
         tax_data = self._build_tax_data(payload)
         bedrooms = await self._resolve_bedrooms_for_save(payload)
+        # Persist the resolved values, not just use them: the underwriting row
+        # is the source of truth from creation onwards, and resolving centrally
+        # here guarantees the invariant even for direct API callers that send
+        # neither field.
+        underwriting_data["bedrooms"] = bedrooms
+        underwriting_data["bathrooms"] = await self._resolve_bathrooms_for_save(payload)
         detail_data = await self._build_detail_data(
             payload,
             tax_data,
@@ -277,12 +283,17 @@ class SaveUnderwritingService:
     async def _resolve_bedrooms_for_save(
         self, payload: SaveUnderwritingPayload
     ) -> int | None:
-        """Resolve the bedroom count used for the Airbnb revenue lookup.
+        """Resolve the bedroom count for the row's own column and the Airbnb lookup.
 
-        Non-automated payloads carry the property data inline, so bedrooms come
-        from ``details.zillow_property``. Automated payloads don't, so they fall
-        back to ``scheduled_listings`` via ``zpid``.
+        ``payload.bedrooms`` is the analyst-owned assumption and wins; both
+        payload builders set it at creation. The Zillow fallbacks exist for
+        direct ``POST /iron-bank/underwritings`` callers that don't send it —
+        non-automated payloads carry the property data inline on
+        ``details.zillow_property``, automated ones only carry a ``zpid``.
         """
+        if payload.bedrooms is not None:
+            return payload.bedrooms
+
         if (
             payload.details is not None
             and payload.details.zillow_property is not None
@@ -290,12 +301,41 @@ class SaveUnderwritingService:
         ):
             return payload.details.zillow_property.bedrooms
 
-        if self.listings_service is not None and payload.zpid is not None:
-            listing = await self.listings_service.get_by_zpid(payload.zpid)
-            if listing is not None:
-                return listing.beds
+        listing = await self._listing_for_save(payload)
+        if listing is not None:
+            return listing.beds
 
         return None
+
+    async def _resolve_bathrooms_for_save(
+        self, payload: SaveUnderwritingPayload
+    ) -> Decimal | None:
+        """Bathrooms counterpart to ``_resolve_bedrooms_for_save``.
+
+        Drives no lookup — it exists so the column is populated on every
+        creation path. ``scheduled_listings.baths`` is a float, so it is
+        converted for the Numeric column.
+        """
+        if payload.bathrooms is not None:
+            return payload.bathrooms
+
+        if (
+            payload.details is not None
+            and payload.details.zillow_property is not None
+            and payload.details.zillow_property.bathrooms is not None
+        ):
+            return payload.details.zillow_property.bathrooms
+
+        listing = await self._listing_for_save(payload)
+        if listing is not None and listing.baths is not None:
+            return Decimal(str(listing.baths))
+
+        return None
+
+    async def _listing_for_save(self, payload: SaveUnderwritingPayload):
+        if self.listings_service is None or payload.zpid is None:
+            return None
+        return await self.listings_service.get_by_zpid(payload.zpid)
 
     async def _build_forecasted_revenue_input(
         self,

@@ -170,10 +170,18 @@ class UpdateUnderwritingService(SaveUnderwritingService):
     ) -> int | None:
         """Resolve bedrooms for the revenue estimate on update.
 
-        Prefers a ``zillow_property`` resent in the update payload, then the
-        stored ``zillow_property`` on the existing row (non-automated), then
-        ``scheduled_listings`` via the row's ``zpid`` (automated).
+        The analyst's own assumption wins: an explicit ``bedrooms`` in the
+        payload (what the FE sends when the count changes), otherwise the value
+        stored on the row. The Zillow chain below is only a fallback for rows
+        predating the column — remove it once
+        ``scripts/backfill_underwriting_bedrooms.py`` has run everywhere.
         """
+        if "bedrooms" in payload.model_fields_set and payload.bedrooms is not None:
+            return payload.bedrooms
+
+        if existing.bedrooms is not None:
+            return existing.bedrooms
+
         if (
             payload.details is not None
             and payload.details.zillow_property is not None
