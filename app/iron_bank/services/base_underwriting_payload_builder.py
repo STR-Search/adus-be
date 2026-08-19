@@ -26,8 +26,6 @@ class BaseUnderwritingPayloadBuilder:
     _DEFAULT_DEAL_STATUS = DealStatus.TEMPLATE_GENERATED
     _DEFAULT_SLA_MULTIPLIER_PCT = Decimal("0.36")
     _DEFAULT_BONUS_AMOUNT_PCT = Decimal("1")
-    # Mirrors UnderwritingCalculator._MONEY_QUANT — the same cents convention,
-    # kept local so the builders don't depend on the calculator.
     _MONEY_QUANT = Decimal("0.01")
 
     # Seeded optimization items all price at tier 2 for now; the analyst
@@ -170,7 +168,8 @@ class BaseUnderwritingPayloadBuilder:
                 [
                     *PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS,
                     *(
-                        id for id in (context.get("must_have_amenity_ids") or [])
+                        id
+                        for id in (context.get("must_have_amenity_ids") or [])
                         if id not in self._POOL_AMENITY_IDS_TO_EXCLUDE
                     ),
                 ]
