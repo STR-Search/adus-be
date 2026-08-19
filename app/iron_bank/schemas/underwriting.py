@@ -53,6 +53,10 @@ class UnderwritingBase(BaseModel):
     state: str | None = None
     days_on_market: int | None = None
     sleep_capacity: int | None = None
+    # The analyst-approved assumption, not Zillow's observation — see the
+    # Underwriting model. details.zillow_property keeps Zillow's own figures.
+    bedrooms: int | None = None
+    bathrooms: Decimal | None = None
     purchase_price: Decimal | None = None
     total_oop: Decimal | None = None
     prr: Decimal | None = None

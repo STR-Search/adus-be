@@ -47,6 +47,8 @@ def upgrade() -> None:
         sa.Column("state", sa.String(length=50), nullable=True),
         sa.Column("days_on_market", sa.Integer(), nullable=True),
         sa.Column("sleep_capacity", sa.Integer(), nullable=True),
+        sa.Column("bedrooms", sa.Integer(), nullable=True),
+        sa.Column("bathrooms", sa.Numeric(precision=4, scale=1), nullable=True),
         sa.Column("purchase_price", sa.Numeric(precision=12, scale=2), nullable=True),
         sa.Column("total_oop", sa.Numeric(precision=12, scale=2), nullable=True),
         sa.Column("prr", sa.Numeric(precision=6, scale=4), nullable=True),
