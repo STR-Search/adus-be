@@ -188,7 +188,14 @@ class BaseUnderwritingPayloadBuilder:
             "tier": self._AMENITY_TIER_LABEL,
         }
 
-    def _build_cleaning_cost(self, cleaning: dict[str, Any]) -> dict[str, Any] | None:
+    def build_cleaning_cost(self, cleaning: dict[str, Any]) -> dict[str, Any] | None:
+        """Resolve the uw_details.cleaning_cost blob from an opex cleaning dict.
+
+        Public alongside ``build_opex_property_taxes``: both are the canonical
+        derivations for their uw_details blob, and the bedroom-context endpoint
+        reuses them so a bedroom change hands the FE exactly the shape creation
+        would have produced.
+        """
         fee = cleaning.get("fee")
         turns = cleaning.get("num_of_turns")
         if fee is None and turns is None:
@@ -242,6 +249,20 @@ class BaseUnderwritingPayloadBuilder:
 
     def _humanize_expense_name(self, value: str) -> str:
         return value.replace("_", " ").title()
+
+    @staticmethod
+    def _as_int(value: Any) -> int | None:
+        """Coerce a Zillow-supplied number to int, or None if it isn't one.
+
+        Mirrors ``CreateUnderwritingFromUrlService._as_int``: the live Zillow
+        fetch can report bedrooms as a float, unlike ``scheduled_listings.beds``.
+        """
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     def _money_to_decimal(self, value: Any) -> Decimal | None:
         return PurchasePriceReconciliationPayloadBuilder.normalize_purchase_price(value)
