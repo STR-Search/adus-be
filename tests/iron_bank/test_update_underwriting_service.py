@@ -302,7 +302,11 @@ class FakeListingsService:
 
 
 class FakeCleanedDataService:
+    def __init__(self):
+        self.request = None
+
     async def get_revenue_potential_percentiles(self, *, key_market, bedrooms):
+        self.request = {"key_market": key_market, "bedrooms": bedrooms}
         return SimpleNamespace(
             low=Decimal("72000"), mid=Decimal("98000"), high=Decimal("127000")
         )
@@ -331,9 +335,10 @@ def _details_with_purchase_only():
 
 @pytest.mark.asyncio
 async def test_update_estimates_revenue_for_automated_beds_from_scheduled_listings():
-    # automated row: no stored zillow_property, beds come from scheduled_listings
+    # automated row predating underwritings.bedrooms: no stored zillow_property,
+    # so beds fall all the way back to scheduled_listings
     repository = FakeRepoWithExisting(
-        SimpleNamespace(id=42, zpid="123", market_id=None, detail=None)
+        SimpleNamespace(id=42, zpid="123", market_id=None, bedrooms=None, detail=None)
     )
     listings_service = FakeListingsService()
     service = UpdateUnderwritingService(
@@ -358,12 +363,14 @@ async def test_update_estimates_revenue_for_automated_beds_from_scheduled_listin
 
 @pytest.mark.asyncio
 async def test_update_estimates_revenue_for_non_automated_beds_from_stored_zillow():
-    # non-automated row: zpid is null, beds come from the stored zillow_property
+    # non-automated row predating underwritings.bedrooms: zpid is null, so beds
+    # fall back to the stored zillow_property
     repository = FakeRepoWithExisting(
         SimpleNamespace(
             id=42,
             zpid=None,
             market_id=None,
+            bedrooms=None,
             detail=SimpleNamespace(zillow_property={"bedrooms": 4}),
         )
     )
@@ -387,9 +394,9 @@ async def test_update_estimates_revenue_for_non_automated_beds_from_stored_zillo
 
 @pytest.mark.asyncio
 async def test_update_skips_revenue_when_no_bedrooms_source():
-    # neither stored zillow_property nor a resolvable zpid → graceful skip
+    # no column, no stored zillow_property, no resolvable zpid → graceful skip
     repository = FakeRepoWithExisting(
-        SimpleNamespace(id=42, zpid=None, market_id=None, detail=None)
+        SimpleNamespace(id=42, zpid=None, market_id=None, bedrooms=None, detail=None)
     )
     service = UpdateUnderwritingService(
         repository,
@@ -975,3 +982,67 @@ async def test_update_deal_status_is_a_noop_when_no_webhook_service_wired():
     )
 
     assert result.underwriting_id == 42
+
+
+# --- bedrooms precedence on update ------------------------------------------
+#
+# The analyst's own assumption decides the Airbnb lookup: an explicit bedrooms
+# in the payload (what the FE sends when the count changes), else the stored
+# column. Zillow is only consulted for rows predating the column.
+
+
+@pytest.mark.asyncio
+async def test_update_prefers_the_payload_bedrooms_over_everything_stored():
+    repository = FakeRepoWithExisting(
+        SimpleNamespace(
+            id=42,
+            zpid="123",
+            market_id=None,
+            bedrooms=4,
+            detail=SimpleNamespace(zillow_property={"bedrooms": 3}),
+        )
+    )
+    cleaned_data_service = FakeCleanedDataService()
+    service = UpdateUnderwritingService(
+        repository,
+        market_service=FakeMarketService(),
+        listings_service=FakeListingsService(),
+        cleaned_data_service=cleaned_data_service,
+    )
+    payload = UpdateUnderwritingPayload.model_validate(
+        {"bedrooms": 6, **_details_with_purchase_only()}
+    )
+
+    await service.update(42, payload)
+
+    assert cleaned_data_service.request["bedrooms"] == 6
+    # and the new count is persisted as the row's own value
+    assert repository.update_kwargs["underwriting_data"]["bedrooms"] == 6
+
+
+@pytest.mark.asyncio
+async def test_update_uses_the_stored_column_when_the_payload_omits_bedrooms():
+    repository = FakeRepoWithExisting(
+        SimpleNamespace(
+            id=42,
+            zpid="123",
+            market_id=None,
+            bedrooms=5,
+            detail=SimpleNamespace(zillow_property={"bedrooms": 3}),
+        )
+    )
+    cleaned_data_service = FakeCleanedDataService()
+    listings_service = FakeListingsService()
+    service = UpdateUnderwritingService(
+        repository,
+        market_service=FakeMarketService(),
+        listings_service=listings_service,
+        cleaned_data_service=cleaned_data_service,
+    )
+    payload = UpdateUnderwritingPayload.model_validate(_details_with_purchase_only())
+
+    await service.update(42, payload)
+
+    # the column wins over both the stored zillow_property and the listing
+    assert cleaned_data_service.request["bedrooms"] == 5
+    assert listings_service.requested_zpid is None

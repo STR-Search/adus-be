@@ -377,3 +377,14 @@ def test_owner_is_null_when_the_market_has_no_analyst_owner():
     }
 
     assert UnderwritingPayloadBuilder().build(prepared).owner_id is None
+
+
+def test_build_seeds_bedrooms_and_bathrooms_from_the_listing():
+    # The automated flow's zillow_property is built from scheduled_listings, so
+    # the columns are seeded without a second lookup.
+    payload = UnderwritingPayloadBuilder().build(
+        {"zillow_property": {"id": "123", "bedrooms": 4, "bathrooms": "2.5"}}
+    )
+
+    assert payload.bedrooms == 4
+    assert payload.bathrooms == Decimal("2.5")

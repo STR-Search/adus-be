@@ -1,8 +1,17 @@
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
 
-from app.workflows.prepare_uw_data_job import PrepareUwDataJob
+from app.iron_bank.services.base_underwriting_payload_builder import (
+    BaseUnderwritingPayloadBuilder,
+)
+from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
+from app.markets.schemas.opex import OpexByBedroomsSchema
+from app.workflows.prepare_uw_data_job import (
+    BedroomContextNotFoundError,
+    PrepareUwDataJob,
+)
 
 
 class FakeListingsService:
@@ -131,6 +140,7 @@ def _job(listing, market=None, uw_service=None, **overrides):
         str_cribs_service=FakeStrCribsService(),
         external_api_service=FakeExternalApiService(),
         uw_data_service=uw_service or RecordingUwDataService(),
+        underwriting_repository=FakeUnderwritingRepository(_underwriting()),
     )
     deps.update(overrides)
     return PrepareUwDataJob(**deps), deps
@@ -249,3 +259,257 @@ def test_from_session_wires_real_services():
 
     assert isinstance(job.uw_data_service, PrepareUwDataService)
     assert isinstance(job.listings_service, ScheduledListingsService)
+
+
+# --- build_bedroom_context ---------------------------------------------------
+#
+# The post-creation counterpart to build_market_context: re-seeds the values an
+# analyst's bedroom change invalidates. Unlike the tests above these run against
+# the real PrepareUwDataService, since the assembly they verify (which opex
+# columns land where, which amenity options are priced) lives inside it.
+
+
+def _opex_row(**overrides):
+    values = dict(
+        id=7,
+        market_id=3,
+        bedrooms=5,
+        cleaning_fee=Decimal("180"),
+        num_of_turns=Decimal("6"),
+        property_taxes=Decimal("0.0125"),
+        pool_hot_tub_low=Decimal("150"),
+        pool_hot_tub_high=Decimal("300"),
+        outdoor_landscaping=Decimal("120"),
+        software=Decimal("40"),
+        insurance_hoi=Decimal("210"),
+        supplies=Decimal("75"),
+        capex_reserve=Decimal("300"),
+        hoa_fees=Decimal("0"),
+        furnishings_low=Decimal("30000"),
+        furnishings_mid=Decimal("45000"),
+        furnishings_high=Decimal("60000"),
+        consolidated_shipping=Decimal("5000"),
+        land_value=Decimal("0.22"),
+        appreciation=Decimal("0.045"),
+    )
+    values.update(overrides)
+    return OpexByBedroomsSchema.model_validate(values)
+
+
+_UNSET = object()
+
+
+class FakeUnderwritingRepository:
+    def __init__(self, underwriting):
+        self.underwriting = underwriting
+        self.requested_id = None
+
+    async def get_by_id(self, underwriting_id):
+        self.requested_id = underwriting_id
+        return self.underwriting
+
+
+def _underwriting(**overrides):
+    base = {
+        "id": 42,
+        "market_id": 3,
+        "purchase_price": Decimal("480000"),
+        "detail": None,
+    }
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def _bedroom_context_job(opex_row, underwriting=_UNSET):
+    return _job(
+        listing=_listing(),
+        uw_service=PrepareUwDataService(),
+        opex_by_bedrooms_service=FakeOpexByBedroomsService(opex_row),
+        underwriting_repository=FakeUnderwritingRepository(
+            _underwriting() if underwriting is _UNSET else underwriting
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_bedroom_context_keys_the_opex_lookup_on_the_requested_bedrooms():
+    job, deps = _bedroom_context_job(_opex_row())
+
+    context = await job.build_bedroom_context(
+        underwriting_id=42, bedrooms=5
+    )
+
+    assert deps["opex_by_bedrooms_service"].called_with == {
+        "bedrooms": 5,
+        "market_id": 3,
+    }
+    assert context.bedrooms == 5
+    assert context.opex.cleaning.fee == Decimal("180")
+    assert context.opex.cleaning.num_of_turns == Decimal("6")
+    assert context.opex.ranged.pool_hot_tub.low == Decimal("150")
+    assert context.opex.ranged.pool_hot_tub.high == Decimal("300")
+    assert context.opex.property_tax_pct == Decimal("0.0125")
+    assert context.land_assumptions_pct == Decimal("0.22")
+    assert context.annual_re_appreciation_pct == Decimal("0.045")
+
+
+@pytest.mark.asyncio
+async def test_bedroom_context_absolute_opex_excludes_sqft_keyed_rows():
+    # opex_by_size is never looked up: it is keyed on sqft, so a bedroom change
+    # leaves internet/pest_control/utilities alone and they must not appear here
+    # for the FE to overwrite.
+    job, deps = _bedroom_context_job(_opex_row())
+
+    context = await job.build_bedroom_context(
+        underwriting_id=42, bedrooms=5
+    )
+
+    assert set(context.opex.absolute) == {
+        "outdoor_landscaping",
+        "software",
+        "insurance_hoi",
+        "supplies",
+        "capex_reserve",
+        "hoa_fees",
+    }
+    assert deps["opex_by_size_service"].called_with is None
+    assert deps["str_cribs_service"].requested_area is None
+
+
+@pytest.mark.asyncio
+async def test_bedroom_context_returns_only_the_two_bedroom_keyed_options():
+    job, _ = _bedroom_context_job(_opex_row())
+
+    context = await job.build_bedroom_context(
+        underwriting_id=42, bedrooms=5
+    )
+
+    by_id = {option.id: option for option in context.furnishing_options}
+    # "Design / Project Management" (-2) is priced from str_cribs_fee, keyed on
+    # area, so it does not move with bedrooms and is excluded.
+    assert set(by_id) == {
+        PrepareUwDataService.FURNISHINGS_OPTION_ID,
+        PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID,
+    }
+
+    furnishings = by_id[PrepareUwDataService.FURNISHINGS_OPTION_ID]
+    # All three tiers, so a re-tiered analyst choice is honoured rather than
+    # forced back to Mid.
+    assert furnishings.price_tier_1 == Decimal("30000")
+    assert furnishings.price_tier_2 == Decimal("45000")
+    assert furnishings.price_tier_3 == Decimal("60000")
+
+    shipping = by_id[PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID]
+    assert shipping.price_tier_2 == Decimal("5000")
+
+
+@pytest.mark.asyncio
+async def test_bedroom_context_blobs_match_what_creation_would_persist():
+    # The whole reason these are derived server-side: the FE places them
+    # straight onto uw_details, so they must be identical to the payload
+    # builders' output for the same inputs.
+    job, _ = _bedroom_context_job(_opex_row())
+    builder = BaseUnderwritingPayloadBuilder()
+    purchase_price = Decimal("480000")
+
+    context = await job.build_bedroom_context(
+        underwriting_id=42, bedrooms=5
+    )
+
+    assert context.cleaning_cost == builder.build_cleaning_cost(
+        {"fee": Decimal("180"), "num_of_turns": Decimal("6")}
+    )
+    assert context.property_taxes == builder.build_opex_property_taxes(
+        property_tax_pct=Decimal("0.0125"), purchase_price=purchase_price
+    )
+    assert context.cleaning_cost["monthly_cleaning_cost"] == Decimal("1080")
+    assert context.property_taxes["annual_amount"] == Decimal("6000.0000")
+
+
+@pytest.mark.asyncio
+async def test_bedroom_context_raises_when_the_market_has_no_row_at_that_count():
+    # Markets do not cover every bedroom count. Returning an all-null context
+    # would let the FE place blanks over the analyst's existing numbers, so the
+    # caller turns this into a 404 instead.
+    job, _ = _bedroom_context_job(None)
+
+    with pytest.raises(
+        BedroomContextNotFoundError, match="No opex data for market 3 at 7 bedrooms"
+    ):
+        await job.build_bedroom_context(
+            underwriting_id=42, bedrooms=7
+        )
+
+
+@pytest.mark.asyncio
+async def test_bedroom_context_reads_market_and_price_off_the_underwriting():
+    # Neither is accepted from the caller, so the property-tax blob can never be
+    # computed against a price the client was holding stale.
+    job, deps = _bedroom_context_job(
+        _opex_row(),
+        underwriting=_underwriting(market_id=9, purchase_price=Decimal("600000")),
+    )
+
+    context = await job.build_bedroom_context(underwriting_id=42, bedrooms=5)
+
+    assert deps["underwriting_repository"].requested_id == 42
+    assert deps["opex_by_bedrooms_service"].called_with == {
+        "bedrooms": 5,
+        "market_id": 9,
+    }
+    # 0.0125 * 600000, not the 480000 the default fixture carries
+    assert context.property_taxes["annual_amount"] == Decimal("7500.0000")
+
+
+@pytest.mark.asyncio
+async def test_bedroom_context_falls_back_to_the_purchase_details_blob():
+    # The top-level column is promoted from purchase_details on save/update, so
+    # it is normally set; the blob covers rows where that promotion never ran.
+    job, _ = _bedroom_context_job(
+        _opex_row(),
+        underwriting=_underwriting(
+            purchase_price=None,
+            detail=SimpleNamespace(purchase_details={"purchase_price": 400000}),
+        ),
+    )
+
+    context = await job.build_bedroom_context(underwriting_id=42, bedrooms=5)
+
+    assert context.property_taxes["annual_amount"] == Decimal("5000.0000")
+
+
+@pytest.mark.asyncio
+async def test_bedroom_context_still_returns_opex_without_a_purchase_price():
+    # A deal with no price yet is legitimate: the tax blob is null but the
+    # opex and furnishing values are still worth re-seeding.
+    job, _ = _bedroom_context_job(
+        _opex_row(), underwriting=_underwriting(purchase_price=None)
+    )
+
+    context = await job.build_bedroom_context(underwriting_id=42, bedrooms=5)
+
+    assert context.property_taxes is None
+    assert context.opex.cleaning.fee == Decimal("180")
+    assert context.land_assumptions_pct == Decimal("0.22")
+
+
+@pytest.mark.asyncio
+async def test_bedroom_context_raises_when_the_underwriting_does_not_exist():
+    job, _ = _bedroom_context_job(_opex_row(), underwriting=None)
+
+    with pytest.raises(BedroomContextNotFoundError, match="Underwriting 42 not found"):
+        await job.build_bedroom_context(underwriting_id=42, bedrooms=5)
+
+
+@pytest.mark.asyncio
+async def test_bedroom_context_raises_for_a_market_less_deal():
+    # A template deal has no market figures to re-seed from.
+    job, deps = _bedroom_context_job(
+        _opex_row(), underwriting=_underwriting(market_id=None)
+    )
+
+    with pytest.raises(BedroomContextNotFoundError, match="has no market"):
+        await job.build_bedroom_context(underwriting_id=42, bedrooms=5)
+
+    # bailed before touching the opex table
+    assert deps["opex_by_bedrooms_service"].called_with is None

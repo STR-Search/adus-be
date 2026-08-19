@@ -371,3 +371,30 @@ class TestOwnership:
 
     def test_owner_is_null_without_a_market_context_or_a_user(self):
         assert self._build(context=None, current_user_id=None).owner_id is None
+
+
+def test_build_from_zillow_property_seeds_bedrooms_and_bathrooms():
+    builder = NonAutomatedUnderwritingPayloadBuilder()
+
+    payload = builder.build_from_zillow_property(
+        listing_url=REQUEST_URL,
+        zillow_property=_zillow_property(),
+    )
+
+    assert payload.bedrooms == 5
+    assert payload.bathrooms == Decimal("4.0")
+    # Zillow's own observation is kept alongside, not replaced by, the columns.
+    assert payload.details.zillow_property.bedrooms == 5
+
+
+def test_build_from_zillow_property_coerces_a_float_bedroom_count():
+    # The live Zillow fetch can report bedrooms as a float, unlike
+    # scheduled_listings.beds; the column and the opex lookup key on an int.
+    builder = NonAutomatedUnderwritingPayloadBuilder()
+
+    payload = builder.build_from_zillow_property(
+        listing_url=REQUEST_URL,
+        zillow_property=_zillow_property(bedrooms=5.0),
+    )
+
+    assert payload.bedrooms == 5
