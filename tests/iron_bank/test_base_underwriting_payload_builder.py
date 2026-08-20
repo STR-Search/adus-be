@@ -3,10 +3,15 @@ from decimal import Decimal
 from app.iron_bank.services.base_underwriting_payload_builder import (
     BaseUnderwritingPayloadBuilder,
 )
+from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 
 
 def _builder():
     return BaseUnderwritingPayloadBuilder()
+
+
+def _option(option_id: int, name: str, price=1000) -> dict:
+    return {"id": option_id, "amenity_name": name, "price_tier_2": price}
 
 
 class TestBuildOpexPropertyTaxes:
@@ -88,3 +93,62 @@ class TestBuildOpexPropertyTaxes:
             )
             is None
         )
+
+
+class TestOptimizationListOrder:
+    """The seeded rows bracket the must-haves, and sort_order is stamped from
+    this list's positions on save, so the order is the contract."""
+
+    _CATALOG = [
+        _option(PrepareUwDataService.FURNISHINGS_OPTION_ID, "Furnishings"),
+        _option(PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID, "Shipping"),
+        _option(
+            PrepareUwDataService.STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID, "Project Mgmt"
+        ),
+        _option(1, "Hot Tub"),
+        _option(2, "Fire Pit"),
+        _option(3, "Sauna"),
+    ]
+
+    def _categories(self, must_have_amenity_ids: list[int]) -> list[str]:
+        items = _builder()._build_optimization_list(
+            {
+                "construction_amenities": self._CATALOG,
+                "must_have_amenity_ids": must_have_amenity_ids,
+            }
+        )
+        return [item["category"] for item in items]
+
+    def test_must_haves_sit_between_furnishings_and_the_service_lines(self):
+        # Several must-haves, so the order within the middle block is pinned too:
+        # it follows the order the market lists them, not the catalog's.
+        assert self._categories([3, 1, 2]) == [
+            "Furnishings",
+            "Sauna",
+            "Hot Tub",
+            "Fire Pit",
+            "Project Mgmt",
+            "Shipping",
+        ]
+
+    def test_the_bracket_holds_with_no_must_haves(self):
+        assert self._categories([]) == ["Furnishings", "Project Mgmt", "Shipping"]
+
+    def test_a_must_have_naming_a_seeded_option_stays_in_its_bracket(self):
+        # Can't happen with today's ids (catalog ids are positive, the seeded
+        # sentinels are not), but the bracket must not depend on that.
+        assert self._categories(
+            [
+                PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID,
+                1,
+                PrepareUwDataService.FURNISHINGS_OPTION_ID,
+            ]
+        ) == ["Furnishings", "Hot Tub", "Project Mgmt", "Shipping"]
+
+    def test_every_seeded_option_is_placed_in_the_bracket(self):
+        # Guards drift: a fourth synthetic option added to the prepare service
+        # would otherwise be silently left out of the seeded payload.
+        builder = BaseUnderwritingPayloadBuilder
+        assert set(
+            builder._LEADING_AMENITY_OPTION_IDS + builder._TRAILING_AMENITY_OPTION_IDS
+        ) == set(PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS)

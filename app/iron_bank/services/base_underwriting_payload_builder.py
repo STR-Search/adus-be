@@ -35,6 +35,17 @@ class BaseUnderwritingPayloadBuilder:
     _AMENITY_METRIC = "flat"
     _POOL_AMENITY_IDS_TO_EXCLUDE = {4, 5, 13, 14}
 
+    # The seeded options bracket the market's must-have amenities: furnishings
+    # opens the rehab budget, the two service lines close it out. Same three ids
+    # as PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS, which is a membership
+    # set (see to_template_market_context) and says nothing about order — the
+    # order lives here, because it is a property of the seeded payload.
+    _LEADING_AMENITY_OPTION_IDS = (PrepareUwDataService.FURNISHINGS_OPTION_ID,)
+    _TRAILING_AMENITY_OPTION_IDS = (
+        PrepareUwDataService.STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID,
+        PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID,
+    )
+
     def _resolve_owner_id(
         self, context: dict[str, Any], *, fallback_user_id: int | None = None
     ) -> int | None:
@@ -153,25 +164,34 @@ class BaseUnderwritingPayloadBuilder:
         """Seed the rehab budget from the amenity options prepared for this deal.
 
         ``context`` is a dumped ``MarketContext`` (the automated flow's prepared
-        result is one). Two groups, in this order: the options every deal gets
-        (furnishings, consolidated shipping, the STR Cribs management fee)
-        followed by the market's must-have amenities. Items whose tier-2 price is
-        missing are still seeded with a blank amount — a visible row the analyst
-        fills in beats a silently absent line item.
+        result is one). The seeded options bracket the market's must-have
+        amenities: furnishings first, then the must-haves in the order the market
+        lists them, then the STR Cribs management fee and consolidated shipping.
+        Items whose tier-2 price is missing are still seeded with a blank amount —
+        a visible row the analyst fills in beats a silently absent line item.
         """
         options_by_id = {
             option.get("id"): option
             for option in context.get("construction_amenities") or []
         }
+        # Seeded ids are dropped from the must-haves rather than left to
+        # dict.fromkeys below: that keeps the first occurrence of a duplicate, so
+        # a must-have naming a trailing option would pull it up out of its
+        # bracket. Catalog ids are positive and the seeded sentinels are not, so
+        # this cannot happen today — filtering makes the bracket unconditional
+        # instead of a coincidence of the id ranges.
+        must_have_ids = [
+            id
+            for id in (context.get("must_have_amenity_ids") or [])
+            if id not in self._POOL_AMENITY_IDS_TO_EXCLUDE
+            and id not in PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS
+        ]
         selected_ids = list(
             dict.fromkeys(
                 [
-                    *PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS,
-                    *(
-                        id
-                        for id in (context.get("must_have_amenity_ids") or [])
-                        if id not in self._POOL_AMENITY_IDS_TO_EXCLUDE
-                    ),
+                    *self._LEADING_AMENITY_OPTION_IDS,
+                    *must_have_ids,
+                    *self._TRAILING_AMENITY_OPTION_IDS,
                 ]
             )
         )
