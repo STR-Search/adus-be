@@ -27,9 +27,7 @@ async def test_missing_opex_row_is_a_404():
     )
 
     with pytest.raises(HTTPException) as exc:
-        await controller.get_bedroom_context(
-            underwriting_id=42, bedrooms=7
-        )
+        await controller.get_bedroom_context(underwriting_id=42, bedrooms=7)
 
     assert exc.value.status_code == 404
     assert exc.value.detail == "No opex data for market 3 at 7 bedrooms"
@@ -49,9 +47,7 @@ async def test_a_malformed_opex_row_is_a_500_not_a_404():
         controller = _controller(validation_error)
 
     with pytest.raises(HTTPException) as exc:
-        await controller.get_bedroom_context(
-            underwriting_id=42, bedrooms=5
-        )
+        await controller.get_bedroom_context(underwriting_id=42, bedrooms=5)
 
     assert exc.value.status_code == 500
     assert exc.value.detail == "Failed to fetch bedroom context"
@@ -62,9 +58,7 @@ async def test_an_unexpected_error_is_a_500():
     controller = _controller(RuntimeError("connection reset"))
 
     with pytest.raises(HTTPException) as exc:
-        await controller.get_bedroom_context(
-            underwriting_id=42, bedrooms=5
-        )
+        await controller.get_bedroom_context(underwriting_id=42, bedrooms=5)
 
     assert exc.value.status_code == 500
     # the internal message is logged, not leaked to the caller

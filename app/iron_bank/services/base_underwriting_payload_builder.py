@@ -49,7 +49,8 @@ class BaseUnderwritingPayloadBuilder:
     # The seeded operating expenses, in the order the analyst sees them, each
     # paired with its display label. Keys are opex columns carried on
     # ``opex["absolute"]``, plus the three rows _build_operating_expenses
-    # derives (cleaning, pool_hot_tub, property_taxes). Order is the contract:
+    # derives (cleaning, pool_hot_tub, property_taxes) and the ones with no
+    # market source at all (_OPEX_ROW_DEFAULTS). Order is the contract:
     # sort_order is stamped from list position on save, so this tuple decides
     # the row order of every seeded underwriting.
     _OPEX_ROWS = (
@@ -64,8 +65,16 @@ class BaseUnderwritingPayloadBuilder:
         ("property_taxes", "Property Taxes (Monthly)"),
         ("insurance_hoi", "Insurance HOI"),
         ("capex_reserve", "CapEx Reserve"),
+        ("misc", "MISC"),
         ("hoa_fees", "HOA Fees"),
     )
+    # Rows with no opex column behind them: no market supplies them, so every
+    # underwriting starts from this amount and the analyst adjusts it. Merged
+    # under the market data in _build_operating_expenses, so adding a real
+    # column of the same name later would take over with no other change. Note
+    # these seed at a starting *value*, unlike _ALWAYS_SEEDED_OPEX_KEYS, which
+    # seed blank — a zero here renders because 0 is not None.
+    _OPEX_ROW_DEFAULTS = {"misc": Decimal("0")}
     # Seeded even when no source resolves an amount: a blank row the team fills
     # in manually beats a silently absent one.
     _ALWAYS_SEEDED_OPEX_KEYS = frozenset({"property_taxes"})
@@ -282,9 +291,11 @@ class BaseUnderwritingPayloadBuilder:
         A row whose amount resolves to None is dropped, so the set of rows still
         follows the market data — except Property Taxes, which is always seeded
         so an unresolved amount is a blank row the team fills in rather than a
-        missing one. An opex column with no place in ``_OPEX_ROWS`` is appended
-        after them and logged; a newly added column should surface to the
-        analyst, not disappear or land at an arbitrary position.
+        missing one, and the ``_OPEX_ROW_DEFAULTS`` rows, which no market
+        supplies and so always carry their default. An opex column with no place
+        in ``_OPEX_ROWS`` is appended after them and logged; a newly added column
+        should surface to the analyst, not disappear or land at an arbitrary
+        position.
         """
         absolute = opex.get("absolute") or {}
         cleaning = opex.get("cleaning") or {}
@@ -292,12 +303,15 @@ class BaseUnderwritingPayloadBuilder:
         turns = cleaning.get("num_of_turns")
         pool_hot_tub = (opex.get("ranged") or {}).get("pool_hot_tub") or {}
 
-        # The three derived keys cannot collide with an `absolute` column:
-        # PrepareUwDataService excludes cleaning_fee/num_of_turns,
-        # pool_hot_tub_low/high and property_taxes from `absolute` (see its
-        # _OPEX_*_FIELDS sets). They merge last regardless, so a future column
-        # sharing one of these names would not displace the derived row.
+        # Defaults sit under the market data, so a real column would take over
+        # from a default of the same name. The three derived keys cannot collide
+        # with an `absolute` column: PrepareUwDataService excludes
+        # cleaning_fee/num_of_turns, pool_hot_tub_low/high and property_taxes
+        # from `absolute` (see its _OPEX_*_FIELDS sets). They merge last
+        # regardless, so a future column sharing one of these names would not
+        # displace the derived row.
         amounts: dict[str, Any] = {
+            **self._OPEX_ROW_DEFAULTS,
             **absolute,
             "cleaning": fee * turns if fee is not None and turns is not None else None,
             "pool_hot_tub": pool_hot_tub.get("low"),
