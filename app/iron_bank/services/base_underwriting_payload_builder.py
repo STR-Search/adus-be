@@ -46,6 +46,30 @@ class BaseUnderwritingPayloadBuilder:
         PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID,
     )
 
+    # The seeded operating expenses, in the order the analyst sees them, each
+    # paired with its display label. Keys are opex columns carried on
+    # ``opex["absolute"]``, plus the three rows _build_operating_expenses
+    # derives (cleaning, pool_hot_tub, property_taxes). Order is the contract:
+    # sort_order is stamped from list position on save, so this tuple decides
+    # the row order of every seeded underwriting.
+    _OPEX_ROWS = (
+        ("internet", "Internet"),
+        ("utilities", "Utilities"),
+        ("pest_control", "Pest Control"),
+        ("pool_hot_tub", "Pool/Hot Tub Maintenance"),
+        ("outdoor_landscaping", "Outdoor/Landscaping"),
+        ("software", "Software"),
+        ("supplies", "Household Supplies"),
+        ("cleaning", "Cleaning"),
+        ("property_taxes", "Property Taxes (Monthly)"),
+        ("insurance_hoi", "Insurance HOI"),
+        ("capex_reserve", "CapEx Reserve"),
+        ("hoa_fees", "HOA Fees"),
+    )
+    # Seeded even when no source resolves an amount: a blank row the team fills
+    # in manually beats a silently absent one.
+    _ALWAYS_SEEDED_OPEX_KEYS = frozenset({"property_taxes"})
+
     def _resolve_owner_id(
         self, context: dict[str, Any], *, fallback_user_id: int | None = None
     ) -> int | None:
@@ -249,40 +273,67 @@ class BaseUnderwritingPayloadBuilder:
         opex: dict[str, Any],
         property_taxes: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        expenses: list[dict[str, Any]] = []
+        """Seed the monthly operating expenses in ``_OPEX_ROWS`` order.
 
+        Amounts are resolved first, then emitted in the canonical order, so the
+        row order is a property of this builder rather than of the opex table's
+        column order (which is what iterating ``absolute`` gave us before).
+
+        A row whose amount resolves to None is dropped, so the set of rows still
+        follows the market data — except Property Taxes, which is always seeded
+        so an unresolved amount is a blank row the team fills in rather than a
+        missing one. An opex column with no place in ``_OPEX_ROWS`` is appended
+        after them and logged; a newly added column should surface to the
+        analyst, not disappear or land at an arbitrary position.
+        """
+        absolute = opex.get("absolute") or {}
         cleaning = opex.get("cleaning") or {}
         fee = cleaning.get("fee")
         turns = cleaning.get("num_of_turns")
-        if fee is not None and turns is not None:
-            expenses.append({"expense": "Cleaning", "monthly": fee * turns})
-
-        # Always seeded — a blank amount means no source could resolve it and
-        # the team fills it out manually.
-        expenses.append(
-            {
-                "expense": "Property Taxes",
-                "monthly": (
-                    property_taxes["monthly_amount"] if property_taxes else None
-                ),
-            }
-        )
-
         pool_hot_tub = (opex.get("ranged") or {}).get("pool_hot_tub") or {}
-        if pool_hot_tub.get("low") is not None:
-            expenses.append(
-                {"expense": "Pool/Hot Tub Maintenance", "monthly": pool_hot_tub["low"]}
-            )
 
-        absolute = opex.get("absolute") or {}
-        expenses.extend(
-            {"expense": self._humanize_expense_name(name), "monthly": amount}
+        # The three derived keys cannot collide with an `absolute` column:
+        # PrepareUwDataService excludes cleaning_fee/num_of_turns,
+        # pool_hot_tub_low/high and property_taxes from `absolute` (see its
+        # _OPEX_*_FIELDS sets). They merge last regardless, so a future column
+        # sharing one of these names would not displace the derived row.
+        amounts: dict[str, Any] = {
+            **absolute,
+            "cleaning": fee * turns if fee is not None and turns is not None else None,
+            "pool_hot_tub": pool_hot_tub.get("low"),
+            "property_taxes": (
+                property_taxes["monthly_amount"] if property_taxes else None
+            ),
+        }
+
+        expenses = [
+            {"expense": label, "monthly": amounts.get(key)}
+            for key, label in self._OPEX_ROWS
+            if amounts.get(key) is not None or key in self._ALWAYS_SEEDED_OPEX_KEYS
+        ]
+
+        placed = {key for key, _ in self._OPEX_ROWS}
+        unplaced = [
+            name
             for name, amount in absolute.items()
-            if amount is not None
-        )
+            if name not in placed and amount is not None
+        ]
+        if unplaced:
+            logger.warning(
+                "_build_operating_expenses: opex columns with no canonical row",
+                unplaced_opex_columns=unplaced,
+            )
+            expenses.extend(
+                {
+                    "expense": self._humanize_expense_name(name),
+                    "monthly": absolute[name],
+                }
+                for name in unplaced
+            )
         return expenses
 
     def _humanize_expense_name(self, value: str) -> str:
+        """Fallback label for an opex column absent from ``_OPEX_ROWS``."""
         return value.replace("_", " ").title()
 
     @staticmethod

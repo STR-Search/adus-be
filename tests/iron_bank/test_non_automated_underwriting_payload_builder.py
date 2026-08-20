@@ -224,7 +224,7 @@ class TestWithMarketContext:
         assert by_expense["Internet"] == Decimal("100")
         assert by_expense["Utilities"] == Decimal("350")
         # 0.012 x 389000 / 12
-        assert by_expense["Property Taxes"] == Decimal("389")
+        assert by_expense["Property Taxes (Monthly)"] == Decimal("389")
 
     def test_records_the_property_tax_derivation_on_details(self):
         property_taxes = self._build().details.property_taxes
@@ -305,7 +305,7 @@ class TestWithTemplateMarketContext:
         # same row set as a real market...
         assert set(by_expense) == {
             "Cleaning",
-            "Property Taxes",
+            "Property Taxes (Monthly)",
             "Pool/Hot Tub Maintenance",
             "Internet",
             "Utilities",
