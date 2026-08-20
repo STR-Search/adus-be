@@ -146,6 +146,7 @@ class TestOperatingExpenseOrder:
             "Property Taxes (Monthly)",
             "Insurance HOI",
             "CapEx Reserve",
+            "MISC",
             "HOA Fees",
         ]
 
@@ -169,15 +170,39 @@ class TestOperatingExpenseOrder:
         assert [e["expense"] for e in self._expenses(opex=opex)] == [
             "Utilities",
             "Property Taxes (Monthly)",
+            "MISC",
             "HOA Fees",
         ]
+
+    def test_misc_is_seeded_at_zero_with_no_market_source(self):
+        # No opex column supplies MISC, so it is seeded from
+        # _OPEX_ROW_DEFAULTS on every underwriting — including one whose
+        # market data is entirely absent.
+        opex = self._opex(cleaning={}, ranged={}, absolute={})
+        expenses = self._expenses(opex=opex, property_taxes=None)
+
+        assert [e["expense"] for e in expenses] == [
+            "Property Taxes (Monthly)",
+            "MISC",
+        ]
+        # zero, not blank: MISC starts at an amount, Property Taxes at nothing
+        assert expenses[0]["monthly"] is None
+        assert expenses[1]["monthly"] == Decimal("0")
+
+    def test_a_market_column_would_override_a_default(self):
+        # Migration path: if misc ever becomes a real opex column, the market
+        # value takes over with no change to _OPEX_ROWS.
+        opex = self._opex(cleaning={}, ranged={}, absolute={"misc": Decimal("250")})
+        by_expense = {e["expense"]: e["monthly"] for e in self._expenses(opex=opex)}
+
+        assert by_expense["MISC"] == Decimal("250")
 
     def test_property_taxes_holds_its_position_when_blank(self):
         expenses = self._expenses(property_taxes=None)
         blank = next(e for e in expenses if e["expense"] == "Property Taxes (Monthly)")
 
         assert blank["monthly"] is None
-        # 9th of twelve, exactly where a resolved amount would sit
+        # 9th of thirteen, exactly where a resolved amount would sit
         assert expenses.index(blank) == 8
 
     def test_cleaning_needs_both_a_fee_and_turns(self):
@@ -186,6 +211,7 @@ class TestOperatingExpenseOrder:
         assert [e["expense"] for e in self._expenses(opex=opex)] == [
             "Pool/Hot Tub Maintenance",
             "Property Taxes (Monthly)",
+            "MISC",
         ]
 
     def test_an_unplaced_opex_column_is_appended_last(self):
@@ -200,6 +226,7 @@ class TestOperatingExpenseOrder:
         assert [e["expense"] for e in self._expenses(opex=opex)] == [
             "Utilities",
             "Property Taxes (Monthly)",
+            "MISC",
             "Snow Removal",
         ]
 
@@ -207,7 +234,8 @@ class TestOperatingExpenseOrder:
         opex = self._opex(cleaning={}, ranged={}, absolute={"snow_removal": None})
 
         assert [e["expense"] for e in self._expenses(opex=opex)] == [
-            "Property Taxes (Monthly)"
+            "Property Taxes (Monthly)",
+            "MISC",
         ]
 
 

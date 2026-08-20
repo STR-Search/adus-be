@@ -309,6 +309,8 @@ class TestWithTemplateMarketContext:
             "Pool/Hot Tub Maintenance",
             "Internet",
             "Utilities",
+            # no market supplies it, so it is seeded here too
+            "MISC",
         }
         # ...at zero
         assert all(monthly == Decimal("0") for monthly in by_expense.values())

@@ -338,18 +338,14 @@ async def test_forecast_uses_the_market_appreciation_rate():
 
 @pytest.mark.asyncio
 async def test_forecast_falls_back_when_the_market_has_no_appreciation_rate():
-    pct = await _saved_appreciation_pct(
-        FakeOpexByBedroomsService(appreciation=None)
-    )
+    pct = await _saved_appreciation_pct(FakeOpexByBedroomsService(appreciation=None))
 
     assert pct == 0.0425
 
 
 @pytest.mark.asyncio
 async def test_forecast_falls_back_when_there_is_no_opex_row():
-    pct = await _saved_appreciation_pct(
-        FakeOpexByBedroomsService(row_exists=False)
-    )
+    pct = await _saved_appreciation_pct(FakeOpexByBedroomsService(row_exists=False))
 
     assert pct == 0.0425
 
