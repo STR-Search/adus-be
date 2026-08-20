@@ -232,9 +232,7 @@ class PrepareUwDataService:
                 "market_name": market.market_name if market else None,
                 "market_id": market_id,
                 "market_slug": market.market_slug if market else None,
-                "analyst_owner_id": (
-                    market.analyst_owner_id if market else None
-                ),
+                "analyst_owner_id": (market.analyst_owner_id if market else None),
                 "opex": self._transform_opex_costs(opex_by_bedrooms, opex_by_size),
                 "construction_amenities": amenities,
                 "construction_remodeling": [

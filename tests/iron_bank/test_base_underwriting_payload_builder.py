@@ -95,6 +95,122 @@ class TestBuildOpexPropertyTaxes:
         )
 
 
+class TestOperatingExpenseOrder:
+    """The rows follow _OPEX_ROWS, not the opex table's column order, and
+    sort_order is stamped from these positions on save."""
+
+    # Deliberately in a different order than _OPEX_ROWS: the builder must not
+    # inherit the order the opex columns happen to arrive in.
+    _ABSOLUTE = {
+        "outdoor_landscaping": Decimal("150"),
+        "software": Decimal("50"),
+        "insurance_hoi": Decimal("200"),
+        "supplies": Decimal("75"),
+        "capex_reserve": Decimal("300"),
+        "hoa_fees": Decimal("125"),
+        "internet": Decimal("100"),
+        "pest_control": Decimal("60"),
+        "utilities": Decimal("350"),
+    }
+
+    def _opex(self, **overrides):
+        return {
+            "cleaning": {"fee": Decimal("275"), "num_of_turns": Decimal("4")},
+            "ranged": {"pool_hot_tub": {"low": Decimal("125")}},
+            "absolute": dict(self._ABSOLUTE),
+            **overrides,
+        }
+
+    # Sentinel, so a test can pass property_taxes=None to mean "unresolved"
+    # rather than "use the default".
+    _UNSET = object()
+
+    def _expenses(self, opex=None, property_taxes=_UNSET):
+        return _builder()._build_operating_expenses(
+            opex if opex is not None else self._opex(),
+            {"monthly_amount": Decimal("485")}
+            if property_taxes is self._UNSET
+            else property_taxes,
+        )
+
+    def test_rows_are_emitted_in_the_canonical_order(self):
+        assert [expense["expense"] for expense in self._expenses()] == [
+            "Internet",
+            "Utilities",
+            "Pest Control",
+            "Pool/Hot Tub Maintenance",
+            "Outdoor/Landscaping",
+            "Software",
+            "Household Supplies",
+            "Cleaning",
+            "Property Taxes (Monthly)",
+            "Insurance HOI",
+            "CapEx Reserve",
+            "HOA Fees",
+        ]
+
+    def test_labels_carry_the_resolved_amounts(self):
+        by_expense = {e["expense"]: e["monthly"] for e in self._expenses()}
+
+        assert by_expense["Household Supplies"] == Decimal("75")
+        assert by_expense["Insurance HOI"] == Decimal("200")
+        assert by_expense["HOA Fees"] == Decimal("125")
+        assert by_expense["Pool/Hot Tub Maintenance"] == Decimal("125")
+        assert by_expense["Cleaning"] == Decimal("1100")  # 275 x 4 turns
+        assert by_expense["Property Taxes (Monthly)"] == Decimal("485")
+
+    def test_unresolved_rows_are_dropped_but_the_order_holds(self):
+        opex = self._opex(
+            cleaning={},
+            ranged={},
+            absolute={"utilities": Decimal("350"), "hoa_fees": Decimal("125")},
+        )
+
+        assert [e["expense"] for e in self._expenses(opex=opex)] == [
+            "Utilities",
+            "Property Taxes (Monthly)",
+            "HOA Fees",
+        ]
+
+    def test_property_taxes_holds_its_position_when_blank(self):
+        expenses = self._expenses(property_taxes=None)
+        blank = next(e for e in expenses if e["expense"] == "Property Taxes (Monthly)")
+
+        assert blank["monthly"] is None
+        # 9th of twelve, exactly where a resolved amount would sit
+        assert expenses.index(blank) == 8
+
+    def test_cleaning_needs_both_a_fee_and_turns(self):
+        opex = self._opex(cleaning={"fee": Decimal("275")}, absolute={})
+
+        assert [e["expense"] for e in self._expenses(opex=opex)] == [
+            "Pool/Hot Tub Maintenance",
+            "Property Taxes (Monthly)",
+        ]
+
+    def test_an_unplaced_opex_column_is_appended_last(self):
+        # A column added to the opex table but not to _OPEX_ROWS still reaches
+        # the analyst, humanized, after every canonical row.
+        opex = self._opex(
+            cleaning={},
+            ranged={},
+            absolute={"snow_removal": Decimal("80"), "utilities": Decimal("350")},
+        )
+
+        assert [e["expense"] for e in self._expenses(opex=opex)] == [
+            "Utilities",
+            "Property Taxes (Monthly)",
+            "Snow Removal",
+        ]
+
+    def test_an_unplaced_column_with_no_amount_is_not_seeded(self):
+        opex = self._opex(cleaning={}, ranged={}, absolute={"snow_removal": None})
+
+        assert [e["expense"] for e in self._expenses(opex=opex)] == [
+            "Property Taxes (Monthly)"
+        ]
+
+
 class TestOptimizationListOrder:
     """The seeded rows bracket the must-haves, and sort_order is stamped from
     this list's positions on save, so the order is the contract."""

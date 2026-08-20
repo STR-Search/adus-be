@@ -69,12 +69,12 @@ def test_builds_save_payload_from_prepared_uw_data():
         expense.model_dump(by_alias=True, exclude_none=True)
         for expense in payload.operating_expenses
     ] == [
-        {"expense": "Cleaning", "monthly": Decimal("10450")},
-        {"expense": "Property Taxes", "monthly": Decimal("485")},
-        {"expense": "Pool/Hot Tub Maintenance", "monthly": Decimal("125")},
         {"expense": "Internet", "monthly": Decimal("100")},
         {"expense": "Utilities", "monthly": Decimal("350")},
         {"expense": "Pest Control", "monthly": Decimal("60")},
+        {"expense": "Pool/Hot Tub Maintenance", "monthly": Decimal("125")},
+        {"expense": "Cleaning", "monthly": Decimal("10450")},
+        {"expense": "Property Taxes (Monthly)", "monthly": Decimal("485")},
     ]
 
 
@@ -117,7 +117,7 @@ def test_builds_draft_payload_when_optional_prepared_fields_are_missing():
     assert [
         expense.model_dump(by_alias=True, exclude={"id"})
         for expense in payload.operating_expenses
-    ] == [{"expense": "Property Taxes", "monthly": None}]
+    ] == [{"expense": "Property Taxes (Monthly)", "monthly": None}]
 
 
 def _amenity_option(amenity_id, name, price_tier_2):
