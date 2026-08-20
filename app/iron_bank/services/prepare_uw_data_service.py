@@ -42,7 +42,9 @@ class PrepareUwDataService:
     FURNISHINGS_OPTION_NAME = "Furniture / Decor / Essentials"
     CONSOLIDATED_SHIPPING_OPTION_NAME = "Install / Staging / Warehousing"
     STR_CRIBS_PROJECT_MANAGEMENT_OPTION_NAME = "Design / Project Management"
-    # Seeded on every underwriting regardless of market, in this order.
+    # Seeded on every underwriting regardless of market. Membership only — the
+    # order these are laid out in a seeded payload is
+    # BaseUnderwritingPayloadBuilder's (_LEADING/_TRAILING_AMENITY_OPTION_IDS).
     SEEDED_AMENITY_OPTION_IDS = (
         FURNISHINGS_OPTION_ID,
         CONSOLIDATED_SHIPPING_OPTION_ID,

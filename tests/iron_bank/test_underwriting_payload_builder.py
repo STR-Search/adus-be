@@ -143,7 +143,7 @@ def _prepared_with_amenities(*, amenities, must_have_amenity_ids):
     }
 
 
-def test_seeds_optimization_items_from_base_options_and_must_haves():
+def test_seeds_optimization_items_with_must_haves_bracketed_by_base_options():
     prepared = _prepared_with_amenities(
         amenities=[
             _amenity_option(0, "Furnishings", 45000),
@@ -169,9 +169,16 @@ def test_seeds_optimization_items_from_base_options_and_must_haves():
             "tier": "Mid",
         },
         {
-            "category": "Consolidated Shipping",
-            "total_price": Decimal("18225"),
-            "base_price": Decimal("18225"),
+            "category": "Fire Pit",
+            "total_price": Decimal("2200"),
+            "base_price": Decimal("2200"),
+            "metric": "flat",
+            "tier": "Mid",
+        },
+        {
+            "category": "Hot Tub",
+            "total_price": Decimal("9500"),
+            "base_price": Decimal("9500"),
             "metric": "flat",
             "tier": "Mid",
         },
@@ -183,16 +190,9 @@ def test_seeds_optimization_items_from_base_options_and_must_haves():
             "tier": "Mid",
         },
         {
-            "category": "Fire Pit",
-            "total_price": Decimal("2200"),
-            "base_price": Decimal("2200"),
-            "metric": "flat",
-            "tier": "Mid",
-        },
-        {
-            "category": "Hot Tub",
-            "total_price": Decimal("9500"),
-            "base_price": Decimal("9500"),
+            "category": "Consolidated Shipping",
+            "total_price": Decimal("18225"),
+            "base_price": Decimal("18225"),
             "metric": "flat",
             "tier": "Mid",
         },

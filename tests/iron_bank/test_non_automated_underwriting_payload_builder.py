@@ -240,14 +240,14 @@ class TestWithMarketContext:
         assert cleaning_cost["turns_per_month"] == Decimal("38")
         assert cleaning_cost["monthly_cleaning_cost"] == Decimal("10450")
 
-    def test_seeds_optimization_items_for_the_three_defaults_then_must_haves(self):
+    def test_seeds_optimization_items_with_must_haves_inside_the_defaults(self):
         payload = self._build()
 
         assert [item.category for item in payload.optimization_list] == [
             "Furniture / Decor / Essentials",
-            "Install / Staging / Warehousing",
-            "Design / Project Management",
             "Hot Tub",
+            "Design / Project Management",
+            "Install / Staging / Warehousing",
         ]
         by_category = {item.category: item for item in payload.optimization_list}
         # tier-2 pricing, matching the automated flow
@@ -319,8 +319,8 @@ class TestWithTemplateMarketContext:
         # must-have amenities belong to a market, so a market-less deal has none
         assert [item.category for item in payload.optimization_list] == [
             "Furniture / Decor / Essentials",
-            "Install / Staging / Warehousing",
             "Design / Project Management",
+            "Install / Staging / Warehousing",
         ]
         for item in payload.optimization_list:
             assert item.total_price == Decimal("0")
