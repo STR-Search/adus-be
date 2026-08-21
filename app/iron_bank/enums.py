@@ -38,3 +38,20 @@ class UnderwritingSortBy(StrEnum):
 class SortOrder(StrEnum):
     ASC = "asc"
     DESC = "desc"
+
+
+class OpexKeyedOn(StrEnum):
+    """What an operating-expense row's market figure varies with.
+
+    Tells a client which rows a change to the deal's bedroom count or square
+    footage would re-seed: ``BEDROOMS`` rows come from ``opex_by_bedrooms``,
+    ``SIZE`` rows from ``opex_by_size``, and ``NONE`` rows have no market source
+    at all (they seed from a default and only ever change by hand).
+
+    A property of the row itself, so it is the same answer whether or not this
+    market happens to have a row at this deal's bedrooms or sqft.
+    """
+
+    BEDROOMS = "bedrooms"
+    SIZE = "size"
+    NONE = "none"

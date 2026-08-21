@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.underwriting_payload_builder import (
     UnderwritingPayloadBuilder,
 )
@@ -261,9 +262,7 @@ def test_optimization_list_is_empty_without_prepared_amenities():
 
 
 def test_property_taxes_hierarchy():
-    builder = UnderwritingPayloadBuilder()
-
-    from_pct = builder.build_opex_property_taxes(
+    from_pct = opex_catalog.build_opex_property_taxes(
         property_tax_pct=Decimal("0.012"),
         purchase_price=Decimal("485000"),
         zillow_annual_tax=Decimal("9000"),
@@ -276,7 +275,7 @@ def test_property_taxes_hierarchy():
         "purchase_price": Decimal("485000"),
     }
 
-    from_zillow = builder.build_opex_property_taxes(
+    from_zillow = opex_catalog.build_opex_property_taxes(
         property_tax_pct=None,
         purchase_price=Decimal("485000"),
         zillow_annual_tax=Decimal("9000"),
@@ -289,13 +288,13 @@ def test_property_taxes_hierarchy():
     }
 
     assert (
-        builder.build_opex_property_taxes(
+        opex_catalog.build_opex_property_taxes(
             property_tax_pct=Decimal("0.012"), purchase_price=None
         )
         is None
     )
     assert (
-        builder.build_opex_property_taxes(
+        opex_catalog.build_opex_property_taxes(
             property_tax_pct=None, purchase_price=Decimal("485000")
         )
         is None
