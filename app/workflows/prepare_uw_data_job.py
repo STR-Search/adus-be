@@ -3,6 +3,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.external_api.services.external_api_service import ExternalApiService
+from app.iron_bank.enums import OpexKeyedOn
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
 from app.iron_bank.schemas.prepare_uw import (
     BedroomContext,
@@ -183,6 +184,11 @@ class PrepareUwDataJob:
         ``bedrooms`` stays a parameter: it is the *prospective* count being
         previewed, which is precisely what ``underwriting.bedrooms`` is not yet.
 
+        The opex figures come back as ``operating_expenses`` — a *partial* list,
+        carrying this underwriting's own row ids so the client merges by id
+        rather than matching labels itself. The deal's existing rows are already
+        eager-loaded by ``get_by_id``, so this costs no extra query.
+
         Raises ``BedroomContextNotFoundError`` — a 404 — when there is no such
         underwriting, when it has no market, or when the market has no opex row
         at this bedroom count (markets do not cover every count). Handing back
@@ -214,8 +220,18 @@ class PrepareUwDataJob:
         # opex_by_size is deliberately not looked up — it is keyed on sqft, so a
         # bedroom change leaves it alone. Passing None (rather than calling with
         # sqft=None, which would emit "sqft IS NULL" and match by accident)
-        # keeps its rows out of opex.absolute entirely.
+        # keeps its rows out of the catalog entirely, and the keyed_on filter
+        # below would drop them regardless.
         opex = opex_catalog.transform_opex_costs(opex_by_bedrooms, None)
+        catalog = opex_catalog.build_opex_options(
+            opex_by_bedrooms=opex_by_bedrooms,
+            opex_by_size=None,
+            purchase_price=purchase_price,
+        )
+        operating_expenses = opex_catalog.resolve_opex_updates(
+            [row for row in catalog if row.keyed_on is OpexKeyedOn.BEDROOMS],
+            underwriting.operating_expenses,
+        )
 
         # str_cribs_fee=None leaves the "Design / Project Management" option
         # unpriced; it is filtered out below along with the (empty) catalog.
@@ -230,7 +246,7 @@ class PrepareUwDataJob:
         return BedroomContext.model_validate(
             {
                 "bedrooms": bedrooms,
-                "opex": opex,
+                "operating_expenses": operating_expenses,
                 "cleaning_cost": opex_catalog.build_cleaning_cost(
                     opex.get("cleaning") or {}
                 ),
@@ -238,7 +254,7 @@ class PrepareUwDataJob:
                     property_tax_pct=opex.get("property_tax_pct"),
                     purchase_price=purchase_price,
                 ),
-                "furnishing_options": [
+                "construction_amenities": [
                     option
                     for option in options
                     if option.get("id") in bedroom_keyed_ids

@@ -14,11 +14,13 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingEditContextResult,
     GetUnderwritingResult,
     GetUnderwritingsResult,
+    OpexOption,
     UnderwritingRealtorDetail,
     UserRef,
     ZillowProperty,
 )
 from app.iron_bank.schemas.underwriting import UnderwritingRead
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 from app.iron_bank.services.reference_label_resolver import apply_reference_labels
 
@@ -30,6 +32,7 @@ class GetUnderwritingService:
         listings_service: Any = None,
         listing_details_service: Any = None,
         opex_by_bedrooms_service: Any = None,
+        opex_by_size_service: Any = None,
         construction_amenities_service: Any = None,
         construction_remodeling_service: Any = None,
         str_cribs_service: Any = None,
@@ -42,6 +45,7 @@ class GetUnderwritingService:
         self.listings_service = listings_service
         self.listing_details_service = listing_details_service
         self.opex_by_bedrooms_service = opex_by_bedrooms_service
+        self.opex_by_size_service = opex_by_size_service
         self.construction_amenities_service = construction_amenities_service
         self.construction_remodeling_service = construction_remodeling_service
         self.str_cribs_service = str_cribs_service
@@ -124,6 +128,14 @@ class GetUnderwritingService:
             opex_by_bedrooms, amenities, str_cribs_fee
         )
 
+        # The market's opex truth table for this deal's bedrooms and sqft, so the
+        # edit form can show what the market says alongside what the analyst has.
+        # The bedroom row is already in hand from above; only the sqft-keyed one
+        # is a new lookup.
+        opex_options = await self._opex_options(
+            underwriting, opex_by_bedrooms=opex_by_bedrooms, area=area
+        )
+
         return GetUnderwritingEditContextResult(
             data=EditContextData(
                 underwriting=underwriting,
@@ -137,8 +149,36 @@ class GetUnderwritingService:
                         for r in remodeling
                     ],
                     deal_tag_options=deal_tag_options,
+                    opex_options=opex_options,
                 ),
             )
+        )
+
+    async def _opex_options(
+        self, underwriting, *, opex_by_bedrooms, area
+    ) -> list[OpexOption]:
+        """The market's operating-expense catalog for this deal.
+
+        Empty rather than partial when there is nothing to key on: no market, or
+        no opex row at this bedroom count. A catalog of thirteen null amounts
+        would read as "the market charges nothing", which is worse than showing
+        no catalog at all — ``_opex_by_bedrooms`` has already logged why.
+        """
+        if not underwriting.market_id or opex_by_bedrooms is None:
+            return []
+
+        sqft = PrepareUwDataService().normalize_sqft(area)
+        opex_by_size = (
+            await self.opex_by_size_service.get_by_market_and_sqft(
+                sqft=sqft, market_id=underwriting.market_id
+            )
+            if self.opex_by_size_service is not None and sqft is not None
+            else None
+        )
+        return opex_catalog.build_opex_options(
+            opex_by_bedrooms=opex_by_bedrooms,
+            opex_by_size=opex_by_size,
+            purchase_price=underwriting.purchase_price,
         )
 
     @staticmethod

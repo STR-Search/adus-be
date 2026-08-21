@@ -307,12 +307,40 @@ class FakeUnderwritingRepository:
         return self.underwriting
 
 
+def _expense(expense_id, expense_name, monthly_amount=Decimal("0")):
+    return SimpleNamespace(
+        id=expense_id, expense_name=expense_name, monthly_amount=monthly_amount
+    )
+
+
+def _ledger():
+    """The deal's own expense rows, as the repository eager-loads them.
+
+    Deliberately imperfect: "Internet" is size-keyed so no bedroom change should
+    ever touch it, and "Software" is missing entirely — the analyst deleted that
+    row, which is the case that has to come back as an insert rather than being
+    silently skipped.
+    """
+    return [
+        _expense(8801, "Internet", Decimal("100")),
+        _expense(8804, "Pool/Hot Tub Maintenance", Decimal("125")),
+        _expense(8805, "Outdoor/Landscaping", Decimal("100")),
+        _expense(8807, "Household Supplies", Decimal("150")),
+        _expense(8808, "Cleaning", Decimal("900")),
+        _expense(8809, "Property Taxes (Monthly)", Decimal("400")),
+        _expense(8810, "Insurance HOI", Decimal("200")),
+        _expense(8811, "CapEx Reserve", Decimal("275")),
+        _expense(8813, "HOA Fees", Decimal("0")),
+    ]
+
+
 def _underwriting(**overrides):
     base = {
         "id": 42,
         "market_id": 3,
         "purchase_price": Decimal("480000"),
         "detail": None,
+        "operating_expenses": _ledger(),
     }
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -342,36 +370,58 @@ async def test_bedroom_context_keys_the_opex_lookup_on_the_requested_bedrooms():
         "market_id": 3,
     }
     assert context.bedrooms == 5
-    assert context.opex.cleaning.fee == Decimal("180")
-    assert context.opex.cleaning.num_of_turns == Decimal("6")
-    assert context.opex.ranged.pool_hot_tub.low == Decimal("150")
-    assert context.opex.ranged.pool_hot_tub.high == Decimal("300")
-    assert context.opex.property_tax_pct == Decimal("0.0125")
+    by_name = {u.expense_name: u.monthly_amount for u in context.operating_expenses}
+    assert by_name["Cleaning"] == Decimal("1080")  # 180 x 6 turns
+    assert by_name["Pool/Hot Tub Maintenance"] == Decimal("150")  # the low end
+    assert by_name["Property Taxes (Monthly)"] == Decimal("500.00")  # 0.0125 x 480k / 12
     assert context.land_assumptions_pct == Decimal("0.22")
     assert context.annual_re_appreciation_pct == Decimal("0.045")
 
 
 @pytest.mark.asyncio
-async def test_bedroom_context_absolute_opex_excludes_sqft_keyed_rows():
+async def test_bedroom_context_updates_exclude_sqft_keyed_rows():
     # opex_by_size is never looked up: it is keyed on sqft, so a bedroom change
     # leaves internet/pest_control/utilities alone and they must not appear here
-    # for the FE to overwrite.
+    # for the FE to overwrite. MISC is excluded too — no market supplies it.
     job, deps = _bedroom_context_job(_opex_row())
 
     context = await job.build_bedroom_context(
         underwriting_id=42, bedrooms=5
     )
 
-    assert set(context.opex.absolute) == {
-        "outdoor_landscaping",
-        "software",
-        "insurance_hoi",
-        "supplies",
-        "capex_reserve",
-        "hoa_fees",
-    }
+    # In OPEX_ROWS order, which is the catalog's order.
+    assert [u.expense_name for u in context.operating_expenses] == [
+        "Pool/Hot Tub Maintenance",
+        "Outdoor/Landscaping",
+        "Software",
+        "Household Supplies",
+        "Cleaning",
+        "Property Taxes (Monthly)",
+        "Insurance HOI",
+        "CapEx Reserve",
+        "HOA Fees",
+    ]
     assert deps["opex_by_size_service"].called_with is None
     assert deps["str_cribs_service"].requested_area is None
+
+
+@pytest.mark.asyncio
+async def test_bedroom_context_updates_carry_the_underwritings_own_row_ids():
+    # The client patches by id rather than matching labels itself, so the ids
+    # must be the ledger's — and a row the deal no longer has must come back as
+    # an insert, not vanish.
+    job, _ = _bedroom_context_job(_opex_row())
+
+    context = await job.build_bedroom_context(underwriting_id=42, bedrooms=5)
+
+    by_name = {u.expense_name: u.id for u in context.operating_expenses}
+    assert by_name["Cleaning"] == 8808
+    assert by_name["HOA Fees"] == 8813
+    # deleted from this deal — id=None tells the client to insert it, which
+    # _upsert_children already handles
+    assert by_name["Software"] is None
+    # size-keyed, so it is not in the patch at all and keeps its stored value
+    assert "Internet" not in by_name
 
 
 @pytest.mark.asyncio
@@ -382,7 +432,7 @@ async def test_bedroom_context_returns_only_the_two_bedroom_keyed_options():
         underwriting_id=42, bedrooms=5
     )
 
-    by_id = {option.id: option for option in context.furnishing_options}
+    by_id = {option.id: option for option in context.construction_amenities}
     # "Design / Project Management" (-2) is priced from str_cribs_fee, keyed on
     # area, so it does not move with bedrooms and is excluded.
     assert set(by_id) == {
@@ -486,7 +536,11 @@ async def test_bedroom_context_still_returns_opex_without_a_purchase_price():
     context = await job.build_bedroom_context(underwriting_id=42, bedrooms=5)
 
     assert context.property_taxes is None
-    assert context.opex.cleaning.fee == Decimal("180")
+    by_name = {u.expense_name: u.monthly_amount for u in context.operating_expenses}
+    assert by_name["Cleaning"] == Decimal("1080")
+    # No price means no tax amount to apply, so the row is left out rather than
+    # patched to null over a figure the analyst can see.
+    assert "Property Taxes (Monthly)" not in by_name
     assert context.land_assumptions_pct == Decimal("0.22")
 
 

@@ -236,7 +236,10 @@ def get_get_underwriting_controller(
         ConstructionRemodelingRepository,
     )
     from app.markets.repositories.market_repository import MarketRepository
-    from app.markets.repositories.opex_repository import OpexByBedroomsRepository
+    from app.markets.repositories.opex_repository import (
+        OpexByBedroomsRepository,
+        OpexBySizeRepository,
+    )
     from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.repositories.str_cribs_repository import (
         StrCribsFeeDetailsRepository,
@@ -247,7 +250,10 @@ def get_get_underwriting_controller(
         ConstructionRemodelingService,
     )
     from app.markets.services.str_cribs_service import StrCribsFeeDetailsService
-    from app.markets.services.opex_service import OpexByBedroomsService
+    from app.markets.services.opex_service import (
+        OpexByBedroomsService,
+        OpexBySizeService,
+    )
     from app.zillow.repositories.scheduled_listing_details_repository import (
         ScheduledListingDetailsRepository,
     )
@@ -272,6 +278,7 @@ def get_get_underwriting_controller(
         opex_by_bedrooms_service=OpexByBedroomsService(
             OpexByBedroomsRepository(db), market_repo
         ),
+        opex_by_size_service=OpexBySizeService(OpexBySizeRepository(db), market_repo),
         construction_amenities_service=ConstructionAmenitiesService(
             ConstructionAmenitiesRepository(db)
         ),
@@ -321,10 +328,19 @@ async def get_bedroom_context(
     404s when the underwriting does not exist, has no market, or its market has
     no opex row at that bedroom count.
 
-    Returns only what is keyed on (market, bedrooms). The FE **merges** the
-    result into the edit form — the sqft-keyed opex rows, the "Design / Project
-    Management" item and the market's must-have amenities are not in the
-    response and must survive untouched — then PUTs as normal.
+    Returns only what is keyed on (market, bedrooms). The sqft-keyed opex rows,
+    the "Design / Project Management" item and the market's must-have amenities
+    are not in the response and must survive untouched.
+
+    ``operating_expenses`` and ``construction_amenities`` use the same field
+    names and item shapes as the edit-context response, but both are **partial**
+    — only what a bedroom change moves. Do not treat either as a replacement for
+    the list it shares a name with.
+
+    ``operating_expenses`` carries this underwriting's own row ids: apply each
+    entry to the row with that id, and treat ``id: null`` as a row to add. Then
+    PUT the **full** merged array — rows absent from an update payload are
+    deleted, so sending only these would drop the rest.
     """
     return await controller.get_bedroom_context(
         underwriting_id=underwriting_id,

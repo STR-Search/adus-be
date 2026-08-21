@@ -15,6 +15,7 @@ from pydantic import (
 from app.core.reference_data.schemas import ReferenceDataOption
 from app.iron_bank.enums import (
     DealStatus,
+    OpexKeyedOn,
     SortOrder,
     UnderwritingSortBy,
     UnderwritingSource,
@@ -330,6 +331,58 @@ class StoredZillowProperty(ZillowProperty):
     model_config = ConfigDict(extra="allow")
 
 
+class OpexOptionInputs(BaseModel):
+    """The drivers behind a row whose amount is not a single market figure.
+
+    One flat bag rather than three differently-shaped sub-objects, so a client
+    parses one type and reads the keys its row uses. Every key is present when
+    ``OpexOption.inputs`` is non-null; the irrelevant ones are null.
+    """
+
+    # cleaning: monthly_amount is cost_per_clean x turns_per_month
+    cost_per_clean: Decimal | None = None
+    turns_per_month: Decimal | None = None
+    # pool/hot tub: a range, of which the low end seeds the row
+    low: Decimal | None = None
+    high: Decimal | None = None
+    # property taxes: an annual rate applied to purchase price
+    pct: Decimal | None = None
+
+    @field_serializer(
+        "cost_per_clean", "turns_per_month", "low", "high", "pct", when_used="json"
+    )
+    def serialize_input(self, value: Decimal | None) -> str | None:
+        return _serialize_plain_decimal(value)
+
+
+class OpexOption(BaseModel):
+    """One row of the operating-expense catalog for a market/bedrooms/sqft.
+
+    Reference data, in the same spirit as ``ConstructionAmenityOption``: what
+    the market says this row costs, *not* what the analyst has on their deal.
+    The two legitimately diverge the moment anyone edits a figure — the
+    persisted ``uw_operating_expenses`` rows are the analyst's ledger, these are
+    the market's truth table.
+
+    Order follows ``opex_catalog.OPEX_ROWS``, which is the seeding order. It is
+    **not** the analyst's row order: ``sort_order`` is stamped from payload
+    position on save, so a reordered deal renders from its own rows.
+    """
+
+    key: str
+    expense_name: str
+    # None means the market supplies no figure for this row — distinct from a
+    # market figure that is genuinely zero.
+    monthly_amount: Decimal | None = None
+    keyed_on: OpexKeyedOn
+    # Null for the rows that are a single amount with nothing behind them.
+    inputs: OpexOptionInputs | None = None
+
+    @field_serializer("monthly_amount", when_used="json")
+    def serialize_monthly_amount(self, value: Decimal | None) -> str | None:
+        return _serialize_plain_decimal(value)
+
+
 class EditContextualData(BaseModel):
     construction_amenities: list[ConstructionAmenityOption] = Field(
         default_factory=list
@@ -340,6 +393,11 @@ class EditContextualData(BaseModel):
     # iron_bank domain reference data, grouped by set_code — the same payload
     # served by GET /reference-data?domain=iron_bank.
     deal_tag_options: dict[str, list[ReferenceDataOption]] = Field(default_factory=dict)
+    # The market's operating-expense figures for this deal's bedrooms and sqft.
+    # Empty for a market-less deal, or one whose market has no row at its
+    # bedroom count — there is no truth table to show, and a blank catalog is
+    # honest about that.
+    opex_options: list[OpexOption] = Field(default_factory=list)
 
 
 class EditContextData(BaseModel):
