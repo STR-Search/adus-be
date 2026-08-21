@@ -3,9 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.iron_bank.services.base_underwriting_payload_builder import (
-    BaseUnderwritingPayloadBuilder,
-)
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 from app.markets.schemas.opex import OpexByBedroomsSchema
 from app.workflows.prepare_uw_data_job import (
@@ -406,20 +404,19 @@ async def test_bedroom_context_returns_only_the_two_bedroom_keyed_options():
 @pytest.mark.asyncio
 async def test_bedroom_context_blobs_match_what_creation_would_persist():
     # The whole reason these are derived server-side: the FE places them
-    # straight onto uw_details, so they must be identical to the payload
-    # builders' output for the same inputs.
+    # straight onto uw_details, so they must be identical to the catalog's
+    # output for the same inputs — the same functions the payload builders use.
     job, _ = _bedroom_context_job(_opex_row())
-    builder = BaseUnderwritingPayloadBuilder()
     purchase_price = Decimal("480000")
 
     context = await job.build_bedroom_context(
         underwriting_id=42, bedrooms=5
     )
 
-    assert context.cleaning_cost == builder.build_cleaning_cost(
+    assert context.cleaning_cost == opex_catalog.build_cleaning_cost(
         {"fee": Decimal("180"), "num_of_turns": Decimal("6")}
     )
-    assert context.property_taxes == builder.build_opex_property_taxes(
+    assert context.property_taxes == opex_catalog.build_opex_property_taxes(
         property_tax_pct=Decimal("0.0125"), purchase_price=purchase_price
     )
     assert context.cleaning_cost["monthly_cleaning_cost"] == Decimal("1080")

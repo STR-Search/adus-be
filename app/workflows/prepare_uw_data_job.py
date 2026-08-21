@@ -9,9 +9,7 @@ from app.iron_bank.schemas.prepare_uw import (
     MarketContext,
     PrepareUwDataResult,
 )
-from app.iron_bank.services.base_underwriting_payload_builder import (
-    BaseUnderwritingPayloadBuilder,
-)
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 from app.markets.repositories.construction_repository import (
     ConstructionAmenitiesRepository,
@@ -217,7 +215,7 @@ class PrepareUwDataJob:
         # bedroom change leaves it alone. Passing None (rather than calling with
         # sqft=None, which would emit "sqft IS NULL" and match by accident)
         # keeps its rows out of opex.absolute entirely.
-        opex = self.uw_data_service._transform_opex_costs(opex_by_bedrooms, None)
+        opex = opex_catalog.transform_opex_costs(opex_by_bedrooms, None)
 
         # str_cribs_fee=None leaves the "Design / Project Management" option
         # unpriced; it is filtered out below along with the (empty) catalog.
@@ -229,15 +227,14 @@ class PrepareUwDataJob:
             PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID,
         }
 
-        payload_builder = BaseUnderwritingPayloadBuilder()
         return BedroomContext.model_validate(
             {
                 "bedrooms": bedrooms,
                 "opex": opex,
-                "cleaning_cost": payload_builder.build_cleaning_cost(
+                "cleaning_cost": opex_catalog.build_cleaning_cost(
                     opex.get("cleaning") or {}
                 ),
-                "property_taxes": payload_builder.build_opex_property_taxes(
+                "property_taxes": opex_catalog.build_opex_property_taxes(
                     property_tax_pct=opex.get("property_tax_pct"),
                     purchase_price=purchase_price,
                 ),

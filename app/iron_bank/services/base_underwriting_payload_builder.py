@@ -4,6 +4,7 @@ from typing import Any
 import structlog
 
 from app.iron_bank.enums import DealStatus
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 from app.iron_bank.services.purchase_price_reconciliation_payload_builder import (
     PurchasePriceReconciliationPayloadBuilder,
@@ -26,7 +27,6 @@ class BaseUnderwritingPayloadBuilder:
     _DEFAULT_DEAL_STATUS = DealStatus.TEMPLATE_GENERATED
     _DEFAULT_SLA_MULTIPLIER_PCT = Decimal("0.36")
     _DEFAULT_BONUS_AMOUNT_PCT = Decimal("1")
-    _MONEY_QUANT = Decimal("0.01")
 
     # Seeded optimization items all price at tier 2 for now; the analyst
     # re-tiers from the amenity catalog in the edit form.
@@ -45,39 +45,6 @@ class BaseUnderwritingPayloadBuilder:
         PrepareUwDataService.STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID,
         PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID,
     )
-
-    # The seeded operating expenses, in the order the analyst sees them, each
-    # paired with its display label. Keys are opex columns carried on
-    # ``opex["absolute"]``, plus the three rows _build_operating_expenses
-    # derives (cleaning, pool_hot_tub, property_taxes) and the ones with no
-    # market source at all (_OPEX_ROW_DEFAULTS). Order is the contract:
-    # sort_order is stamped from list position on save, so this tuple decides
-    # the row order of every seeded underwriting.
-    _OPEX_ROWS = (
-        ("internet", "Internet"),
-        ("utilities", "Utilities"),
-        ("pest_control", "Pest Control"),
-        ("pool_hot_tub", "Pool/Hot Tub Maintenance"),
-        ("outdoor_landscaping", "Outdoor/Landscaping"),
-        ("software", "Software"),
-        ("supplies", "Household Supplies"),
-        ("cleaning", "Cleaning"),
-        ("property_taxes", "Property Taxes (Monthly)"),
-        ("insurance_hoi", "Insurance HOI"),
-        ("capex_reserve", "CapEx Reserve"),
-        ("misc", "MISC"),
-        ("hoa_fees", "HOA Fees"),
-    )
-    # Rows with no opex column behind them: no market supplies them, so every
-    # underwriting starts from this amount and the analyst adjusts it. Merged
-    # under the market data in _build_operating_expenses, so adding a real
-    # column of the same name later would take over with no other change. Note
-    # these seed at a starting *value*, unlike _ALWAYS_SEEDED_OPEX_KEYS, which
-    # seed blank — a zero here renders because 0 is not None.
-    _OPEX_ROW_DEFAULTS = {"misc": Decimal("0")}
-    # Seeded even when no source resolves an amount: a blank row the team fills
-    # in manually beats a silently absent one.
-    _ALWAYS_SEEDED_OPEX_KEYS = frozenset({"property_taxes"})
 
     def _resolve_owner_id(
         self, context: dict[str, Any], *, fallback_user_id: int | None = None
@@ -135,61 +102,6 @@ class BaseUnderwritingPayloadBuilder:
                 config.get("tax_rate"), Decimal("0.37")
             ),
         }
-
-    def build_opex_property_taxes(
-        self,
-        *,
-        property_tax_pct: Any,
-        purchase_price: Decimal | None,
-        zillow_annual_tax: Decimal | None = None,
-    ) -> dict[str, Any] | None:
-        """Resolve the monthly Property Taxes opex item and its breakdown.
-
-        Sources, in priority order:
-        1. Market tax rate (opex_by_bedrooms.property_taxes) x purchase price.
-        2. Zillow-provided annual tax amount (not wired up yet — callers will
-           pass it once it is threaded through prepared zillow data).
-        3. Neither -> None; the item is seeded blank for the team to fill out.
-
-        Amounts are annual; OPEX is monthly, so both sources divide by 12.
-        Both are quantized to cents — a rate like 0.0125 would otherwise carry
-        its own scale into the stored blob (0.0125 x 480000 = 6000.0000) and the
-        division would trail even further. The raw figures stay recoverable
-        under "inputs".
-
-        Each amount is rounded from the unrounded annual, not from each other,
-        so neither inherits the other's rounding error; 12 x monthly can
-        therefore differ from annual by up to a cent.
-
-        The returned dict is persisted on uw_details.property_taxes so the
-        derivation stays auditable (mirrors cleaning_cost): the resolved
-        amounts sit at the top level regardless of source, and the
-        source-specific figures live under "inputs".
-        """
-        if property_tax_pct is not None and purchase_price is not None:
-            pct = Decimal(str(property_tax_pct))
-            annual = pct * purchase_price
-            return {
-                "source": "opex_property_tax_pct",
-                "annual_amount": self._money(annual),
-                "monthly_amount": self._money(annual / 12),
-                "inputs": {
-                    "opex_property_tax_pct": pct,
-                    "purchase_price": purchase_price,
-                },
-            }
-        if zillow_annual_tax is not None:
-            return {
-                "source": "zillow_annual_tax",
-                "annual_amount": self._money(zillow_annual_tax),
-                "monthly_amount": self._money(zillow_annual_tax / 12),
-                "inputs": {},
-            }
-        return None
-
-    def _money(self, value: Decimal) -> Decimal:
-        """Round to cents, matching ``UnderwritingCalculator._money``."""
-        return value.quantize(self._MONEY_QUANT)
 
     def _build_optimization_list(
         self, context: dict[str, Any], *, zpid: Any = None
@@ -256,99 +168,19 @@ class BaseUnderwritingPayloadBuilder:
             "tier": self._AMENITY_TIER_LABEL,
         }
 
-    def build_cleaning_cost(self, cleaning: dict[str, Any]) -> dict[str, Any] | None:
-        """Resolve the uw_details.cleaning_cost blob from an opex cleaning dict.
-
-        Public alongside ``build_opex_property_taxes``: both are the canonical
-        derivations for their uw_details blob, and the bedroom-context endpoint
-        reuses them so a bedroom change hands the FE exactly the shape creation
-        would have produced.
-        """
-        fee = cleaning.get("fee")
-        turns = cleaning.get("num_of_turns")
-        if fee is None and turns is None:
-            return None
-
-        result = {
-            "cost_per_clean": fee,
-            "turns_per_month": turns,
-        }
-        if fee is not None and turns is not None:
-            result["monthly_cleaning_cost"] = fee * turns
-        return result
-
     def _build_operating_expenses(
         self,
         opex: dict[str, Any],
         property_taxes: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Seed the monthly operating expenses in ``_OPEX_ROWS`` order.
+        """Seed the monthly operating expenses from the canonical catalog.
 
-        Amounts are resolved first, then emitted in the canonical order, so the
-        row order is a property of this builder rather than of the opex table's
-        column order (which is what iterating ``absolute`` gave us before).
-
-        A row whose amount resolves to None is dropped, so the set of rows still
-        follows the market data — except Property Taxes, which is always seeded
-        so an unresolved amount is a blank row the team fills in rather than a
-        missing one, and the ``_OPEX_ROW_DEFAULTS`` rows, which no market
-        supplies and so always carry their default. An opex column with no place
-        in ``_OPEX_ROWS`` is appended after them and logged; a newly added column
-        should surface to the analyst, not disappear or land at an arbitrary
-        position.
+        The row table, the amounts and the ordering all live in
+        ``opex_catalog``, which the read paths share — so the rows a draft is
+        seeded with and the rows served back as reference data cannot disagree
+        about what exists or what it is called.
         """
-        absolute = opex.get("absolute") or {}
-        cleaning = opex.get("cleaning") or {}
-        fee = cleaning.get("fee")
-        turns = cleaning.get("num_of_turns")
-        pool_hot_tub = (opex.get("ranged") or {}).get("pool_hot_tub") or {}
-
-        # Defaults sit under the market data, so a real column would take over
-        # from a default of the same name. The three derived keys cannot collide
-        # with an `absolute` column: PrepareUwDataService excludes
-        # cleaning_fee/num_of_turns, pool_hot_tub_low/high and property_taxes
-        # from `absolute` (see its _OPEX_*_FIELDS sets). They merge last
-        # regardless, so a future column sharing one of these names would not
-        # displace the derived row.
-        amounts: dict[str, Any] = {
-            **self._OPEX_ROW_DEFAULTS,
-            **absolute,
-            "cleaning": fee * turns if fee is not None and turns is not None else None,
-            "pool_hot_tub": pool_hot_tub.get("low"),
-            "property_taxes": (
-                property_taxes["monthly_amount"] if property_taxes else None
-            ),
-        }
-
-        expenses = [
-            {"expense": label, "monthly": amounts.get(key)}
-            for key, label in self._OPEX_ROWS
-            if amounts.get(key) is not None or key in self._ALWAYS_SEEDED_OPEX_KEYS
-        ]
-
-        placed = {key for key, _ in self._OPEX_ROWS}
-        unplaced = [
-            name
-            for name, amount in absolute.items()
-            if name not in placed and amount is not None
-        ]
-        if unplaced:
-            logger.warning(
-                "_build_operating_expenses: opex columns with no canonical row",
-                unplaced_opex_columns=unplaced,
-            )
-            expenses.extend(
-                {
-                    "expense": self._humanize_expense_name(name),
-                    "monthly": absolute[name],
-                }
-                for name in unplaced
-            )
-        return expenses
-
-    def _humanize_expense_name(self, value: str) -> str:
-        """Fallback label for an opex column absent from ``_OPEX_ROWS``."""
-        return value.replace("_", " ").title()
+        return opex_catalog.build_opex_expense_rows(opex, property_taxes)
 
     @staticmethod
     def _as_int(value: Any) -> int | None:

@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.iron_bank.enums import UnderwritingSource
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.base_underwriting_payload_builder import (
     BaseUnderwritingPayloadBuilder,
 )
@@ -30,8 +31,8 @@ class UnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         opex = prepared.get("opex") or {}
 
         purchase_price = self._money_to_decimal(zillow_property.get("price"))
-        cleaning_cost = self.build_cleaning_cost(opex.get("cleaning") or {})
-        property_taxes = self.build_opex_property_taxes(
+        cleaning_cost = opex_catalog.build_cleaning_cost(opex.get("cleaning") or {})
+        property_taxes = opex_catalog.build_opex_property_taxes(
             property_tax_pct=opex.get("property_tax_pct"),
             purchase_price=purchase_price,
         )

@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from app.iron_bank.defaults import UW_CONFIG_DEFAULTS
 from app.iron_bank.schemas.prepare_uw import MarketContext, PrepareUwDataResult
+from app.iron_bank.services import opex_catalog
 
 
 class PrepareUwDataService:
@@ -14,22 +15,6 @@ class PrepareUwDataService:
     # Spread applied over the FRED 30y fixed rate to derive the UW interest rate.
     _INTEREST_RATE_SPREAD_OVER_FRED = 0.0035
     _SQFT_CHECKPOINTS = [1000, 1500, 2000, 2750, 3500, 4500]
-    _OPEX_METADATA_FIELDS = {"id", "market_id", "market_slug", "bedrooms", "sqft"}
-    _OPEX_CLEANING_FIELDS = {"cleaning_fee", "num_of_turns"}
-    _OPEX_RANGED_FIELDS = {
-        "pool_hot_tub_low",
-        "pool_hot_tub_high",
-        "furnishings_low",
-        "furnishings_mid",
-        "furnishings_high",
-    }
-    _OPEX_CONFIG_FIELDS = {"land_value", "appreciation"}
-    # Opex columns that are percentages of purchase price, not monthly dollar
-    # amounts; the payload builder resolves them against the listing price.
-    _OPEX_PCT_OF_PURCHASE_FIELDS = {"property_taxes"}
-    # Opex columns that are surfaced as amenity options (see
-    # build_amenities_options) rather than monthly operating expenses.
-    _OPEX_AMENITY_FIELDS = {"consolidated_shipping"}
 
     # Synthetic amenity options prepended to the construction_costs_amenities
     # catalog by build_amenities_options. They are not catalog rows, so they
@@ -85,39 +70,6 @@ class PrepareUwDataService:
             ),
             "lot_size_sqft": listing_details.lot_size_sqft if listing_details else None,
             "description": listing_details.description if listing_details else None,
-        }
-
-    def _transform_opex_costs(self, opex_by_bedrooms, opex_by_size) -> dict:
-        bedrooms_data = (
-            opex_by_bedrooms.model_dump() if opex_by_bedrooms is not None else {}
-        )
-        size_data = opex_by_size.model_dump() if opex_by_size is not None else {}
-
-        exclude = (
-            self._OPEX_METADATA_FIELDS
-            | self._OPEX_CLEANING_FIELDS
-            | self._OPEX_RANGED_FIELDS
-            | self._OPEX_CONFIG_FIELDS
-            | self._OPEX_AMENITY_FIELDS
-            | self._OPEX_PCT_OF_PURCHASE_FIELDS
-        )
-        absolute = {
-            k: v for k, v in {**bedrooms_data, **size_data}.items() if k not in exclude
-        }
-
-        return {
-            "cleaning": {
-                "fee": bedrooms_data.get("cleaning_fee"),
-                "num_of_turns": bedrooms_data.get("num_of_turns"),
-            },
-            "ranged": {
-                "pool_hot_tub": {
-                    "low": bedrooms_data.get("pool_hot_tub_low"),
-                    "high": bedrooms_data.get("pool_hot_tub_high"),
-                },
-            },
-            "absolute": absolute,
-            "property_tax_pct": bedrooms_data.get("property_taxes"),
         }
 
     def _apply_opex_config_values(
@@ -233,7 +185,9 @@ class PrepareUwDataService:
                 "market_id": market_id,
                 "market_slug": market.market_slug if market else None,
                 "analyst_owner_id": (market.analyst_owner_id if market else None),
-                "opex": self._transform_opex_costs(opex_by_bedrooms, opex_by_size),
+                "opex": opex_catalog.transform_opex_costs(
+                    opex_by_bedrooms, opex_by_size
+                ),
                 "construction_amenities": amenities,
                 "construction_remodeling": [
                     r.model_dump() for r in construction_remodeling

@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.base_underwriting_payload_builder import (
     BaseUnderwritingPayloadBuilder,
 )
@@ -25,7 +26,7 @@ class TestBuildOpexPropertyTaxes:
     def test_amounts_are_quantized_to_cents(self):
         # 0.0125 carries four decimal places of its own, which would otherwise
         # propagate into the stored blob as 6000.0000.
-        result = _builder().build_opex_property_taxes(
+        result = opex_catalog.build_opex_property_taxes(
             property_tax_pct=Decimal("0.0125"),
             purchase_price=Decimal("480000"),
         )
@@ -34,7 +35,7 @@ class TestBuildOpexPropertyTaxes:
         assert str(result["monthly_amount"]) == "500.00"
 
     def test_a_repeating_monthly_amount_is_rounded(self):
-        result = _builder().build_opex_property_taxes(
+        result = opex_catalog.build_opex_property_taxes(
             property_tax_pct=Decimal("0.0125"),
             purchase_price=Decimal("500000"),
         )
@@ -48,7 +49,7 @@ class TestBuildOpexPropertyTaxes:
         # 415.62, half-up would give 415.63. This follows
         # UnderwritingCalculator._money so every money figure on the payload
         # rounds the same way.
-        result = _builder().build_opex_property_taxes(
+        result = opex_catalog.build_opex_property_taxes(
             property_tax_pct=Decimal("0.0133"),
             purchase_price=Decimal("375000"),
         )
@@ -57,7 +58,7 @@ class TestBuildOpexPropertyTaxes:
         assert str(result["monthly_amount"]) == "415.62"
 
     def test_inputs_keep_the_unrounded_figures(self):
-        result = _builder().build_opex_property_taxes(
+        result = opex_catalog.build_opex_property_taxes(
             property_tax_pct=Decimal("0.0125"),
             purchase_price=Decimal("480000"),
         )
@@ -69,7 +70,7 @@ class TestBuildOpexPropertyTaxes:
         }
 
     def test_the_zillow_annual_source_is_quantized_too(self):
-        result = _builder().build_opex_property_taxes(
+        result = opex_catalog.build_opex_property_taxes(
             property_tax_pct=None,
             purchase_price=None,
             zillow_annual_tax=Decimal("7231.4567"),
@@ -82,13 +83,13 @@ class TestBuildOpexPropertyTaxes:
 
     def test_returns_none_when_no_source_resolves(self):
         assert (
-            _builder().build_opex_property_taxes(
+            opex_catalog.build_opex_property_taxes(
                 property_tax_pct=None, purchase_price=Decimal("480000")
             )
             is None
         )
         assert (
-            _builder().build_opex_property_taxes(
+            opex_catalog.build_opex_property_taxes(
                 property_tax_pct=Decimal("0.0125"), purchase_price=None
             )
             is None
@@ -96,10 +97,14 @@ class TestBuildOpexPropertyTaxes:
 
 
 class TestOperatingExpenseOrder:
-    """The rows follow _OPEX_ROWS, not the opex table's column order, and
-    sort_order is stamped from these positions on save."""
+    """The rows follow opex_catalog.OPEX_ROWS, not the opex table's column
+    order, and sort_order is stamped from these positions on save.
 
-    # Deliberately in a different order than _OPEX_ROWS: the builder must not
+    Exercised through the builder's delegation rather than against the catalog
+    directly: what matters here is that the seeded payload still comes out in
+    the canonical order."""
+
+    # Deliberately in a different order than OPEX_ROWS: the builder must not
     # inherit the order the opex columns happen to arrive in.
     _ABSOLUTE = {
         "outdoor_landscaping": Decimal("150"),
@@ -176,7 +181,7 @@ class TestOperatingExpenseOrder:
 
     def test_misc_is_seeded_at_zero_with_no_market_source(self):
         # No opex column supplies MISC, so it is seeded from
-        # _OPEX_ROW_DEFAULTS on every underwriting — including one whose
+        # OPEX_ROW_DEFAULTS on every underwriting — including one whose
         # market data is entirely absent.
         opex = self._opex(cleaning={}, ranged={}, absolute={})
         expenses = self._expenses(opex=opex, property_taxes=None)
@@ -191,7 +196,7 @@ class TestOperatingExpenseOrder:
 
     def test_a_market_column_would_override_a_default(self):
         # Migration path: if misc ever becomes a real opex column, the market
-        # value takes over with no change to _OPEX_ROWS.
+        # value takes over with no change to OPEX_ROWS.
         opex = self._opex(cleaning={}, ranged={}, absolute={"misc": Decimal("250")})
         by_expense = {e["expense"]: e["monthly"] for e in self._expenses(opex=opex)}
 
@@ -215,7 +220,7 @@ class TestOperatingExpenseOrder:
         ]
 
     def test_an_unplaced_opex_column_is_appended_last(self):
-        # A column added to the opex table but not to _OPEX_ROWS still reaches
+        # A column added to the opex table but not to OPEX_ROWS still reaches
         # the analyst, humanized, after every canonical row.
         opex = self._opex(
             cleaning={},
