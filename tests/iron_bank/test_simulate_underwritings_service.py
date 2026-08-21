@@ -86,7 +86,9 @@ def _row(
         optimization_total=optimization_total,
         operating_expense_total=operating_expense_total,
         purchase_details=(
-            _stored_purchase_details() if purchase_details == "default" else purchase_details
+            _stored_purchase_details()
+            if purchase_details == "default"
+            else purchase_details
         ),
         forecasted_revenue=(
             _stored_forecasted_revenue()
@@ -100,9 +102,7 @@ def _row(
 def _sorted_ids(rows, *, sort_by, sort_order):
     """Run the service's in-place sorter over `_SimulatedRow`s directly."""
     ordered = list(rows)
-    SimulateUnderwritingsService._sort(
-        ordered, sort_by=sort_by, sort_order=sort_order
-    )
+    SimulateUnderwritingsService._sort(ordered, sort_by=sort_by, sort_order=sort_order)
     return [row.id for row in ordered]
 
 
@@ -478,7 +478,11 @@ def test_datetime_columns_sort_in_both_directions(column):
 
 def test_datetime_ties_break_by_id_desc_in_both_directions():
     same = datetime(2026, 8, 5, tzinfo=timezone.utc)
-    rows = [_sortable(1, created_at=same), _sortable(5, created_at=same), _sortable(3, created_at=same)]
+    rows = [
+        _sortable(1, created_at=same),
+        _sortable(5, created_at=same),
+        _sortable(3, created_at=same),
+    ]
 
     for order in SortOrder:
         assert _sorted_ids(

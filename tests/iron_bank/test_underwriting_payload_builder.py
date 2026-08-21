@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.underwriting_payload_builder import (
     UnderwritingPayloadBuilder,
 )
@@ -69,12 +70,14 @@ def test_builds_save_payload_from_prepared_uw_data():
         expense.model_dump(by_alias=True, exclude_none=True)
         for expense in payload.operating_expenses
     ] == [
-        {"expense": "Cleaning", "monthly": Decimal("10450")},
-        {"expense": "Property Taxes", "monthly": Decimal("485")},
-        {"expense": "Pool/Hot Tub Maintenance", "monthly": Decimal("125")},
         {"expense": "Internet", "monthly": Decimal("100")},
         {"expense": "Utilities", "monthly": Decimal("350")},
         {"expense": "Pest Control", "monthly": Decimal("60")},
+        {"expense": "Pool/Hot Tub Maintenance", "monthly": Decimal("125")},
+        {"expense": "Cleaning", "monthly": Decimal("10450")},
+        {"expense": "Property Taxes (Monthly)", "monthly": Decimal("485")},
+        # no opex column behind it — seeded at zero for the analyst to adjust
+        {"expense": "MISC", "monthly": Decimal("0")},
     ]
 
 
@@ -117,7 +120,10 @@ def test_builds_draft_payload_when_optional_prepared_fields_are_missing():
     assert [
         expense.model_dump(by_alias=True, exclude={"id"})
         for expense in payload.operating_expenses
-    ] == [{"expense": "Property Taxes", "monthly": None}]
+    ] == [
+        {"expense": "Property Taxes (Monthly)", "monthly": None},
+        {"expense": "MISC", "monthly": Decimal("0")},
+    ]
 
 
 def _amenity_option(amenity_id, name, price_tier_2):
@@ -143,7 +149,7 @@ def _prepared_with_amenities(*, amenities, must_have_amenity_ids):
     }
 
 
-def test_seeds_optimization_items_from_base_options_and_must_haves():
+def test_seeds_optimization_items_with_must_haves_bracketed_by_base_options():
     prepared = _prepared_with_amenities(
         amenities=[
             _amenity_option(0, "Furnishings", 45000),
@@ -169,9 +175,16 @@ def test_seeds_optimization_items_from_base_options_and_must_haves():
             "tier": "Mid",
         },
         {
-            "category": "Consolidated Shipping",
-            "total_price": Decimal("18225"),
-            "base_price": Decimal("18225"),
+            "category": "Fire Pit",
+            "total_price": Decimal("2200"),
+            "base_price": Decimal("2200"),
+            "metric": "flat",
+            "tier": "Mid",
+        },
+        {
+            "category": "Hot Tub",
+            "total_price": Decimal("9500"),
+            "base_price": Decimal("9500"),
             "metric": "flat",
             "tier": "Mid",
         },
@@ -183,16 +196,9 @@ def test_seeds_optimization_items_from_base_options_and_must_haves():
             "tier": "Mid",
         },
         {
-            "category": "Fire Pit",
-            "total_price": Decimal("2200"),
-            "base_price": Decimal("2200"),
-            "metric": "flat",
-            "tier": "Mid",
-        },
-        {
-            "category": "Hot Tub",
-            "total_price": Decimal("9500"),
-            "base_price": Decimal("9500"),
+            "category": "Consolidated Shipping",
+            "total_price": Decimal("18225"),
+            "base_price": Decimal("18225"),
             "metric": "flat",
             "tier": "Mid",
         },
@@ -256,9 +262,7 @@ def test_optimization_list_is_empty_without_prepared_amenities():
 
 
 def test_property_taxes_hierarchy():
-    builder = UnderwritingPayloadBuilder()
-
-    from_pct = builder.build_opex_property_taxes(
+    from_pct = opex_catalog.build_opex_property_taxes(
         property_tax_pct=Decimal("0.012"),
         purchase_price=Decimal("485000"),
         zillow_annual_tax=Decimal("9000"),
@@ -271,7 +275,7 @@ def test_property_taxes_hierarchy():
         "purchase_price": Decimal("485000"),
     }
 
-    from_zillow = builder.build_opex_property_taxes(
+    from_zillow = opex_catalog.build_opex_property_taxes(
         property_tax_pct=None,
         purchase_price=Decimal("485000"),
         zillow_annual_tax=Decimal("9000"),
@@ -284,13 +288,13 @@ def test_property_taxes_hierarchy():
     }
 
     assert (
-        builder.build_opex_property_taxes(
+        opex_catalog.build_opex_property_taxes(
             property_tax_pct=Decimal("0.012"), purchase_price=None
         )
         is None
     )
     assert (
-        builder.build_opex_property_taxes(
+        opex_catalog.build_opex_property_taxes(
             property_tax_pct=None, purchase_price=Decimal("485000")
         )
         is None
@@ -377,3 +381,14 @@ def test_owner_is_null_when_the_market_has_no_analyst_owner():
     }
 
     assert UnderwritingPayloadBuilder().build(prepared).owner_id is None
+
+
+def test_build_seeds_bedrooms_and_bathrooms_from_the_listing():
+    # The automated flow's zillow_property is built from scheduled_listings, so
+    # the columns are seeded without a second lookup.
+    payload = UnderwritingPayloadBuilder().build(
+        {"zillow_property": {"id": "123", "bedrooms": 4, "bathrooms": "2.5"}}
+    )
+
+    assert payload.bedrooms == 4
+    assert payload.bathrooms == Decimal("2.5")

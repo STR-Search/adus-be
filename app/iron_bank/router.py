@@ -46,7 +46,7 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingsQuery,
     GetUnderwritingsResult,
 )
-from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
+from app.iron_bank.schemas.prepare_uw import BedroomContext, PrepareUwDataResult
 from app.iron_bank.schemas.save_underwriting import (
     SaveUnderwritingPayload,
     SaveUnderwritingResult,
@@ -104,7 +104,9 @@ def get_save_underwriting_controller(
         CleanedDataRepository,
     )
     from app.airbnb_public.services.cleaned_data_service import CleanedDataService
-    from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
+    from app.markets.repositories.construction_repository import (
+        ConstructionAmenitiesRepository,
+    )
     from app.markets.repositories.market_repository import MarketRepository
     from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.services.market_service import MarketService
@@ -179,7 +181,9 @@ def get_update_underwriting_controller(
     )
     from app.airbnb_public.services.cleaned_data_service import CleanedDataService
     from app.external_api.services.n8n_webhook_service import N8nWebhookService
-    from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
+    from app.markets.repositories.construction_repository import (
+        ConstructionAmenitiesRepository,
+    )
     from app.markets.repositories.market_repository import MarketRepository
     from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.services.market_service import MarketService
@@ -232,7 +236,10 @@ def get_get_underwriting_controller(
         ConstructionRemodelingRepository,
     )
     from app.markets.repositories.market_repository import MarketRepository
-    from app.markets.repositories.opex_repository import OpexByBedroomsRepository
+    from app.markets.repositories.opex_repository import (
+        OpexByBedroomsRepository,
+        OpexBySizeRepository,
+    )
     from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.repositories.str_cribs_repository import (
         StrCribsFeeDetailsRepository,
@@ -243,7 +250,10 @@ def get_get_underwriting_controller(
         ConstructionRemodelingService,
     )
     from app.markets.services.str_cribs_service import StrCribsFeeDetailsService
-    from app.markets.services.opex_service import OpexByBedroomsService
+    from app.markets.services.opex_service import (
+        OpexByBedroomsService,
+        OpexBySizeService,
+    )
     from app.zillow.repositories.scheduled_listing_details_repository import (
         ScheduledListingDetailsRepository,
     )
@@ -268,6 +278,7 @@ def get_get_underwriting_controller(
         opex_by_bedrooms_service=OpexByBedroomsService(
             OpexByBedroomsRepository(db), market_repo
         ),
+        opex_by_size_service=OpexBySizeService(OpexBySizeRepository(db), market_repo),
         construction_amenities_service=ConstructionAmenitiesService(
             ConstructionAmenitiesRepository(db)
         ),
@@ -294,6 +305,47 @@ async def get_prepare_uw_data(
     controller: PrepareUwDataController = Depends(get_prepare_uw_data_controller),
 ):
     return await controller.get_prepare_uw_data(zpid=zpid)
+
+
+@router.get(
+    "/underwritings/{underwriting_id}/bedroom-context",
+    response_model=BedroomContext,
+    tags=["iron_bank"],
+)
+async def get_bedroom_context(
+    underwriting_id: int,
+    bedrooms: int = Query(...),
+    controller: PrepareUwDataController = Depends(get_prepare_uw_data_controller),
+):
+    """Re-seed an underwriting's bedroom-keyed values for a new bedroom count.
+
+    ``bedrooms`` is the *prospective* count the analyst is considering — not the
+    one stored on the row, which is exactly what this previews changing. The
+    market and purchase price are read off the underwriting itself, so the
+    property-tax blob can never be computed against a stale price the client
+    happened to be holding.
+
+    404s when the underwriting does not exist, has no market, or its market has
+    no opex row at that bedroom count.
+
+    Returns only what is keyed on (market, bedrooms). The sqft-keyed opex rows,
+    the "Design / Project Management" item and the market's must-have amenities
+    are not in the response and must survive untouched.
+
+    ``operating_expenses`` and ``construction_amenities`` use the same field
+    names and item shapes as the edit-context response, but both are **partial**
+    — only what a bedroom change moves. Do not treat either as a replacement for
+    the list it shares a name with.
+
+    ``operating_expenses`` carries this underwriting's own row ids: apply each
+    entry to the row with that id, and treat ``id: null`` as a row to add. Then
+    PUT the **full** merged array — rows absent from an update payload are
+    deleted, so sending only these would drop the rest.
+    """
+    return await controller.get_bedroom_context(
+        underwriting_id=underwriting_id,
+        bedrooms=bedrooms,
+    )
 
 
 @router.post(

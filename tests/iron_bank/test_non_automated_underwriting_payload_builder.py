@@ -224,7 +224,7 @@ class TestWithMarketContext:
         assert by_expense["Internet"] == Decimal("100")
         assert by_expense["Utilities"] == Decimal("350")
         # 0.012 x 389000 / 12
-        assert by_expense["Property Taxes"] == Decimal("389")
+        assert by_expense["Property Taxes (Monthly)"] == Decimal("389")
 
     def test_records_the_property_tax_derivation_on_details(self):
         property_taxes = self._build().details.property_taxes
@@ -240,14 +240,14 @@ class TestWithMarketContext:
         assert cleaning_cost["turns_per_month"] == Decimal("38")
         assert cleaning_cost["monthly_cleaning_cost"] == Decimal("10450")
 
-    def test_seeds_optimization_items_for_the_three_defaults_then_must_haves(self):
+    def test_seeds_optimization_items_with_must_haves_inside_the_defaults(self):
         payload = self._build()
 
         assert [item.category for item in payload.optimization_list] == [
             "Furniture / Decor / Essentials",
-            "Install / Staging / Warehousing",
-            "Design / Project Management",
             "Hot Tub",
+            "Design / Project Management",
+            "Install / Staging / Warehousing",
         ]
         by_category = {item.category: item for item in payload.optimization_list}
         # tier-2 pricing, matching the automated flow
@@ -305,10 +305,12 @@ class TestWithTemplateMarketContext:
         # same row set as a real market...
         assert set(by_expense) == {
             "Cleaning",
-            "Property Taxes",
+            "Property Taxes (Monthly)",
             "Pool/Hot Tub Maintenance",
             "Internet",
             "Utilities",
+            # no market supplies it, so it is seeded here too
+            "MISC",
         }
         # ...at zero
         assert all(monthly == Decimal("0") for monthly in by_expense.values())
@@ -319,8 +321,8 @@ class TestWithTemplateMarketContext:
         # must-have amenities belong to a market, so a market-less deal has none
         assert [item.category for item in payload.optimization_list] == [
             "Furniture / Decor / Essentials",
-            "Install / Staging / Warehousing",
             "Design / Project Management",
+            "Install / Staging / Warehousing",
         ]
         for item in payload.optimization_list:
             assert item.total_price == Decimal("0")
@@ -371,3 +373,30 @@ class TestOwnership:
 
     def test_owner_is_null_without_a_market_context_or_a_user(self):
         assert self._build(context=None, current_user_id=None).owner_id is None
+
+
+def test_build_from_zillow_property_seeds_bedrooms_and_bathrooms():
+    builder = NonAutomatedUnderwritingPayloadBuilder()
+
+    payload = builder.build_from_zillow_property(
+        listing_url=REQUEST_URL,
+        zillow_property=_zillow_property(),
+    )
+
+    assert payload.bedrooms == 5
+    assert payload.bathrooms == Decimal("4.0")
+    # Zillow's own observation is kept alongside, not replaced by, the columns.
+    assert payload.details.zillow_property.bedrooms == 5
+
+
+def test_build_from_zillow_property_coerces_a_float_bedroom_count():
+    # The live Zillow fetch can report bedrooms as a float, unlike
+    # scheduled_listings.beds; the column and the opex lookup key on an int.
+    builder = NonAutomatedUnderwritingPayloadBuilder()
+
+    payload = builder.build_from_zillow_property(
+        listing_url=REQUEST_URL,
+        zillow_property=_zillow_property(bedrooms=5.0),
+    )
+
+    assert payload.bedrooms == 5

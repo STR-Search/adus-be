@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from app.iron_bank.schemas.get_underwriting import (
     ConstructionAmenityOption,
     ConstructionRemodelingOption,
+    GetUnderwritingOperatingExpense,
     ZillowProperty,
 )
 from app.iron_bank.schemas.uw_config import UwConfigSchema
@@ -56,6 +57,51 @@ class MarketContext(BaseModel):
     # optimization item per id.
     must_have_amenity_ids: list[int] = Field(default_factory=list)
     config: UwConfigSchema
+
+
+class BedroomContext(BaseModel):
+    """The seed values that change when an analyst changes the bedroom count.
+
+    Deliberately narrower than ``MarketContext``: it carries *only* what is
+    keyed on ``(market_id, bedrooms)``, so the FE has nothing it must remember
+    to ignore. Excluded because none of it moves with bedrooms — the remodeling
+    catalog, must-have amenities, the STR Cribs option (keyed on area), the
+    sqft-keyed opex rows (internet / pest control / utilities), and every
+    financing/FRED default.
+
+    The FE merges these into the edit form and PUTs as usual; bedrooms itself
+    has no formula, so the normal recalculation cascade does the rest.
+
+    ``operating_expenses`` and ``construction_amenities`` carry the same field
+    names — and the same item shapes — as their counterparts on the edit-context
+    response, so the FE reuses the types it already has. Both are **partial**
+    here: only the rows and options a bedroom change actually moves. Neither is
+    a replacement for the list it shares a name with.
+    """
+
+    bedrooms: int
+    # A patch against this underwriting's own expense rows, not a catalog: the
+    # ids are the ledger's, resolved server-side, so the client merges by id
+    # rather than by matching labels itself. Same shape it already renders and
+    # PUTs back. ``id=None`` means "insert this row".
+    operating_expenses: list[GetUnderwritingOperatingExpense] = Field(
+        default_factory=list
+    )
+    # Derived server-side rather than left to the FE so the persisted blobs stay
+    # byte-identical to the ones creation produces (same shape, same
+    # source/inputs provenance keys). Placed straight onto uw_details.
+    cleaning_cost: dict[str, Any] | None = None
+    property_taxes: dict[str, Any] | None = None
+    # Only the two bedroom-keyed synthetic options: "Furniture / Decor /
+    # Essentials" (id 0) and "Install / Staging / Warehousing" (id -1) — not the
+    # whole catalog the edit-context response carries under this name. All three
+    # price tiers are returned so a re-tiered analyst choice is honoured rather
+    # than forced back to Mid.
+    construction_amenities: list[ConstructionAmenityOption] = Field(
+        default_factory=list
+    )
+    land_assumptions_pct: Decimal | None = None
+    annual_re_appreciation_pct: Decimal | None = None
 
 
 class PrepareUwDataResult(MarketContext):
