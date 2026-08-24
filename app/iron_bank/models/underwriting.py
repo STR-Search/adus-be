@@ -203,7 +203,10 @@ class Underwriting(Base):
 
 class UnderwritingDetail(Base):
     __tablename__ = "uw_details"
-    __table_args__ = {"schema": "iron_bank"}
+    __table_args__ = (
+        Index("uq_uw_details_underwriting_id", "underwriting_id", unique=True),
+        {"schema": "iron_bank"},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     underwriting_id = Column(
@@ -225,7 +228,10 @@ class UnderwritingDetail(Base):
 
 class UnderwritingTax(Base):
     __tablename__ = "uw_taxes"
-    __table_args__ = {"schema": "iron_bank"}
+    __table_args__ = (
+        Index("uq_uw_taxes_underwriting_id", "underwriting_id", unique=True),
+        {"schema": "iron_bank"},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     underwriting_id = Column(
