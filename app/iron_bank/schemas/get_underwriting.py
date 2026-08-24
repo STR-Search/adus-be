@@ -65,6 +65,7 @@ class GetUnderwritingDetails(BaseModel):
     property_taxes: dict[str, Any] | None = None
     zillow_property: ZillowProperty | None = None
     analyst_notes: str | None = None
+    construction_and_design_notes: str | None = None
 
 
 class GetUnderwritingTaxes(BaseModel):

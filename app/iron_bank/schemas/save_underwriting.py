@@ -51,6 +51,7 @@ class UnderwritingDetailsInput(BaseModel):
     property_taxes: dict[str, Any] | None = None
     zillow_property: StoredZillowProperty | None = None
     analyst_notes: str | None = None
+    construction_and_design_notes: str | None = None
 
 
 class UnderwritingTaxInput(BaseModel):
@@ -190,6 +191,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         },
                     },
                     "analyst_notes": "asdkasdaksdalsdlala",
+                    "construction_and_design_notes": "Full gut reno, coastal finishes.",
                     "cleaning_cost": {
                         "cost_per_clean": 220,
                         "turns_per_month": 7,

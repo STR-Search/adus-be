@@ -76,6 +76,7 @@ def _underwriting():
             },
             zillow_property=None,
             analyst_notes="Existing hot tub and cabin aesthetic.",
+            construction_and_design_notes="Cosmetic refresh, no structural work.",
         ),
         taxes=SimpleNamespace(
             land_assumptions_pct=Decimal("0.2"),

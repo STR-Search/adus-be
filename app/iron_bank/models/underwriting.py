@@ -222,6 +222,7 @@ class UnderwritingDetail(Base):
     property_taxes = Column(JSONB, nullable=True)
     zillow_property = Column(JSONB, nullable=True)
     analyst_notes = Column(Text, nullable=True)
+    construction_and_design_notes = Column(Text, nullable=True)
 
     underwriting = relationship("Underwriting", back_populates="detail")
 

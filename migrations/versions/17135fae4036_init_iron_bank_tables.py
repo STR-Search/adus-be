@@ -218,6 +218,7 @@ def upgrade() -> None:
             "zillow_property", postgresql.JSONB(astext_type=sa.Text()), nullable=True
         ),
         sa.Column("analyst_notes", sa.Text(), nullable=True),
+        sa.Column("construction_and_design_notes", sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"
         ),
