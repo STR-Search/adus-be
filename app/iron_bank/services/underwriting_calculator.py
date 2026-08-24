@@ -62,9 +62,7 @@ class UnderwritingCalculator:
         optimization_items: list[OptimizationItemInput],
     ) -> dict:
         data = taxes.model_dump(exclude_unset=True)
-        optimization_total = sum(
-            item.total_price or Decimal("0") for item in optimization_items
-        )
+        optimization_total = self._optimization_total(optimization_items)
 
         improvement_basis = (
             purchase_price * (Decimal("1") - taxes.land_assumptions_pct)
@@ -101,7 +99,7 @@ class UnderwritingCalculator:
         forecasted_revenue: ForecastedRevenueInput,
         purchase_details: dict,
         operating_expenses: list[OperatingExpenseInput],
-        optimization_items: list[OptimizationItemInput],
+        total_oop: Decimal,
     ) -> dict:
         data = forecasted_revenue.model_dump()
         total_opex_monthly = sum(
@@ -115,10 +113,7 @@ class UnderwritingCalculator:
             purchase_details["purchase_price"]
             * forecasted_revenue.annual_re_appreciation_pct
         )
-        total_oop = self.calculate_total_oop(
-            purchase_details=purchase_details,
-            optimization_items=optimization_items,
-        )
+        total_oop = self._require_nonzero_total_oop(total_oop)
 
         logger.debug(
             "calculate_forecasted_revenue: pre-scenario inputs",
@@ -193,13 +188,9 @@ class UnderwritingCalculator:
         self,
         forecasted_revenue: dict,
         tax_data: dict,
-        purchase_details: dict,
-        optimization_items: list[OptimizationItemInput],
+        total_oop: Decimal,
     ) -> dict:
-        total_oop = self.calculate_total_oop(
-            purchase_details=purchase_details,
-            optimization_items=optimization_items,
-        )
+        total_oop = self._require_nonzero_total_oop(total_oop)
         tax_savings = tax_data["tax_savings"]
 
         logger.debug(
@@ -305,9 +296,7 @@ class UnderwritingCalculator:
         purchase_details: dict,
         optimization_items: list[OptimizationItemInput],
     ) -> Decimal:
-        optimization_total = sum(
-            item.total_price or Decimal("0") for item in optimization_items
-        )
+        optimization_total = self._optimization_total(optimization_items)
         down_payment_amount = purchase_details["down_payment_amount"]
         closing_costs_amount = purchase_details["closing_costs_amount"]
         total_oop = down_payment_amount + closing_costs_amount + optimization_total
@@ -321,7 +310,34 @@ class UnderwritingCalculator:
             total_oop=total_oop,
         )
 
-        if total_oop == 0:
+        return self._require_nonzero_total_oop(total_oop)
+
+    @staticmethod
+    def _optimization_total(
+        optimization_items: list[OptimizationItemInput],
+    ) -> Decimal:
+        return sum(
+            (item.total_price or Decimal("0") for item in optimization_items),
+            Decimal("0"),
+        )
+
+    @staticmethod
+    def _require_nonzero_total_oop(total_oop: Decimal | None) -> Decimal:
+        """Reject a missing or zero ``total_oop`` before anything divides by it.
+
+        This guard is load-bearing for the simulation path, not just defensive:
+        every consumer divides by ``total_oop``, and ``Decimal`` division by
+        zero raises ``DivisionByZero`` — a ``ZeroDivisionError``, which
+        ``SimulateUnderwritingsService._simulate_row`` does *not* catch. The
+        ``ValueError`` raised here is what turns a zero-OOP row into a flagged
+        row with stored fallbacks instead of a failed request.
+
+        ``None`` is rejected the same way even though the parameter is now
+        required: a caller threading through an un-narrowed optional would
+        otherwise reach a ``TypeError`` deep in the arithmetic, which reads as a
+        bug rather than as the unusable input it actually is.
+        """
+        if total_oop is None or total_oop == 0:
             raise ValueError("total_oop is required to calculate forecasted revenue")
         return total_oop
 

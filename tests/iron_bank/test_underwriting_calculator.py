@@ -68,7 +68,10 @@ def test_calculates_forecasted_revenue_for_each_scenario():
         forecasted_revenue=forecasted_revenue,
         purchase_details=purchase_details,
         operating_expenses=operating_expenses,
-        optimization_items=optimization_items,
+        total_oop=calculator.calculate_total_oop(
+            purchase_details=purchase_details,
+            optimization_items=optimization_items,
+        ),
     )
 
     assert result["co_hosting_fee_pct"] == Decimal("0.10")
@@ -130,8 +133,10 @@ def test_calculates_y1_coc_including_tax_savings_for_each_scenario():
     result = calculator.calculate_y1_coc_incl_tax_savings(
         forecasted_revenue=forecasted_revenue,
         tax_data=tax_data,
-        purchase_details=purchase_details,
-        optimization_items=optimization_items,
+        total_oop=calculator.calculate_total_oop(
+            purchase_details=purchase_details,
+            optimization_items=optimization_items,
+        ),
     )
 
     assert result == {
