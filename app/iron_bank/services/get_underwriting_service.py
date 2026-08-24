@@ -423,6 +423,7 @@ class GetUnderwritingService:
             "property_taxes": detail.property_taxes,
             "zillow_property": detail.zillow_property,
             "analyst_notes": detail.analyst_notes,
+            "construction_and_design_notes": detail.construction_and_design_notes,
         }
 
     def _tax_data(self, taxes) -> dict[str, Any] | None:
