@@ -30,6 +30,7 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         zillow_property: dict[str, Any],
         market_context: MarketContext | None = None,
         current_user_id: int | None = None,
+        zpid: str | None = None,
     ) -> SaveUnderwritingPayload:
         # street/city/state ride along on the fetched dict but belong on the
         # underwritings row's own columns, not in the stored zillow_property
@@ -63,12 +64,15 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         )
         details["zillow_property"] = zillow_property
 
-        # NOTE: the top-level ``zpid`` column has a FK to
-        # ``zillow.scheduled_listings`` (the automated source of truth). A
-        # property fetched live from Zillow is not in that table, so we must
-        # leave the column null here — the zpid is preserved on
-        # ``details.zillow_property.id``.
+        # The top-level ``zpid`` column has a FK to
+        # ``zillow.scheduled_listings``, so it may only be set once the listing
+        # is known to be in that table. Fetching property details now persists
+        # the listing upstream, so the caller verifies the row exists and passes
+        # the zpid in; callers that don't verify pass nothing and the column
+        # stays null, as it did before scraping wrote to scheduled_listings.
+        # Either way the zpid is preserved on ``details.zillow_property.id``.
         payload = {
+            "zpid": zpid,
             "deal_status": self._DEFAULT_DEAL_STATUS,
             "is_automated": False,
             "listing_url": listing_url,
