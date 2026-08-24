@@ -7,12 +7,12 @@ from pydantic import (
     ConfigDict,
     Field,
     computed_field,
-    field_serializer,
     model_serializer,
     model_validator,
 )
 
 from app.core.reference_data.schemas import ReferenceDataOption
+from app.core.serialization import PlainDecimal
 from app.iron_bank.enums import (
     DealStatus,
     OpexKeyedOn,
@@ -21,13 +21,6 @@ from app.iron_bank.enums import (
     UnderwritingSource,
 )
 from app.iron_bank.schemas.underwriting import UnderwritingRead
-
-
-def _serialize_plain_decimal(value: Decimal | None) -> str | None:
-    if value is None:
-        return None
-    return format(value, "f")
-
 
 _SQFT_PER_ACRE = Decimal("43560")
 
@@ -285,19 +278,10 @@ class ConstructionAmenityOption(BaseModel):
     id: int
     location: str | None = None
     amenity_name: str | None = None
-    price_tier_1: Decimal | None = None
-    price_tier_2: Decimal | None = None
-    price_tier_3: Decimal | None = None
+    price_tier_1: PlainDecimal | None = None
+    price_tier_2: PlainDecimal | None = None
+    price_tier_3: PlainDecimal | None = None
     notes: str | None = None
-
-    @field_serializer(
-        "price_tier_1",
-        "price_tier_2",
-        "price_tier_3",
-        when_used="json",
-    )
-    def serialize_price_tier(self, value: Decimal | None) -> str | None:
-        return _serialize_plain_decimal(value)
 
 
 class ConstructionRemodelingOption(BaseModel):
@@ -305,19 +289,10 @@ class ConstructionRemodelingOption(BaseModel):
     location: str | None = None
     rehab_item: str | None = None
     metric: str | None = None
-    price_tier_1: Decimal | None = None
-    price_tier_2: Decimal | None = None
-    price_tier_3: Decimal | None = None
+    price_tier_1: PlainDecimal | None = None
+    price_tier_2: PlainDecimal | None = None
+    price_tier_3: PlainDecimal | None = None
     notes: str | None = None
-
-    @field_serializer(
-        "price_tier_1",
-        "price_tier_2",
-        "price_tier_3",
-        when_used="json",
-    )
-    def serialize_price_tier(self, value: Decimal | None) -> str | None:
-        return _serialize_plain_decimal(value)
 
 
 class StoredZillowProperty(ZillowProperty):
@@ -340,19 +315,13 @@ class OpexOptionInputs(BaseModel):
     """
 
     # cleaning: monthly_amount is cost_per_clean x turns_per_month
-    cost_per_clean: Decimal | None = None
-    turns_per_month: Decimal | None = None
+    cost_per_clean: PlainDecimal | None = None
+    turns_per_month: PlainDecimal | None = None
     # pool/hot tub: a range, of which the low end seeds the row
-    low: Decimal | None = None
-    high: Decimal | None = None
+    low: PlainDecimal | None = None
+    high: PlainDecimal | None = None
     # property taxes: an annual rate applied to purchase price
-    pct: Decimal | None = None
-
-    @field_serializer(
-        "cost_per_clean", "turns_per_month", "low", "high", "pct", when_used="json"
-    )
-    def serialize_input(self, value: Decimal | None) -> str | None:
-        return _serialize_plain_decimal(value)
+    pct: PlainDecimal | None = None
 
 
 class OpexOption(BaseModel):
@@ -373,14 +342,10 @@ class OpexOption(BaseModel):
     expense_name: str
     # None means the market supplies no figure for this row — distinct from a
     # market figure that is genuinely zero.
-    monthly_amount: Decimal | None = None
+    monthly_amount: PlainDecimal | None = None
     keyed_on: OpexKeyedOn
     # Null for the rows that are a single amount with nothing behind them.
     inputs: OpexOptionInputs | None = None
-
-    @field_serializer("monthly_amount", when_used="json")
-    def serialize_monthly_amount(self, value: Decimal | None) -> str | None:
-        return _serialize_plain_decimal(value)
 
 
 class EditContextualData(BaseModel):
