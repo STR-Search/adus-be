@@ -1,6 +1,7 @@
 from sqlalchemy import (
     Boolean,
     Column,
+    Index,
     Integer,
     String,
     Numeric,
@@ -16,13 +17,16 @@ from app.core.database import Base
 
 class UnderwritingOptimizationItem(Base):
     __tablename__ = "uw_optimization_items"
-    __table_args__ = {"schema": "iron_bank"}
+    __table_args__ = (
+        Index("ix_uw_optimization_items_underwriting_id", "underwriting_id"),
+        {"schema": "iron_bank"},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     underwriting_id = Column(
         Integer,
         ForeignKey("iron_bank.underwritings.id", ondelete="CASCADE"),
-        nullable=False
+        nullable=False,
     )
 
     category = Column(String(255), nullable=True)
@@ -39,13 +43,16 @@ class UnderwritingOptimizationItem(Base):
 
 class UnderwritingOperatingExpense(Base):
     __tablename__ = "uw_operating_expenses"
-    __table_args__ = {"schema": "iron_bank"}
+    __table_args__ = (
+        Index("ix_uw_operating_expenses_underwriting_id", "underwriting_id"),
+        {"schema": "iron_bank"},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     underwriting_id = Column(
         Integer,
         ForeignKey("iron_bank.underwritings.id", ondelete="CASCADE"),
-        nullable=False
+        nullable=False,
     )
 
     expense_name = Column(String(255), nullable=True)
@@ -57,13 +64,16 @@ class UnderwritingOperatingExpense(Base):
 
 class UnderwritingCompSet(Base):
     __tablename__ = "uw_comp_sets"
-    __table_args__ = {"schema": "iron_bank"}
+    __table_args__ = (
+        Index("ix_uw_comp_sets_underwriting_id", "underwriting_id"),
+        {"schema": "iron_bank"},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     underwriting_id = Column(
         Integer,
         ForeignKey("iron_bank.underwritings.id", ondelete="CASCADE"),
-        nullable=False
+        nullable=False,
     )
 
     listing_url = Column(Text, nullable=True)
