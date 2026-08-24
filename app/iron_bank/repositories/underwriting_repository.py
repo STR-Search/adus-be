@@ -301,13 +301,61 @@ class UnderwritingRepository:
         return list(result.scalars().all())
 
     async def get_by_listing_url(self, listing_url: str) -> Underwriting | None:
+        """The *oldest* underwriting for a listing URL.
+
+        Ordered ascending, not descending: this backs the duplicate-URL guard in
+        ``CreateUnderwritingFromUrlService``, whose 409 carries an id the client
+        redirects to. Duplicates copy ``listing_url`` verbatim, so every version
+        of a series shares it — and the analyst should land on version 0, the
+        original, rather than on whichever copy happens to be newest.
+        """
         result = await self.db.execute(
             select(Underwriting)
             .where(Underwriting.listing_url == listing_url)
-            .order_by(Underwriting.id.desc())
+            .order_by(Underwriting.id.asc())
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    async def get_all_by_zpid(self, zpid: str) -> list[Underwriting]:
+        """Every underwriting for a zpid, oldest version first.
+
+        A zpid maps to many rows once deals are duplicated into versions, so
+        jobs that act on "the underwriting for this listing" must fan out over
+        all of them. ``get_by_zpid`` remains the right call for a pure existence
+        check (the automated create guard); this one is for anything that
+        *writes*, where touching only the newest row leaves the rest stale.
+        """
+        result = await self.db.execute(
+            select(Underwriting)
+            .where(Underwriting.zpid == zpid)
+            .options(
+                selectinload(Underwriting.detail),
+                selectinload(Underwriting.taxes),
+                selectinload(Underwriting.optimization_items),
+                selectinload(Underwriting.operating_expenses),
+                selectinload(Underwriting.comp_set),
+            )
+            .order_by(Underwriting.version.asc(), Underwriting.id.asc())
+        )
+        return list(result.scalars().all())
+
+    async def get_next_version_for_series(self, series_id) -> int:
+        """One past the highest version in the series.
+
+        Racy by nature — two concurrent duplicates can read the same max. The
+        ``uq_underwritings_series_version`` constraint is what makes that safe,
+        turning the loser into a retryable IntegrityError; see
+        ``DuplicateUnderwritingService``.
+        """
+        current_max = (
+            await self.db.execute(
+                select(func.max(Underwriting.version)).where(
+                    Underwriting.series_id == series_id
+                )
+            )
+        ).scalar_one_or_none()
+        return 0 if current_max is None else current_max + 1
 
     async def get_by_zpid(self, zpid: str) -> Underwriting | None:
         result = await self.db.execute(
