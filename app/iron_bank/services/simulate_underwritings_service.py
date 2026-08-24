@@ -256,17 +256,22 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             )
         ]
 
+        # Derived once and threaded through: all three of the calls below need
+        # it, and each would otherwise re-derive the identical value from the
+        # same two inputs — three times per row, over the whole filtered set.
+        # It is also the zero guard, so it stays ahead of everything that
+        # divides by it (see UnderwritingCalculator._require_nonzero_total_oop).
+        total_oop = self.calculator.calculate_total_oop(
+            purchase_details=purchase_details,
+            optimization_items=optimization_items,
+        )
         forecasted_revenue = self.calculator.calculate_forecasted_revenue(
             forecasted_revenue=ForecastedRevenueInput.model_validate(
                 row.forecasted_revenue
             ),
             purchase_details=purchase_details,
             operating_expenses=operating_expenses,
-            optimization_items=optimization_items,
-        )
-        total_oop = self.calculator.calculate_total_oop(
-            purchase_details=purchase_details,
-            optimization_items=optimization_items,
+            total_oop=total_oop,
         )
         cash_on_cash = self.calculator.calculate_cash_on_cash(
             forecasted_revenue=forecasted_revenue,
@@ -280,8 +285,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             self.calculator.calculate_y1_coc_incl_tax_savings(
                 forecasted_revenue=forecasted_revenue,
                 tax_data={"tax_savings": row.tax_savings},
-                purchase_details=purchase_details,
-                optimization_items=optimization_items,
+                total_oop=total_oop,
             )
             if row.tax_savings is not None
             else None

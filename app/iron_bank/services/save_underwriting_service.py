@@ -225,24 +225,38 @@ class SaveUnderwritingService:
                 bedrooms=bedrooms,
             )
 
+        # Derived once and required by both calculator calls below, which would
+        # each otherwise re-derive the identical value from the same inputs.
+        # Only set inside the branch that has a calculated purchase_details to
+        # derive it from; the y1 guard below re-checks it rather than assuming.
+        total_oop: Decimal | None = None
         if forecasted_revenue_input is not None:
             if "purchase_details" not in detail_data:
                 raise ValueError(
                     "purchase_details is required to calculate forecasted revenue"
                 )
+            total_oop = self.calculator.calculate_total_oop(
+                purchase_details=detail_data["purchase_details"],
+                optimization_items=payload.optimization_list,
+            )
             detail_data["forecasted_revenue"] = (
                 self.calculator.calculate_forecasted_revenue(
                     forecasted_revenue=forecasted_revenue_input,
                     purchase_details=detail_data["purchase_details"],
                     operating_expenses=payload.operating_expenses,
-                    optimization_items=payload.optimization_list,
+                    total_oop=total_oop,
                 )
             )
 
+        # total_oop replaces the former "purchase_details" in detail_data check
+        # rather than adding to it: purchase_details was only ever needed here
+        # so y1 could derive total_oop from it, and the branch above cannot set
+        # total_oop without it. So this is the same condition, stated in terms
+        # of what the call now actually consumes.
         will_calc_y1 = (
             "forecasted_revenue" in detail_data
             and tax_data is not None
-            and "purchase_details" in detail_data
+            and total_oop is not None
         )
         logger.debug(
             "_build_detail_data: y1 coc tax savings",
@@ -254,8 +268,7 @@ class SaveUnderwritingService:
                 self.calculator.calculate_y1_coc_incl_tax_savings(
                     forecasted_revenue=detail_data["forecasted_revenue"],
                     tax_data=tax_data,
-                    purchase_details=detail_data["purchase_details"],
-                    optimization_items=payload.optimization_list,
+                    total_oop=total_oop,
                 )
             )
 
