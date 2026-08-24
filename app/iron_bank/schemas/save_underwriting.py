@@ -171,8 +171,6 @@ class SaveUnderwritingPayload(UnderwritingBase):
                     "Log cabin with hot tub already installed. "
                     "Seller motivated - estate sale."
                 ),
-                "deal_benefits": None,
-                "property_uniqueness": None,
                 "details": {
                     "purchase_details": {
                         "purchase_price": 485000,

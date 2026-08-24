@@ -98,8 +98,6 @@ def upgrade() -> None:
         sa.Column("video_walkthrough", sa.Text(), nullable=True),
         sa.Column("survey", sa.Text(), nullable=True),
         sa.Column("note", sa.Text(), nullable=True),
-        sa.Column("deal_benefits", sa.Text(), nullable=True),
-        sa.Column("property_uniqueness", sa.Text(), nullable=True),
         sa.Column("deal_score", sa.Integer(), nullable=True),
         sa.Column(
             "created_at",
