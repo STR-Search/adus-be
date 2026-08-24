@@ -98,8 +98,6 @@ class UnderwritingBase(BaseModel):
     video_walkthrough: str | None = None
     survey: str | None = None
     note: str | None = None
-    deal_benefits: str | None = None
-    property_uniqueness: str | None = None
     deal_score: int | None = Field(default=None, ge=1, le=100)
 
     @field_validator("deal_status")

@@ -150,8 +150,6 @@ class Underwriting(Base):
     video_walkthrough = Column(Text, nullable=True)
     survey = Column(Text, nullable=True)
     note = Column(Text, nullable=True)
-    deal_benefits = Column(Text, nullable=True)
-    property_uniqueness = Column(Text, nullable=True)
 
     deal_score = Column(Integer, nullable=True)
 
