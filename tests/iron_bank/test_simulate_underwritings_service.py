@@ -65,6 +65,8 @@ def _row(
     purchase_price=Decimal("100000"),
     total_oop=Decimal("30000"),
     l_cash_on_cash=Decimal("0.5"),
+    m_cash_on_cash=Decimal("0.7"),
+    h_cash_on_cash=Decimal("0.9"),
     optimization_total=Decimal("7000"),
     operating_expense_total=Decimal("1000"),
     purchase_details="default",
@@ -83,6 +85,8 @@ def _row(
         purchase_price=purchase_price,
         total_oop=total_oop,
         l_cash_on_cash=l_cash_on_cash,
+        m_cash_on_cash=m_cash_on_cash,
+        h_cash_on_cash=h_cash_on_cash,
         optimization_total=optimization_total,
         operating_expense_total=operating_expense_total,
         purchase_details=(
@@ -318,6 +322,133 @@ async def test_filters_on_simulated_cash_on_cash():
     # The affected bound must NOT have been pushed down to SQL.
     assert "min_l_cash_on_cash" not in repository.sim_filters
     assert repository.sim_filters["market_id"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bound, simulated_value",
+    # Both from the module header's hand-computed defaults for id=1.
+    [("min_m_cash_on_cash", Decimal("2.25")), ("min_h_cash_on_cash", Decimal("2.726"))],
+)
+async def test_filters_on_simulated_mid_and_high_cash_on_cash(bound, simulated_value):
+    # id=2 carries double the opex, so every scenario's simulated CoC drops
+    # under 1.0 (mid: NOI 60000 - 48000 = 12000, FCF 9000, CoC 0.45).
+    rows = [
+        _row(id=1),
+        _row(id=2, operating_expense_total=Decimal("4000")),
+    ]
+    service, repository = _service(rows, {1: _item(id=1), 2: _item(id=2)})
+
+    result = await _get_all_simulated(
+        service,
+        interest_rate=Decimal("0"),
+        down_payment_pct=Decimal("0.1"),
+        **{bound: Decimal("1.0")},
+    )
+
+    assert result.total == 1
+    assert [row.id for row in result.data] == [1]
+    # Sanity: the surviving row really is above the bound it was filtered on.
+    assert getattr(result.data[0], bound.removeprefix("min_")) == simulated_value
+    # The affected bound must NOT have been pushed down to SQL — it would
+    # compare stored values, which simulation has just replaced.
+    assert bound not in repository.sim_filters
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scenario", ["m", "h"])
+async def test_flagged_rows_are_bounded_on_their_stored_cash_on_cash(scenario):
+    """Include-and-flag: a non-simulatable row is filtered on stored values.
+
+    Without the stored fallback these rows would carry None and be dropped by
+    any mid/high bound, which is not how the low scenario behaves.
+    """
+    kwargs = {f"{scenario}_cash_on_cash": Decimal("5.0")}
+    rows = [
+        _row(id=1),  # simulated
+        _row(id=2, purchase_details=None, **kwargs),  # flagged, stored 5.0
+    ]
+    service, _ = _service(rows, {1: _item(id=1), 2: _item(id=2)})
+
+    result = await _get_all_simulated(
+        service,
+        interest_rate=Decimal("0"),
+        down_payment_pct=Decimal("0.1"),
+        **{f"min_{scenario}_cash_on_cash": Decimal("4.0")},
+    )
+
+    assert [row.id for row in result.data] == [2]
+    assert result.data[0].simulated is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scenario", ["m", "h"])
+async def test_flagged_rows_below_the_stored_bound_are_excluded(scenario):
+    kwargs = {f"{scenario}_cash_on_cash": Decimal("0.1")}
+    rows = [_row(id=1), _row(id=2, purchase_details=None, **kwargs)]
+    service, _ = _service(rows, {1: _item(id=1), 2: _item(id=2)})
+
+    result = await _get_all_simulated(
+        service,
+        interest_rate=Decimal("0"),
+        down_payment_pct=Decimal("0.1"),
+        **{f"min_{scenario}_cash_on_cash": Decimal("1.0")},
+    )
+
+    assert result.total == 1
+    assert [row.id for row in result.data] == [1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "scenario, sort_by",
+    [
+        ("m", UnderwritingSortBy.M_CASH_ON_CASH),
+        ("h", UnderwritingSortBy.H_CASH_ON_CASH),
+    ],
+)
+async def test_sorts_on_simulated_mid_and_high_cash_on_cash(scenario, sort_by):
+    rows = [
+        _row(id=1),  # simulated: mid 2.25, high 2.726
+        _row(id=2, purchase_details=None, **{f"{scenario}_cash_on_cash": None}),
+        _row(
+            id=3,
+            purchase_details=None,
+            **{f"{scenario}_cash_on_cash": Decimal("5.0")},
+        ),
+    ]
+    items = {i: _item(id=i) for i in (1, 2, 3)}
+    service, _ = _service(rows, items)
+
+    result = await _get_all_simulated(
+        service,
+        interest_rate=Decimal("0"),
+        down_payment_pct=Decimal("0.1"),
+        sort_by=sort_by,
+        sort_order=SortOrder.DESC,
+    )
+
+    # nullslast() in both directions: values descending, then nulls.
+    assert [row.id for row in result.data] == [3, 1, 2]
+
+    result = await _get_all_simulated(
+        service,
+        interest_rate=Decimal("0"),
+        down_payment_pct=Decimal("0.1"),
+        sort_by=sort_by,
+        sort_order=SortOrder.ASC,
+    )
+    assert [row.id for row in result.data] == [1, 3, 2]
+
+
+@pytest.mark.parametrize("sort_by", list(UnderwritingSortBy))
+def test_every_sort_by_value_exists_on_the_simulated_row(sort_by):
+    """``_sort`` reads the value with getattr, so a gap fails at request time."""
+    assert hasattr(
+        _SimulatedRow(id=1, simulated=False, purchase_price=None, total_oop=None,
+                      l_cash_on_cash=None),
+        sort_by.value,
+    )
 
 
 @pytest.mark.asyncio

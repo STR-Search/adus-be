@@ -39,9 +39,13 @@ class _SimulatedRow:
     purchase_price: Decimal | None
     total_oop: Decimal | None
     l_cash_on_cash: Decimal | None
-    # Simulated-only outputs, overlaid onto the hydrated page results.
+    # Also displayed values: the mid/high scenarios are filtered and sorted on
+    # like the low one, so a flagged row carries its stored figures rather than
+    # None — otherwise an m/h bound would silently drop every non-simulatable
+    # row instead of including-and-flagging it.
     m_cash_on_cash: Decimal | None = None
     h_cash_on_cash: Decimal | None = None
+    # Simulated-only outputs, overlaid onto the hydrated page results.
     budget_to_pp: Decimal | None = None
     purchase_details: dict[str, Any] | None = None
     forecasted_revenue: dict[str, Any] | None = None
@@ -89,6 +93,10 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         max_total_oop: Decimal | None = None,
         min_l_cash_on_cash: Decimal | None = None,
         max_l_cash_on_cash: Decimal | None = None,
+        min_m_cash_on_cash: Decimal | None = None,
+        max_m_cash_on_cash: Decimal | None = None,
+        min_h_cash_on_cash: Decimal | None = None,
+        max_h_cash_on_cash: Decimal | None = None,
         min_created_at: date | None = None,
         max_created_at: date | None = None,
         min_deal_approved: date | None = None,
@@ -123,6 +131,12 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             if self._passes_bounds(row.total_oop, min_total_oop, max_total_oop)
             and self._passes_bounds(
                 row.l_cash_on_cash, min_l_cash_on_cash, max_l_cash_on_cash
+            )
+            and self._passes_bounds(
+                row.m_cash_on_cash, min_m_cash_on_cash, max_m_cash_on_cash
+            )
+            and self._passes_bounds(
+                row.h_cash_on_cash, min_h_cash_on_cash, max_h_cash_on_cash
             )
         ]
 
@@ -176,6 +190,8 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             purchase_price=row.purchase_price,
             total_oop=row.total_oop,
             l_cash_on_cash=row.l_cash_on_cash,
+            m_cash_on_cash=row.m_cash_on_cash,
+            h_cash_on_cash=row.h_cash_on_cash,
             **self._sort_passthroughs(row),
         )
 

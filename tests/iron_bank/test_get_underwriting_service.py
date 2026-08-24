@@ -295,6 +295,45 @@ async def test_get_all_passes_filters_to_repository():
 
 
 @pytest.mark.asyncio
+async def test_get_all_passes_cash_on_cash_bounds_to_repository():
+    """The non-simulated path filters in SQL, so every bound must reach it."""
+    repository = FakeUnderwritingRepository(_underwriting())
+    service = GetUnderwritingService(repository)
+
+    await service.get_all(
+        page=1,
+        page_size=20,
+        min_l_cash_on_cash=Decimal("0.05"),
+        max_l_cash_on_cash=Decimal("0.15"),
+        min_m_cash_on_cash=Decimal("0.10"),
+        max_m_cash_on_cash=Decimal("0.20"),
+        min_h_cash_on_cash=Decimal("0.25"),
+        max_h_cash_on_cash=Decimal("0.35"),
+    )
+
+    requested = repository.requested_page
+    assert requested["min_m_cash_on_cash"] == Decimal("0.10")
+    assert requested["max_m_cash_on_cash"] == Decimal("0.20")
+    assert requested["min_h_cash_on_cash"] == Decimal("0.25")
+    assert requested["max_h_cash_on_cash"] == Decimal("0.35")
+
+
+@pytest.mark.asyncio
+async def test_get_all_omits_unset_cash_on_cash_bounds():
+    """Unset bounds stay None so the repository adds no WHERE clause."""
+    repository = FakeUnderwritingRepository(_underwriting())
+    service = GetUnderwritingService(repository)
+
+    await service.get_all(page=1, page_size=20, min_m_cash_on_cash=Decimal("0.10"))
+
+    requested = repository.requested_page
+    assert requested["min_m_cash_on_cash"] == Decimal("0.10")
+    assert requested["max_m_cash_on_cash"] is None
+    assert requested["min_h_cash_on_cash"] is None
+    assert requested["max_h_cash_on_cash"] is None
+
+
+@pytest.mark.asyncio
 async def test_get_all_returns_empty_page_when_no_underwritings():
     service = GetUnderwritingService(FakeUnderwritingRepository(None))
 

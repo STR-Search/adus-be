@@ -199,6 +199,10 @@ class GetUnderwritingsQuery(BaseModel):
     max_total_oop: Decimal | None = Field(None, ge=0)
     min_l_cash_on_cash: Decimal | None = None
     max_l_cash_on_cash: Decimal | None = None
+    min_m_cash_on_cash: Decimal | None = None
+    max_m_cash_on_cash: Decimal | None = None
+    min_h_cash_on_cash: Decimal | None = None
+    max_h_cash_on_cash: Decimal | None = None
     # Calendar dates (YYYY-MM-DD), both ends inclusive: min == max selects that
     # single day. Bounds are interpreted in UTC against the stored timestamps.
     min_created_at: date | None = None
@@ -238,6 +242,22 @@ class GetUnderwritingsQuery(BaseModel):
         ):
             raise ValueError(
                 "min_l_cash_on_cash must be less than or equal to max_l_cash_on_cash"
+            )
+        if (
+            self.min_m_cash_on_cash is not None
+            and self.max_m_cash_on_cash is not None
+            and self.min_m_cash_on_cash > self.max_m_cash_on_cash
+        ):
+            raise ValueError(
+                "min_m_cash_on_cash must be less than or equal to max_m_cash_on_cash"
+            )
+        if (
+            self.min_h_cash_on_cash is not None
+            and self.max_h_cash_on_cash is not None
+            and self.min_h_cash_on_cash > self.max_h_cash_on_cash
+        ):
+            raise ValueError(
+                "min_h_cash_on_cash must be less than or equal to max_h_cash_on_cash"
             )
         if (
             self.min_created_at is not None
