@@ -56,11 +56,16 @@ but the values they operate on differ by mode:
 
 | Param | Non-simulation | Simulation |
 |---|---|---|
-| `zpid`, `market_id`, `deal_status`, `analyst_id`, `min/max_purchase_price` | SQL | SQL (simulation never changes these) |
+| `zpid`, `market_id` (repeatable), `deal_status`, `analyst_id`, `min/max_purchase_price` | SQL | SQL (simulation never changes these) |
 | `min/max_total_oop`, `min/max_l_cash_on_cash` | SQL, stored values | Python, **simulated** values |
 | `sort_by=total_oop` / `l_cash_on_cash` | SQL, stored values | Python, **simulated** values |
 | `sort_by=id` / `purchase_price` | SQL | Python, same values |
 | `total` / `pages` | SQL count | counted after Python filtering |
+
+`market_id` accepts more than one value — `?market_id=1&market_id=4` (or
+`?market_id=1,4`) matches deals in **any** of the listed markets. Because
+simulation never changes which market a deal belongs to, the filter is applied
+in SQL on both paths.
 
 Filtering the affected bounds in SQL would compare stored values and wrongly
 include/exclude rows (a row with stored CoC 8% might simulate to 12% and should

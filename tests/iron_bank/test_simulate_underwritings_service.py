@@ -179,10 +179,13 @@ async def test_forwards_source_and_search_filters_to_the_input_query():
         interest_rate=Decimal("0"),
         source="adus",
         search="Austin",
+        market_ids=[2, 6],
     )
 
     assert repository.sim_filters["source"] == "adus"
     assert repository.sim_filters["search"] == "Austin"
+    # market is untouched by simulation, so it stays a SQL-side filter here
+    assert repository.sim_filters["market_ids"] == [2, 6]
 
 
 @pytest.mark.asyncio
@@ -321,7 +324,7 @@ async def test_filters_on_simulated_cash_on_cash():
     assert [row.id for row in result.data] == [1]
     # The affected bound must NOT have been pushed down to SQL.
     assert "min_l_cash_on_cash" not in repository.sim_filters
-    assert repository.sim_filters["market_id"] is None
+    assert repository.sim_filters["market_ids"] is None
 
 
 @pytest.mark.asyncio
