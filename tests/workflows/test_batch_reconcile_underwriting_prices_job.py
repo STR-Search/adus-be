@@ -39,15 +39,34 @@ class FakeSession:
 @pytest.mark.asyncio
 async def test_processes_recent_price_changes_and_returns_summary():
     details_service = FakeListingDetailsService(["1", "2", "3", "4"])
+    # zpid "1" carries two versions — one moved, one was already current — which
+    # is why the per-listing counts and the per-underwriting counts differ.
     reconcile_job = FakeReconcileJob(
         {
-            "1": {"zpid": "1", "status": "updated", "underwriting_id": 10},
+            "1": {
+                "zpid": "1",
+                "status": "updated",
+                "results": [
+                    {"underwriting_id": 10, "version": 0, "status": "updated"},
+                    {
+                        "underwriting_id": 11,
+                        "version": 1,
+                        "status": "skipped_same_price",
+                    },
+                ],
+            },
             "2": {
                 "zpid": "2",
                 "status": "skipped_same_price",
-                "underwriting_id": 20,
+                "results": [
+                    {
+                        "underwriting_id": 20,
+                        "version": 0,
+                        "status": "skipped_same_price",
+                    }
+                ],
             },
-            "3": {"zpid": "3", "status": "skipped_no_underwriting"},
+            "3": {"zpid": "3", "status": "skipped_no_underwriting", "results": []},
             "4": RuntimeError("boom"),
         }
     )
@@ -62,25 +81,57 @@ async def test_processes_recent_price_changes_and_returns_summary():
     assert details_service.called_with == {"since_hours": 24, "limit": 500}
     # The one failing zpid ("4") must roll the session back.
     assert db.rollback_count == 1
-    assert summary == {
-        "found": 4,
-        "processed": 4,
+    # listings
+    assert summary["found"] == 4
+    assert summary["processed"] == 4
+    assert summary["updated"] == 1
+    assert summary["skipped_same_price"] == 1
+    assert summary["skipped_no_underwriting"] == 1
+    assert summary["skipped_no_purchase_price"] == 0
+    assert summary["skipped_terminal_status"] == 0
+    assert summary["failed"] == 1
+    # underwritings — 3 rows across those listings, counted independently
+    assert summary["underwritings"] == {
         "updated": 1,
-        "skipped_same_price": 1,
-        "skipped_no_underwriting": 1,
+        "skipped_same_price": 2,
+        "skipped_no_underwriting": 0,
         "skipped_no_purchase_price": 0,
-        "failed": 1,
-        "results": [
-            {"zpid": "1", "status": "updated", "underwriting_id": 10},
-            {
-                "zpid": "2",
-                "status": "skipped_same_price",
-                "underwriting_id": 20,
-            },
-            {"zpid": "3", "status": "skipped_no_underwriting"},
-            {"zpid": "4", "status": "failed", "error": "boom"},
-        ],
+        "skipped_terminal_status": 0,
+        "failed": 0,
     }
+    assert [r["zpid"] for r in summary["results"]] == ["1", "2", "3", "4"]
+    assert summary["results"][3] == {
+        "zpid": "4",
+        "status": "failed",
+        "error": "boom",
+    }
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_status_does_not_kill_the_batch():
+    """A status added to the reconcile job must not KeyError mid-run."""
+    details_service = FakeListingDetailsService(["1"])
+    reconcile_job = FakeReconcileJob(
+        {
+            "1": {
+                "zpid": "1",
+                "status": "some_new_status",
+                "results": [
+                    {"underwriting_id": 10, "version": 0, "status": "some_new_row"}
+                ],
+            }
+        }
+    )
+
+    summary = await BatchReconcileUnderwritingPricesJob(
+        db=FakeSession(),
+        listing_details_service=details_service,
+        reconcile_job=reconcile_job,
+    ).run(since_hours=24, limit=None)
+
+    assert summary["some_new_status"] == 1
+    assert summary["underwritings"]["some_new_row"] == 1
+    assert summary["failed"] == 0
 
 
 @pytest.mark.asyncio

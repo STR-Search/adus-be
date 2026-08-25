@@ -75,6 +75,20 @@ DEAL_STATUS_TRANSITIONS: dict[DealStatus, set[DealStatus]] = {
     DealStatus.PREVIOUSLY_UNDERWRITTEN_NO_STATUS: set(),
 }
 
+# Statuses a deal can never move out of. Derived from the transition table
+# rather than listed by hand, so a status that later becomes terminal (or stops
+# being terminal) is picked up automatically.
+#
+# These are the deals automated jobs must leave alone: a deal under contract has
+# an agreed price that Zillow no longer governs, deleted deals are dead, and a
+# training deal is a fixed teaching artifact. See
+# ReconcileUnderwritingPriceJob.
+TERMINAL_DEAL_STATUSES: frozenset[str] = frozenset(
+    status.value
+    for status, allowed_targets in DEAL_STATUS_TRANSITIONS.items()
+    if not allowed_targets
+)
+
 ROLE_ALLOWED_TARGETS: dict[str, set[DealStatus]] = {
     "analyst": {
         DealStatus.ANALYST_STARTED,
