@@ -96,10 +96,6 @@ class CreateUnderwritingFromUrlService:
         self.underwriting_reader = underwriting_reader
         self.market_context_reader = market_context_reader
         self.builder = builder or NonAutomatedUnderwritingPayloadBuilder()
-        # Confirms the scrape persisted the listing, which is what makes the
-        # zpid FK satisfiable. Optional so existing callers that never set a
-        # zpid keep working; when absent the deal is created with a null zpid,
-        # as it was before scraping wrote to scheduled_listings.
         self.listings_service = listings_service
 
     async def create(

@@ -8,7 +8,9 @@ from app.iron_bank.services.save_underwriting_service import SaveUnderwritingSer
 from app.iron_bank.services.underwriting_payload_builder import (
     UnderwritingPayloadBuilder,
 )
-from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
+from app.markets.repositories.construction_repository import (
+    ConstructionAmenitiesRepository,
+)
 from app.markets.repositories.market_repository import MarketRepository
 from app.markets.repositories.opex_repository import OpexByBedroomsRepository
 from app.markets.repositories.realtor_repository import RealtorRepository
@@ -37,8 +39,6 @@ class PrepareAndSaveUnderwritingJob:
         self.payload_builder = payload_builder
         self.save_service = save_service
         self.underwriting_repository = underwriting_repository
-        # Supplies the listing's detail_url for the duplicate guard's URL
-        # fallback. Optional: without it the guard is zpid-only, as before.
         self.listings_service = listings_service
 
     @classmethod
@@ -70,9 +70,7 @@ class PrepareAndSaveUnderwritingJob:
                 ),
             ),
             underwriting_repository=underwriting_repository,
-            listings_service=ScheduledListingsService(
-                ScheduledListingsRepository(db)
-            ),
+            listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
         )
 
     async def run(self, zpid: str) -> dict:

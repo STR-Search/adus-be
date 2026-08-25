@@ -55,8 +55,6 @@ class UnderwritingBase(BaseModel):
     state: str | None = None
     days_on_market: int | None = None
     sleep_capacity: int | None = None
-    # The analyst-approved assumption, not Zillow's observation — see the
-    # Underwriting model. details.zillow_property keeps Zillow's own figures.
     bedrooms: int | None = None
     bathrooms: Decimal | None = None
     purchase_price: Decimal | None = None
@@ -109,7 +107,9 @@ class UnderwritingBase(BaseModel):
             try:
                 return DealStatus(value)
             except ValueError:
-                raise ValueError(f"deal_status must be a valid DealStatus key, got {value!r}")
+                raise ValueError(
+                    f"deal_status must be a valid DealStatus key, got {value!r}"
+                )
         return value
 
 
@@ -139,10 +139,6 @@ class UnderwritingRead(UnderwritingBase, DealStatusLabelMixin):
     # Version lineage — read-only, hence declared here and not on
     # UnderwritingBase (which UnderwritingCreate inherits): clients must never
     # set these, they are assigned by the duplicate path.
-    # Optional on the read contract like every other field here: the columns are
-    # NOT NULL in the DB, so these are only ever None for partially-constructed
-    # results, and rejecting those would break read paths that build a row field
-    # by field.
     series_id: UUID | None = None
     version: int | None = None
     copied_from_id: int | None = None
