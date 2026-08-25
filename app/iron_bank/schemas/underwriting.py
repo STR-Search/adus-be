@@ -53,6 +53,10 @@ class UnderwritingBase(BaseModel):
     state: str | None = None
     days_on_market: int | None = None
     sleep_capacity: int | None = None
+    # The analyst-approved assumption, not Zillow's observation — see the
+    # Underwriting model. details.zillow_property keeps Zillow's own figures.
+    bedrooms: int | None = None
+    bathrooms: Decimal | None = None
     purchase_price: Decimal | None = None
     total_oop: Decimal | None = None
     prr: Decimal | None = None
@@ -94,8 +98,6 @@ class UnderwritingBase(BaseModel):
     video_walkthrough: str | None = None
     survey: str | None = None
     note: str | None = None
-    deal_benefits: str | None = None
-    property_uniqueness: str | None = None
     deal_score: int | None = Field(default=None, ge=1, le=100)
 
     @field_validator("deal_status")

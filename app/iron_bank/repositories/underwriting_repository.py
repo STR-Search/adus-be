@@ -69,7 +69,7 @@ class UnderwritingRepository:
         page: int,
         page_size: int,
         zpid: str | None = None,
-        market_id: int | None = None,
+        market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
         source: str | None = None,
@@ -80,6 +80,10 @@ class UnderwritingRepository:
         max_total_oop: Decimal | None = None,
         min_l_cash_on_cash: Decimal | None = None,
         max_l_cash_on_cash: Decimal | None = None,
+        min_m_cash_on_cash: Decimal | None = None,
+        max_m_cash_on_cash: Decimal | None = None,
+        min_h_cash_on_cash: Decimal | None = None,
+        max_h_cash_on_cash: Decimal | None = None,
         min_created_at: date | None = None,
         max_created_at: date | None = None,
         min_deal_approved: date | None = None,
@@ -91,8 +95,8 @@ class UnderwritingRepository:
         query = select(Underwriting)
         if zpid is not None:
             query = query.where(Underwriting.zpid == zpid)
-        if market_id is not None:
-            query = query.where(Underwriting.market_id == market_id)
+        if market_ids:
+            query = query.where(Underwriting.market_id.in_(market_ids))
         if deal_status is not None:
             query = query.where(Underwriting.deal_status == deal_status)
         if source is not None:
@@ -122,6 +126,14 @@ class UnderwritingRepository:
             query = query.where(Underwriting.l_cash_on_cash >= min_l_cash_on_cash)
         if max_l_cash_on_cash is not None:
             query = query.where(Underwriting.l_cash_on_cash <= max_l_cash_on_cash)
+        if min_m_cash_on_cash is not None:
+            query = query.where(Underwriting.m_cash_on_cash >= min_m_cash_on_cash)
+        if max_m_cash_on_cash is not None:
+            query = query.where(Underwriting.m_cash_on_cash <= max_m_cash_on_cash)
+        if min_h_cash_on_cash is not None:
+            query = query.where(Underwriting.h_cash_on_cash >= min_h_cash_on_cash)
+        if max_h_cash_on_cash is not None:
+            query = query.where(Underwriting.h_cash_on_cash <= max_h_cash_on_cash)
         for condition in (
             *_date_range_conditions(
                 Underwriting.created_at, min_created_at, max_created_at
@@ -171,7 +183,7 @@ class UnderwritingRepository:
         self,
         *,
         zpid: str | None = None,
-        market_id: int | None = None,
+        market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
         source: str | None = None,
@@ -192,7 +204,7 @@ class UnderwritingRepository:
         inputs, and the child-collection totals the calculator sums over.
 
         Only filters that simulation does NOT change are applied here; the
-        total_oop / l_cash_on_cash bounds are applied by the service in Python
+        total_oop / l_/m_/h_cash_on_cash bounds are applied by the service in Python
         against the simulated values (filtering them in SQL would compare
         stored values and wrongly include/exclude rows).
         """
@@ -202,6 +214,8 @@ class UnderwritingRepository:
                 Underwriting.purchase_price,
                 Underwriting.total_oop,
                 Underwriting.l_cash_on_cash,
+                Underwriting.m_cash_on_cash,
+                Underwriting.h_cash_on_cash,
                 Underwriting.optimization_total,
                 Underwriting.operating_expense_total,
                 # Read by the service to skip legacy sheet deals.
@@ -227,8 +241,8 @@ class UnderwritingRepository:
         )
         if zpid is not None:
             query = query.where(Underwriting.zpid == zpid)
-        if market_id is not None:
-            query = query.where(Underwriting.market_id == market_id)
+        if market_ids:
+            query = query.where(Underwriting.market_id.in_(market_ids))
         if deal_status is not None:
             query = query.where(Underwriting.deal_status == deal_status)
         if source is not None:

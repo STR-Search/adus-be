@@ -10,6 +10,7 @@ class UnderwritingDetailBase(BaseModel):
     cleaning_cost: dict[str, Any] | None = None
     property_taxes: dict[str, Any] | None = None
     analyst_notes: str | None = None
+    construction_and_design_notes: str | None = None
 
 
 class UnderwritingDetailCreate(UnderwritingDetailBase):

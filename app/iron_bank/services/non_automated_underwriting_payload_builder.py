@@ -2,6 +2,7 @@ from typing import Any
 
 from app.iron_bank.schemas.prepare_uw import MarketContext
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.base_underwriting_payload_builder import (
     BaseUnderwritingPayloadBuilder,
 )
@@ -45,8 +46,8 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         # apply — the same thing an empty config dict yields.
         config = context.get("config") or {}
         opex = context.get("opex") or {}
-        cleaning_cost = self._build_cleaning_cost(opex.get("cleaning") or {})
-        property_taxes = self.build_opex_property_taxes(
+        cleaning_cost = opex_catalog.build_cleaning_cost(opex.get("cleaning") or {})
+        property_taxes = opex_catalog.build_opex_property_taxes(
             property_tax_pct=opex.get("property_tax_pct"),
             purchase_price=purchase_price,
         )
@@ -83,6 +84,8 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
             "street": street,
             "city": city,
             "state": state,
+            "bedrooms": self._as_int(zillow_property.get("bedrooms")),
+            "bathrooms": zillow_property.get("bathrooms"),
             "purchase_price": purchase_price,
             "details": details,
             "taxes": self._build_taxes(config) if purchase_price is not None else None,

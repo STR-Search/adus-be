@@ -1,30 +1,29 @@
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    field_serializer,
+    computed_field,
+    field_validator,
     model_serializer,
     model_validator,
 )
 
 from app.core.reference_data.schemas import ReferenceDataOption
+from app.core.serialization import PlainDecimal
 from app.iron_bank.enums import (
     DealStatus,
+    OpexKeyedOn,
     SortOrder,
     UnderwritingSortBy,
     UnderwritingSource,
 )
 from app.iron_bank.schemas.underwriting import UnderwritingRead
 
-
-def _serialize_plain_decimal(value: Decimal | None) -> str | None:
-    if value is None:
-        return None
-    return format(value, "f")
+_SQFT_PER_ACRE = Decimal("43560")
 
 
 class ZillowProperty(BaseModel):
@@ -40,6 +39,20 @@ class ZillowProperty(BaseModel):
     lot_size_sqft: Decimal | None = None
     description: str | None = None
 
+    @computed_field
+    @property
+    def lot_size_acres(self) -> Decimal | None:
+        """``lot_size_sqft`` expressed in acres (2 dp), for every read path.
+
+        Derived rather than stored so the list, detail, and n8n webhook
+        payloads all carry it without any caller doing the conversion.
+        """
+        if self.lot_size_sqft is None:
+            return None
+        return (self.lot_size_sqft / _SQFT_PER_ACRE).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+
 
 class GetUnderwritingDetails(BaseModel):
     # from_attributes on the child schemas lets callers validate the ORM rows
@@ -53,6 +66,7 @@ class GetUnderwritingDetails(BaseModel):
     property_taxes: dict[str, Any] | None = None
     zillow_property: ZillowProperty | None = None
     analyst_notes: str | None = None
+    construction_and_design_notes: str | None = None
 
 
 class GetUnderwritingTaxes(BaseModel):
@@ -167,14 +181,18 @@ class GetUnderwritingsQuery(BaseModel):
     """Query params for the underwritings list endpoint.
 
     Field names, types, and defaults mirror the previous inline ``Query(...)``
-    params exactly, so the URL contract is unchanged. The added value is the
-    cross-field ``min <= max`` validation that inline params can't express.
+    params exactly, so the URL contract is unchanged -- the one exception being
+    ``market_ids``, which is aliased back to the original ``market_id`` param
+    name. The added value is the cross-field ``min <= max`` validation that
+    inline params can't express.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     page: int = Field(1, ge=1)
     page_size: int = Field(20, ge=1, le=20)
     zpid: str | None = None
-    market_id: int | None = None
+    market_ids: list[int] | None = Field(None, alias="market_id")
     deal_status: DealStatus | None = None
     analyst_id: int | None = None
     source: UnderwritingSource | None = None
@@ -186,6 +204,10 @@ class GetUnderwritingsQuery(BaseModel):
     max_total_oop: Decimal | None = Field(None, ge=0)
     min_l_cash_on_cash: Decimal | None = None
     max_l_cash_on_cash: Decimal | None = None
+    min_m_cash_on_cash: Decimal | None = None
+    max_m_cash_on_cash: Decimal | None = None
+    min_h_cash_on_cash: Decimal | None = None
+    max_h_cash_on_cash: Decimal | None = None
     # Calendar dates (YYYY-MM-DD), both ends inclusive: min == max selects that
     # single day. Bounds are interpreted in UTC against the stored timestamps.
     min_created_at: date | None = None
@@ -199,6 +221,26 @@ class GetUnderwritingsQuery(BaseModel):
     # the simulated values. Fractional values, e.g. 0.069 and 0.1.
     interest_rate: Decimal | None = Field(None, ge=0, lt=1)
     down_payment_pct: Decimal | None = Field(None, ge=0, le=1)
+
+    @field_validator("market_ids", mode="before")
+    @classmethod
+    def split_market_ids(cls, value):
+        """Flatten comma-separated values and normalize "no filter" to None.
+
+        An empty result becomes None rather than [] so the repository never has
+        to reason about an ``IN ()`` that would match nothing.
+        """
+        if value is None:
+            return None
+        values = value if isinstance(value, list) else [value]
+        flattened = []
+        for item in values:
+            if isinstance(item, str):
+                flattened.extend(part.strip() for part in item.split(","))
+            else:
+                flattened.append(item)
+        cleaned = [item for item in flattened if item != "" and item is not None]
+        return cleaned or None
 
     @model_validator(mode="after")
     def check_ranges(self):
@@ -225,6 +267,22 @@ class GetUnderwritingsQuery(BaseModel):
         ):
             raise ValueError(
                 "min_l_cash_on_cash must be less than or equal to max_l_cash_on_cash"
+            )
+        if (
+            self.min_m_cash_on_cash is not None
+            and self.max_m_cash_on_cash is not None
+            and self.min_m_cash_on_cash > self.max_m_cash_on_cash
+        ):
+            raise ValueError(
+                "min_m_cash_on_cash must be less than or equal to max_m_cash_on_cash"
+            )
+        if (
+            self.min_h_cash_on_cash is not None
+            and self.max_h_cash_on_cash is not None
+            and self.min_h_cash_on_cash > self.max_h_cash_on_cash
+        ):
+            raise ValueError(
+                "min_h_cash_on_cash must be less than or equal to max_h_cash_on_cash"
             )
         if (
             self.min_created_at is not None
@@ -266,19 +324,10 @@ class ConstructionAmenityOption(BaseModel):
     id: int
     location: str | None = None
     amenity_name: str | None = None
-    price_tier_1: Decimal | None = None
-    price_tier_2: Decimal | None = None
-    price_tier_3: Decimal | None = None
+    price_tier_1: PlainDecimal | None = None
+    price_tier_2: PlainDecimal | None = None
+    price_tier_3: PlainDecimal | None = None
     notes: str | None = None
-
-    @field_serializer(
-        "price_tier_1",
-        "price_tier_2",
-        "price_tier_3",
-        when_used="json",
-    )
-    def serialize_price_tier(self, value: Decimal | None) -> str | None:
-        return _serialize_plain_decimal(value)
 
 
 class ConstructionRemodelingOption(BaseModel):
@@ -286,19 +335,10 @@ class ConstructionRemodelingOption(BaseModel):
     location: str | None = None
     rehab_item: str | None = None
     metric: str | None = None
-    price_tier_1: Decimal | None = None
-    price_tier_2: Decimal | None = None
-    price_tier_3: Decimal | None = None
+    price_tier_1: PlainDecimal | None = None
+    price_tier_2: PlainDecimal | None = None
+    price_tier_3: PlainDecimal | None = None
     notes: str | None = None
-
-    @field_serializer(
-        "price_tier_1",
-        "price_tier_2",
-        "price_tier_3",
-        when_used="json",
-    )
-    def serialize_price_tier(self, value: Decimal | None) -> str | None:
-        return _serialize_plain_decimal(value)
 
 
 class StoredZillowProperty(ZillowProperty):
@@ -312,6 +352,48 @@ class StoredZillowProperty(ZillowProperty):
     model_config = ConfigDict(extra="allow")
 
 
+class OpexOptionInputs(BaseModel):
+    """The drivers behind a row whose amount is not a single market figure.
+
+    One flat bag rather than three differently-shaped sub-objects, so a client
+    parses one type and reads the keys its row uses. Every key is present when
+    ``OpexOption.inputs`` is non-null; the irrelevant ones are null.
+    """
+
+    # cleaning: monthly_amount is cost_per_clean x turns_per_month
+    cost_per_clean: PlainDecimal | None = None
+    turns_per_month: PlainDecimal | None = None
+    # pool/hot tub: a range, of which the low end seeds the row
+    low: PlainDecimal | None = None
+    high: PlainDecimal | None = None
+    # property taxes: an annual rate applied to purchase price
+    pct: PlainDecimal | None = None
+
+
+class OpexOption(BaseModel):
+    """One row of the operating-expense catalog for a market/bedrooms/sqft.
+
+    Reference data, in the same spirit as ``ConstructionAmenityOption``: what
+    the market says this row costs, *not* what the analyst has on their deal.
+    The two legitimately diverge the moment anyone edits a figure — the
+    persisted ``uw_operating_expenses`` rows are the analyst's ledger, these are
+    the market's truth table.
+
+    Order follows ``opex_catalog.OPEX_ROWS``, which is the seeding order. It is
+    **not** the analyst's row order: ``sort_order`` is stamped from payload
+    position on save, so a reordered deal renders from its own rows.
+    """
+
+    key: str
+    expense_name: str
+    # None means the market supplies no figure for this row — distinct from a
+    # market figure that is genuinely zero.
+    monthly_amount: PlainDecimal | None = None
+    keyed_on: OpexKeyedOn
+    # Null for the rows that are a single amount with nothing behind them.
+    inputs: OpexOptionInputs | None = None
+
+
 class EditContextualData(BaseModel):
     construction_amenities: list[ConstructionAmenityOption] = Field(
         default_factory=list
@@ -322,6 +404,11 @@ class EditContextualData(BaseModel):
     # iron_bank domain reference data, grouped by set_code — the same payload
     # served by GET /reference-data?domain=iron_bank.
     deal_tag_options: dict[str, list[ReferenceDataOption]] = Field(default_factory=dict)
+    # The market's operating-expense figures for this deal's bedrooms and sqft.
+    # Empty for a market-less deal, or one whose market has no row at its
+    # bedroom count — there is no truth table to show, and a blank catalog is
+    # honest about that.
+    opex_options: list[OpexOption] = Field(default_factory=list)
 
 
 class EditContextData(BaseModel):

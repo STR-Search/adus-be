@@ -47,6 +47,8 @@ def upgrade() -> None:
         sa.Column("state", sa.String(length=50), nullable=True),
         sa.Column("days_on_market", sa.Integer(), nullable=True),
         sa.Column("sleep_capacity", sa.Integer(), nullable=True),
+        sa.Column("bedrooms", sa.Integer(), nullable=True),
+        sa.Column("bathrooms", sa.Numeric(precision=4, scale=1), nullable=True),
         sa.Column("purchase_price", sa.Numeric(precision=12, scale=2), nullable=True),
         sa.Column("total_oop", sa.Numeric(precision=12, scale=2), nullable=True),
         sa.Column("prr", sa.Numeric(precision=6, scale=4), nullable=True),
@@ -96,8 +98,6 @@ def upgrade() -> None:
         sa.Column("video_walkthrough", sa.Text(), nullable=True),
         sa.Column("survey", sa.Text(), nullable=True),
         sa.Column("note", sa.Text(), nullable=True),
-        sa.Column("deal_benefits", sa.Text(), nullable=True),
-        sa.Column("property_uniqueness", sa.Text(), nullable=True),
         sa.Column("deal_score", sa.Integer(), nullable=True),
         sa.Column(
             "created_at",
@@ -176,6 +176,21 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         schema="iron_bank",
     )
+    # Postgres does not index FK columns automatically. Every child table is
+    # read by underwriting_id — selectinload of the collections, the ON DELETE
+    # CASCADE fan-out, and (the expensive one) the optimization_total /
+    # operating_expense_total column_properties in
+    # app/iron_bank/models/line_items.py. Those are correlated scalar
+    # subqueries, which Postgres runs as a SubPlan per output row rather than
+    # flattening into a join, so the simulation path's full-set select of both
+    # was doing 2N sequential scans of the child tables at N underwritings.
+    op.create_index(
+        "ix_uw_comp_sets_underwriting_id",
+        "uw_comp_sets",
+        ["underwriting_id"],
+        unique=False,
+        schema="iron_bank",
+    )
     op.create_table(
         "uw_details",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -201,10 +216,18 @@ def upgrade() -> None:
             "zillow_property", postgresql.JSONB(astext_type=sa.Text()), nullable=True
         ),
         sa.Column("analyst_notes", sa.Text(), nullable=True),
+        sa.Column("construction_and_design_notes", sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("id"),
+        schema="iron_bank",
+    )
+    op.create_index(
+        "uq_uw_details_underwriting_id",
+        "uw_details",
+        ["underwriting_id"],
+        unique=True,
         schema="iron_bank",
     )
     op.create_table(
@@ -218,6 +241,13 @@ def upgrade() -> None:
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("id"),
+        schema="iron_bank",
+    )
+    op.create_index(
+        "ix_uw_operating_expenses_underwriting_id",
+        "uw_operating_expenses",
+        ["underwriting_id"],
+        unique=False,
         schema="iron_bank",
     )
     op.create_table(
@@ -236,6 +266,13 @@ def upgrade() -> None:
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("id"),
+        schema="iron_bank",
+    )
+    op.create_index(
+        "ix_uw_optimization_items_underwriting_id",
+        "uw_optimization_items",
+        ["underwriting_id"],
+        unique=False,
         schema="iron_bank",
     )
     op.create_table(
@@ -268,6 +305,13 @@ def upgrade() -> None:
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("id"),
+        schema="iron_bank",
+    )
+    op.create_index(
+        "uq_uw_taxes_underwriting_id",
+        "uw_taxes",
+        ["underwriting_id"],
+        unique=True,
         schema="iron_bank",
     )
     # ### end Alembic commands ###

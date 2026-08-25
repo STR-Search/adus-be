@@ -4,6 +4,7 @@ from typing import Any
 import structlog
 
 from app.iron_bank.enums import DealStatus
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 from app.iron_bank.services.purchase_price_reconciliation_payload_builder import (
     PurchasePriceReconciliationPayloadBuilder,
@@ -33,6 +34,17 @@ class BaseUnderwritingPayloadBuilder:
     _AMENITY_TIER_LABEL = "Mid"
     _AMENITY_METRIC = "flat"
     _POOL_AMENITY_IDS_TO_EXCLUDE = {4, 5, 13, 14}
+
+    # The seeded options bracket the market's must-have amenities: furnishings
+    # opens the rehab budget, the two service lines close it out. Same three ids
+    # as PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS, which is a membership
+    # set (see to_template_market_context) and says nothing about order — the
+    # order lives here, because it is a property of the seeded payload.
+    _LEADING_AMENITY_OPTION_IDS = (PrepareUwDataService.FURNISHINGS_OPTION_ID,)
+    _TRAILING_AMENITY_OPTION_IDS = (
+        PrepareUwDataService.STR_CRIBS_PROJECT_MANAGEMENT_OPTION_ID,
+        PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID,
+    )
 
     def _resolve_owner_id(
         self, context: dict[str, Any], *, fallback_user_id: int | None = None
@@ -91,72 +103,40 @@ class BaseUnderwritingPayloadBuilder:
             ),
         }
 
-    def build_opex_property_taxes(
-        self,
-        *,
-        property_tax_pct: Any,
-        purchase_price: Decimal | None,
-        zillow_annual_tax: Decimal | None = None,
-    ) -> dict[str, Any] | None:
-        """Resolve the monthly Property Taxes opex item and its breakdown.
-
-        Sources, in priority order:
-        1. Market tax rate (opex_by_bedrooms.property_taxes) x purchase price.
-        2. Zillow-provided annual tax amount (not wired up yet — callers will
-           pass it once it is threaded through prepared zillow data).
-        3. Neither -> None; the item is seeded blank for the team to fill out.
-
-        Amounts are annual; OPEX is monthly, so both sources divide by 12.
-        The returned dict is persisted on uw_details.property_taxes so the
-        derivation stays auditable (mirrors cleaning_cost): the resolved
-        amounts sit at the top level regardless of source, and the
-        source-specific figures live under "inputs".
-        """
-        if property_tax_pct is not None and purchase_price is not None:
-            pct = Decimal(str(property_tax_pct))
-            annual = pct * purchase_price
-            return {
-                "source": "opex_property_tax_pct",
-                "annual_amount": annual,
-                "monthly_amount": annual / 12,
-                "inputs": {
-                    "opex_property_tax_pct": pct,
-                    "purchase_price": purchase_price,
-                },
-            }
-        if zillow_annual_tax is not None:
-            return {
-                "source": "zillow_annual_tax",
-                "annual_amount": zillow_annual_tax,
-                "monthly_amount": zillow_annual_tax / 12,
-                "inputs": {},
-            }
-        return None
-
     def _build_optimization_list(
         self, context: dict[str, Any], *, zpid: Any = None
     ) -> list[dict[str, Any]]:
         """Seed the rehab budget from the amenity options prepared for this deal.
 
         ``context`` is a dumped ``MarketContext`` (the automated flow's prepared
-        result is one). Two groups, in this order: the options every deal gets
-        (furnishings, consolidated shipping, the STR Cribs management fee)
-        followed by the market's must-have amenities. Items whose tier-2 price is
-        missing are still seeded with a blank amount — a visible row the analyst
-        fills in beats a silently absent line item.
+        result is one). The seeded options bracket the market's must-have
+        amenities: furnishings first, then the must-haves in the order the market
+        lists them, then the STR Cribs management fee and consolidated shipping.
+        Items whose tier-2 price is missing are still seeded with a blank amount —
+        a visible row the analyst fills in beats a silently absent line item.
         """
         options_by_id = {
             option.get("id"): option
             for option in context.get("construction_amenities") or []
         }
+        # Seeded ids are dropped from the must-haves rather than left to
+        # dict.fromkeys below: that keeps the first occurrence of a duplicate, so
+        # a must-have naming a trailing option would pull it up out of its
+        # bracket. Catalog ids are positive and the seeded sentinels are not, so
+        # this cannot happen today — filtering makes the bracket unconditional
+        # instead of a coincidence of the id ranges.
+        must_have_ids = [
+            id
+            for id in (context.get("must_have_amenity_ids") or [])
+            if id not in self._POOL_AMENITY_IDS_TO_EXCLUDE
+            and id not in PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS
+        ]
         selected_ids = list(
             dict.fromkeys(
                 [
-                    *PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS,
-                    *(
-                        id for id in (context.get("must_have_amenity_ids") or [])
-                        if id not in self._POOL_AMENITY_IDS_TO_EXCLUDE
-                    ),
+                    *self._LEADING_AMENITY_OPTION_IDS,
+                    *must_have_ids,
+                    *self._TRAILING_AMENITY_OPTION_IDS,
                 ]
             )
         )
@@ -188,60 +168,33 @@ class BaseUnderwritingPayloadBuilder:
             "tier": self._AMENITY_TIER_LABEL,
         }
 
-    def _build_cleaning_cost(self, cleaning: dict[str, Any]) -> dict[str, Any] | None:
-        fee = cleaning.get("fee")
-        turns = cleaning.get("num_of_turns")
-        if fee is None and turns is None:
-            return None
-
-        result = {
-            "cost_per_clean": fee,
-            "turns_per_month": turns,
-        }
-        if fee is not None and turns is not None:
-            result["monthly_cleaning_cost"] = fee * turns
-        return result
-
     def _build_operating_expenses(
         self,
         opex: dict[str, Any],
         property_taxes: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        expenses: list[dict[str, Any]] = []
+        """Seed the monthly operating expenses from the canonical catalog.
 
-        cleaning = opex.get("cleaning") or {}
-        fee = cleaning.get("fee")
-        turns = cleaning.get("num_of_turns")
-        if fee is not None and turns is not None:
-            expenses.append({"expense": "Cleaning", "monthly": fee * turns})
+        The row table, the amounts and the ordering all live in
+        ``opex_catalog``, which the read paths share — so the rows a draft is
+        seeded with and the rows served back as reference data cannot disagree
+        about what exists or what it is called.
+        """
+        return opex_catalog.build_opex_expense_rows(opex, property_taxes)
 
-        # Always seeded — a blank amount means no source could resolve it and
-        # the team fills it out manually.
-        expenses.append(
-            {
-                "expense": "Property Taxes",
-                "monthly": (
-                    property_taxes["monthly_amount"] if property_taxes else None
-                ),
-            }
-        )
+    @staticmethod
+    def _as_int(value: Any) -> int | None:
+        """Coerce a Zillow-supplied number to int, or None if it isn't one.
 
-        pool_hot_tub = (opex.get("ranged") or {}).get("pool_hot_tub") or {}
-        if pool_hot_tub.get("low") is not None:
-            expenses.append(
-                {"expense": "Pool/Hot Tub Maintenance", "monthly": pool_hot_tub["low"]}
-            )
-
-        absolute = opex.get("absolute") or {}
-        expenses.extend(
-            {"expense": self._humanize_expense_name(name), "monthly": amount}
-            for name, amount in absolute.items()
-            if amount is not None
-        )
-        return expenses
-
-    def _humanize_expense_name(self, value: str) -> str:
-        return value.replace("_", " ").title()
+        Mirrors ``CreateUnderwritingFromUrlService._as_int``: the live Zillow
+        fetch can report bedrooms as a float, unlike ``scheduled_listings.beds``.
+        """
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     def _money_to_decimal(self, value: Any) -> Decimal | None:
         return PurchasePriceReconciliationPayloadBuilder.normalize_purchase_price(value)

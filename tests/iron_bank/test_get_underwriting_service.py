@@ -7,7 +7,9 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingDetails,
     GetUnderwritingResult,
 )
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
+from app.markets.schemas.opex import OpexByBedroomsSchema, OpexBySizeSchema
 
 
 class FakeUnderwritingRepository:
@@ -74,6 +76,7 @@ def _underwriting():
             },
             zillow_property=None,
             analyst_notes="Existing hot tub and cabin aesthetic.",
+            construction_and_design_notes="Cosmetic refresh, no structural work.",
         ),
         taxes=SimpleNamespace(
             land_assumptions_pct=Decimal("0.2"),
@@ -167,7 +170,7 @@ async def test_get_all_returns_paginated_results():
     assert repository.requested_page["page"] == 1
     assert repository.requested_page["page_size"] == 50
     assert repository.requested_page["zpid"] is None
-    assert repository.requested_page["market_id"] is None
+    assert repository.requested_page["market_ids"] is None
     assert result.total == 1
     assert result.page == 1
     assert result.page_size == 50
@@ -249,6 +252,7 @@ async def test_get_all_batch_hydrates_automated_zillow_into_details():
         "original_photos": ["https://photos.zillowstatic.com/photo-1.jpg"],
         "lot_size_sqft": Decimal("21780"),
         "description": "Cabin in the woods.",
+        "lot_size_acres": Decimal("0.50"),
     }
     # non-automated item keeps its stored zillow_property (coerced to schema)
     assert result.data[1].details.zillow_property.id == "copied"
@@ -264,7 +268,7 @@ async def test_get_all_passes_filters_to_repository():
         page=1,
         page_size=20,
         zpid="12345",
-        market_id=3,
+        market_ids=[3, 5],
         deal_status="template_generated",
         analyst_id=7,
         source="legacy_sheet",
@@ -275,19 +279,58 @@ async def test_get_all_passes_filters_to_repository():
     assert requested["page"] == 1
     assert requested["page_size"] == 20
     assert requested["zpid"] == "12345"
-    assert requested["market_id"] == 3
+    assert requested["market_ids"] == [3, 5]
     assert requested["deal_status"] == "template_generated"
     assert requested["analyst_id"] == 7
     expected = {
         "page": 1,
         "page_size": 20,
         "zpid": "12345",
-        "market_id": 3,
+        "market_ids": [3, 5],
         "source": "legacy_sheet",
         "search": "fort lauderdale",
     }
     for key, value in expected.items():
         assert repository.requested_page[key] == value
+
+
+@pytest.mark.asyncio
+async def test_get_all_passes_cash_on_cash_bounds_to_repository():
+    """The non-simulated path filters in SQL, so every bound must reach it."""
+    repository = FakeUnderwritingRepository(_underwriting())
+    service = GetUnderwritingService(repository)
+
+    await service.get_all(
+        page=1,
+        page_size=20,
+        min_l_cash_on_cash=Decimal("0.05"),
+        max_l_cash_on_cash=Decimal("0.15"),
+        min_m_cash_on_cash=Decimal("0.10"),
+        max_m_cash_on_cash=Decimal("0.20"),
+        min_h_cash_on_cash=Decimal("0.25"),
+        max_h_cash_on_cash=Decimal("0.35"),
+    )
+
+    requested = repository.requested_page
+    assert requested["min_m_cash_on_cash"] == Decimal("0.10")
+    assert requested["max_m_cash_on_cash"] == Decimal("0.20")
+    assert requested["min_h_cash_on_cash"] == Decimal("0.25")
+    assert requested["max_h_cash_on_cash"] == Decimal("0.35")
+
+
+@pytest.mark.asyncio
+async def test_get_all_omits_unset_cash_on_cash_bounds():
+    """Unset bounds stay None so the repository adds no WHERE clause."""
+    repository = FakeUnderwritingRepository(_underwriting())
+    service = GetUnderwritingService(repository)
+
+    await service.get_all(page=1, page_size=20, min_m_cash_on_cash=Decimal("0.10"))
+
+    requested = repository.requested_page
+    assert requested["min_m_cash_on_cash"] == Decimal("0.10")
+    assert requested["max_m_cash_on_cash"] is None
+    assert requested["min_h_cash_on_cash"] is None
+    assert requested["max_h_cash_on_cash"] is None
 
 
 @pytest.mark.asyncio
@@ -339,16 +382,48 @@ class MissingListingDetailsService:
         return None
 
 
-class StubOpexByBedrooms:
-    furnishings_low = Decimal("1000")
-    furnishings_mid = Decimal("1500")
-    furnishings_high = Decimal("2000")
-    consolidated_shipping = Decimal("500")
+def StubOpexByBedrooms():
+    # A real schema rather than a bare attribute bag: the opex catalog reads the
+    # row's whole column set (to classify each row as bedrooms- or size-keyed),
+    # not just the four furnishings fields the amenity options need.
+    return OpexByBedroomsSchema.model_validate(
+        {
+            "id": 1,
+            "market_id": 1,
+            "bedrooms": 3,
+            "furnishings_low": Decimal("1000"),
+            "furnishings_mid": Decimal("1500"),
+            "furnishings_high": Decimal("2000"),
+            "consolidated_shipping": Decimal("500"),
+            "cleaning_fee": Decimal("150"),
+            "num_of_turns": Decimal("6"),
+            "property_taxes": Decimal("0.01"),
+            "insurance_hoi": Decimal("200"),
+        }
+    )
 
 
 class StubOpexByBedroomsService:
     async def get_by_market_and_bedrooms(self, *, bedrooms: int, market_id: int):
         return StubOpexByBedrooms()
+
+
+class StubOpexBySizeService:
+    def __init__(self):
+        self.called_with = None
+
+    async def get_by_market_and_sqft(self, *, sqft: int, market_id: int):
+        self.called_with = {"sqft": sqft, "market_id": market_id}
+        return OpexBySizeSchema.model_validate(
+            {
+                "id": 2,
+                "market_id": market_id,
+                "sqft": sqft,
+                "internet": Decimal("100"),
+                "pest_control": Decimal("60"),
+                "utilities": Decimal("400"),
+            }
+        )
 
 
 class StubConstructionService:
@@ -362,12 +437,14 @@ def _make_service(
     listings_service=None,
     listing_details_service=None,
     opex_service=None,
+    opex_by_size_service=None,
 ):
     service = GetUnderwritingService(
         repository=None,
         listings_service=listings_service or StubListingsService(),
         listing_details_service=listing_details_service or StubListingDetailsService(),
         opex_by_bedrooms_service=opex_service or StubOpexByBedroomsService(),
+        opex_by_size_service=opex_by_size_service or StubOpexBySizeService(),
         construction_amenities_service=StubConstructionService(),
         construction_remodeling_service=StubConstructionService(),
     )
@@ -401,6 +478,7 @@ async def test_get_edit_context_automated_hydrates_zillow_from_listing():
         "original_photos": ["https://photos.zillowstatic.com/photo-1.jpg"],
         "lot_size_sqft": Decimal("21780"),
         "description": "Cabin in the woods.",
+        "lot_size_acres": Decimal("0.50"),
     }
     furnishings = result.data.contextual.construction_amenities[0]
     assert furnishings.amenity_name == "Furniture / Decor / Essentials"
@@ -467,3 +545,170 @@ async def test_get_edit_context_no_zpid_yields_no_zillow_property():
     furnishings = result.data.contextual.construction_amenities[0]
     assert furnishings.amenity_name == "Furniture / Decor / Essentials"
     assert furnishings.price_tier_1 is None
+
+
+# --- get_edit_context: opex keys on underwritings.bedrooms ------------------
+#
+# The analyst can add a bedroom during underwriting, so the row's own count --
+# not Zillow's observation -- decides which opex row prices the furnishing and
+# shipping options.
+
+
+class RecordingOpexByBedroomsService:
+    def __init__(self):
+        self.called_with = None
+
+    async def get_by_market_and_bedrooms(self, *, bedrooms: int, market_id: int):
+        self.called_with = {"bedrooms": bedrooms, "market_id": market_id}
+        return StubOpexByBedrooms()
+
+
+@pytest.mark.asyncio
+async def test_edit_context_opex_uses_the_underwriting_bedrooms_not_the_listing():
+    # StubListing.beds is 3; the analyst underwrote it as a 5-bedroom.
+    underwriting = GetUnderwritingResult(
+        id=1, zpid="123", market_id=1, is_automated=True, bedrooms=5
+    )
+    opex_service = RecordingOpexByBedroomsService()
+    service = _make_service(underwriting, opex_service=opex_service)
+
+    await service.get_edit_context(1)
+
+    assert opex_service.called_with == {"bedrooms": 5, "market_id": 1}
+
+
+@pytest.mark.asyncio
+async def test_edit_context_opex_uses_the_underwriting_bedrooms_not_stored_zillow():
+    underwriting = GetUnderwritingResult(
+        id=1,
+        zpid="copied-from-browser",
+        market_id=1,
+        is_automated=False,
+        bedrooms=5,
+        details=GetUnderwritingDetails(
+            zillow_property={"id": "copied-from-browser", "bedrooms": 3}
+        ),
+    )
+    opex_service = RecordingOpexByBedroomsService()
+    service = _make_service(
+        underwriting,
+        listings_service=ExplodingListingsService(),
+        opex_service=opex_service,
+    )
+
+    result = await service.get_edit_context(1)
+
+    assert opex_service.called_with == {"bedrooms": 5, "market_id": 1}
+    # Zillow's original observation is still returned, untouched.
+    assert result.data.underwriting.details.zillow_property.bedrooms == 3
+
+
+@pytest.mark.asyncio
+async def test_edit_context_falls_back_to_zillow_when_the_column_is_null():
+    # Pre-backfill row: no bedrooms column, so the listing's count still works.
+    # Remove this fallback once backfill_underwriting_bedrooms.py has run.
+    underwriting = GetUnderwritingResult(
+        id=1, zpid="123", market_id=1, is_automated=True, bedrooms=None
+    )
+    opex_service = RecordingOpexByBedroomsService()
+    service = _make_service(underwriting, opex_service=opex_service)
+
+    await service.get_edit_context(1)
+
+    assert opex_service.called_with == {"bedrooms": 3, "market_id": 1}
+
+
+@pytest.mark.asyncio
+async def test_edit_context_hydrates_zillow_even_without_a_market():
+    # The market_id guard now sits on the opex lookup alone, so a market-less
+    # deal keeps its photos/address/price and merely loses furnishing prices.
+    underwriting = GetUnderwritingResult(
+        id=1, zpid="123", market_id=None, is_automated=True, bedrooms=5
+    )
+    service = _make_service(underwriting)
+
+    result = await service.get_edit_context(1)
+
+    assert result.data.underwriting.details.zillow_property.address == (
+        "123 Pine Ridge Rd"
+    )
+    furnishings = result.data.contextual.construction_amenities[0]
+    assert furnishings.price_tier_1 is None
+
+
+# --- get_edit_context: the opex catalog ------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_edit_context_serves_the_markets_opex_catalog():
+    underwriting = GetUnderwritingResult(
+        id=1,
+        zpid="123",
+        market_id=1,
+        is_automated=True,
+        bedrooms=3,
+        purchase_price=Decimal("450000"),
+    )
+    service = _make_service(underwriting)
+
+    result = await service.get_edit_context(1)
+    options = result.data.contextual.opex_options
+
+    # The whole row table, in canonical order — a client cannot tell "no figure"
+    # from "no such row" if absent rows are dropped.
+    assert [o.key for o in options] == [k for k, _ in opex_catalog.OPEX_ROWS]
+    by_key = {o.key: o for o in options}
+    assert by_key["internet"].monthly_amount == Decimal("100")
+    assert by_key["insurance_hoi"].monthly_amount == Decimal("200")
+    # 150 x 6 turns
+    assert by_key["cleaning"].monthly_amount == Decimal("900")
+    # 0.01 x 450000 / 12, from the underwriting's own price
+    assert by_key["property_taxes"].monthly_amount == Decimal("375.00")
+
+
+@pytest.mark.asyncio
+async def test_edit_context_keys_the_size_lookup_on_the_normalized_sqft():
+    # StubListing.area is 1800, which normalizes up to the 2000 checkpoint —
+    # the opex_by_size table is only populated at the checkpoints.
+    underwriting = GetUnderwritingResult(
+        id=1, zpid="123", market_id=1, is_automated=True, bedrooms=3
+    )
+    size_service = StubOpexBySizeService()
+    service = _make_service(underwriting, opex_by_size_service=size_service)
+
+    await service.get_edit_context(1)
+
+    assert size_service.called_with == {"sqft": 2000, "market_id": 1}
+
+
+@pytest.mark.asyncio
+async def test_edit_context_catalog_is_empty_without_a_market():
+    # A catalog of thirteen null amounts would read as "the market charges
+    # nothing", which is worse than showing no catalog at all.
+    underwriting = GetUnderwritingResult(
+        id=1, zpid="123", market_id=None, is_automated=True, bedrooms=3
+    )
+    size_service = StubOpexBySizeService()
+    service = _make_service(underwriting, opex_by_size_service=size_service)
+
+    result = await service.get_edit_context(1)
+
+    assert result.data.contextual.opex_options == []
+    # bailed before touching either opex table
+    assert size_service.called_with is None
+
+
+@pytest.mark.asyncio
+async def test_edit_context_catalog_is_empty_when_the_market_has_no_bedroom_row():
+    class NoOpexByBedroomsService:
+        async def get_by_market_and_bedrooms(self, *, bedrooms, market_id):
+            return None
+
+    underwriting = GetUnderwritingResult(
+        id=1, zpid="123", market_id=1, is_automated=True, bedrooms=99
+    )
+    service = _make_service(underwriting, opex_service=NoOpexByBedroomsService())
+
+    result = await service.get_edit_context(1)
+
+    assert result.data.contextual.opex_options == []

@@ -100,6 +100,8 @@ class Underwriting(Base):
     state = Column(String(50), nullable=True)
     days_on_market = Column(Integer, nullable=True)
     sleep_capacity = Column(Integer, nullable=True)
+    bedrooms = Column(Integer, nullable=True)
+    bathrooms = Column(Numeric(4, 1), nullable=True)
 
     purchase_price = Column(Numeric(12, 2), nullable=True)
     total_oop = Column(Numeric(12, 2), nullable=True)
@@ -148,8 +150,6 @@ class Underwriting(Base):
     video_walkthrough = Column(Text, nullable=True)
     survey = Column(Text, nullable=True)
     note = Column(Text, nullable=True)
-    deal_benefits = Column(Text, nullable=True)
-    property_uniqueness = Column(Text, nullable=True)
 
     deal_score = Column(Integer, nullable=True)
 
@@ -201,7 +201,10 @@ class Underwriting(Base):
 
 class UnderwritingDetail(Base):
     __tablename__ = "uw_details"
-    __table_args__ = {"schema": "iron_bank"}
+    __table_args__ = (
+        Index("uq_uw_details_underwriting_id", "underwriting_id", unique=True),
+        {"schema": "iron_bank"},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     underwriting_id = Column(
@@ -217,13 +220,17 @@ class UnderwritingDetail(Base):
     property_taxes = Column(JSONB, nullable=True)
     zillow_property = Column(JSONB, nullable=True)
     analyst_notes = Column(Text, nullable=True)
+    construction_and_design_notes = Column(Text, nullable=True)
 
     underwriting = relationship("Underwriting", back_populates="detail")
 
 
 class UnderwritingTax(Base):
     __tablename__ = "uw_taxes"
-    __table_args__ = {"schema": "iron_bank"}
+    __table_args__ = (
+        Index("uq_uw_taxes_underwriting_id", "underwriting_id", unique=True),
+        {"schema": "iron_bank"},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     underwriting_id = Column(

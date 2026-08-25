@@ -14,11 +14,13 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingEditContextResult,
     GetUnderwritingResult,
     GetUnderwritingsResult,
+    OpexOption,
     UnderwritingRealtorDetail,
     UserRef,
     ZillowProperty,
 )
 from app.iron_bank.schemas.underwriting import UnderwritingRead
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 from app.iron_bank.services.reference_label_resolver import apply_reference_labels
 
@@ -30,6 +32,7 @@ class GetUnderwritingService:
         listings_service: Any = None,
         listing_details_service: Any = None,
         opex_by_bedrooms_service: Any = None,
+        opex_by_size_service: Any = None,
         construction_amenities_service: Any = None,
         construction_remodeling_service: Any = None,
         str_cribs_service: Any = None,
@@ -42,6 +45,7 @@ class GetUnderwritingService:
         self.listings_service = listings_service
         self.listing_details_service = listing_details_service
         self.opex_by_bedrooms_service = opex_by_bedrooms_service
+        self.opex_by_size_service = opex_by_size_service
         self.construction_amenities_service = construction_amenities_service
         self.construction_remodeling_service = construction_remodeling_service
         self.str_cribs_service = str_cribs_service
@@ -67,13 +71,26 @@ class GetUnderwritingService:
         # zillow data is hydrated live. Non-automated (manual POST) ones read
         # it back from the zillow_property persisted on uw_details.
         if underwriting.is_automated is True:
-            zillow_property, opex_by_bedrooms = await self._zillow_from_listing(
+            zillow_property, zillow_bedrooms = await self._zillow_from_listing(
                 underwriting
             )
         else:
-            zillow_property, opex_by_bedrooms = await self._zillow_from_stored(
+            zillow_property, zillow_bedrooms = await self._zillow_from_stored(
                 underwriting
             )
+
+        # The opex lookup keys on the underwriting's own bedroom count, so it no
+        # longer depends on which zillow branch ran — or on that branch
+        # succeeding at all. ``zillow_bedrooms`` is a fallback for rows predating
+        # the column; drop it once
+        # ``scripts/backfill_underwriting_bedrooms.py`` has run everywhere.
+        opex_by_bedrooms = await self._opex_by_bedrooms(
+            underwriting,
+            bedrooms=(
+                underwriting.bedrooms if underwriting.bedrooms is not None
+                else zillow_bedrooms
+            ),
+        )
 
         # zillow_property is intrinsic property data, so it belongs on details
         # alongside purchase_details/forecasted_revenue — not in the contextual
@@ -111,6 +128,14 @@ class GetUnderwritingService:
             opex_by_bedrooms, amenities, str_cribs_fee
         )
 
+        # The market's opex truth table for this deal's bedrooms and sqft, so the
+        # edit form can show what the market says alongside what the analyst has.
+        # The bedroom row is already in hand from above; only the sqft-keyed one
+        # is a new lookup.
+        opex_options = await self._opex_options(
+            underwriting, opex_by_bedrooms=opex_by_bedrooms, area=area
+        )
+
         return GetUnderwritingEditContextResult(
             data=EditContextData(
                 underwriting=underwriting,
@@ -124,8 +149,36 @@ class GetUnderwritingService:
                         for r in remodeling
                     ],
                     deal_tag_options=deal_tag_options,
+                    opex_options=opex_options,
                 ),
             )
+        )
+
+    async def _opex_options(
+        self, underwriting, *, opex_by_bedrooms, area
+    ) -> list[OpexOption]:
+        """The market's operating-expense catalog for this deal.
+
+        Empty rather than partial when there is nothing to key on: no market, or
+        no opex row at this bedroom count. A catalog of thirteen null amounts
+        would read as "the market charges nothing", which is worse than showing
+        no catalog at all — ``_opex_by_bedrooms`` has already logged why.
+        """
+        if not underwriting.market_id or opex_by_bedrooms is None:
+            return []
+
+        sqft = PrepareUwDataService().normalize_sqft(area)
+        opex_by_size = (
+            await self.opex_by_size_service.get_by_market_and_sqft(
+                sqft=sqft, market_id=underwriting.market_id
+            )
+            if self.opex_by_size_service is not None and sqft is not None
+            else None
+        )
+        return opex_catalog.build_opex_options(
+            opex_by_bedrooms=opex_by_bedrooms,
+            opex_by_size=opex_by_size,
+            purchase_price=underwriting.purchase_price,
         )
 
     @staticmethod
@@ -154,7 +207,7 @@ class GetUnderwritingService:
         page: int,
         page_size: int,
         zpid: str | None = None,
-        market_id: int | None = None,
+        market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
         source: str | None = None,
@@ -165,6 +218,10 @@ class GetUnderwritingService:
         max_total_oop: Decimal | None = None,
         min_l_cash_on_cash: Decimal | None = None,
         max_l_cash_on_cash: Decimal | None = None,
+        min_m_cash_on_cash: Decimal | None = None,
+        max_m_cash_on_cash: Decimal | None = None,
+        min_h_cash_on_cash: Decimal | None = None,
+        max_h_cash_on_cash: Decimal | None = None,
         min_created_at: date | None = None,
         max_created_at: date | None = None,
         min_deal_approved: date | None = None,
@@ -176,7 +233,7 @@ class GetUnderwritingService:
             page=page,
             page_size=page_size,
             zpid=zpid,
-            market_id=market_id,
+            market_ids=market_ids,
             deal_status=deal_status,
             analyst_id=analyst_id,
             source=source,
@@ -187,6 +244,10 @@ class GetUnderwritingService:
             max_total_oop=max_total_oop,
             min_l_cash_on_cash=min_l_cash_on_cash,
             max_l_cash_on_cash=max_l_cash_on_cash,
+            min_m_cash_on_cash=min_m_cash_on_cash,
+            max_m_cash_on_cash=max_m_cash_on_cash,
+            min_h_cash_on_cash=min_h_cash_on_cash,
+            max_h_cash_on_cash=max_h_cash_on_cash,
             min_created_at=min_created_at,
             max_created_at=max_created_at,
             min_deal_approved=min_deal_approved,
@@ -370,6 +431,7 @@ class GetUnderwritingService:
             "property_taxes": detail.property_taxes,
             "zillow_property": detail.zillow_property,
             "analyst_notes": detail.analyst_notes,
+            "construction_and_design_notes": detail.construction_and_design_notes,
         }
 
     def _tax_data(self, taxes) -> dict[str, Any] | None:
@@ -416,20 +478,16 @@ class GetUnderwritingService:
         }
 
     async def _zillow_from_listing(self, underwriting) -> tuple[Any, Any]:
-        """Automated path: hydrate zillow data live from scheduled_listings."""
+        """Automated path: hydrate zillow data live from scheduled_listings.
+
+        The second element is the listing's own bed count, kept solely as a
+        fallback for rows predating ``underwritings.bedrooms``.
+        """
         if not underwriting.zpid:
             logger.warning(
                 "iron_bank.get_underwriting.no_zpid",
                 underwriting_id=underwriting.id,
-                detail="underwriting has no zpid — furnishings prices will be unavailable",
-            )
-            return None, None
-        if not underwriting.market_id:
-            logger.warning(
-                "iron_bank.get_underwriting.no_market_id",
-                underwriting_id=underwriting.id,
-                zpid=underwriting.zpid,
-                detail="underwriting has no market_id — furnishings prices will be unavailable",
+                detail="underwriting has no zpid — zillow data will be unavailable",
             )
             return None, None
 
@@ -439,7 +497,7 @@ class GetUnderwritingService:
                 "iron_bank.get_underwriting.listing_not_found",
                 underwriting_id=underwriting.id,
                 zpid=underwriting.zpid,
-                detail="no listing found for zpid — furnishings prices will be unavailable",
+                detail="no listing found for zpid — zillow data will be unavailable",
             )
             return None, None
 
@@ -449,13 +507,14 @@ class GetUnderwritingService:
         zillow_property = PrepareUwDataService()._transform_zillow_property(
             listing, listing_details
         )
-        opex_by_bedrooms = await self._opex_by_bedrooms(
-            underwriting, bedrooms=listing.beds
-        )
-        return zillow_property, opex_by_bedrooms
+        return zillow_property, listing.beds
 
     async def _zillow_from_stored(self, underwriting) -> tuple[Any, Any]:
-        """Non-automated path: read zillow data persisted on uw_details."""
+        """Non-automated path: read zillow data persisted on uw_details.
+
+        The second element is Zillow's own bed count, kept solely as a fallback
+        for rows predating ``underwritings.bedrooms``.
+        """
         zillow_property = (
             underwriting.details.zillow_property if underwriting.details else None
         )
@@ -466,20 +525,35 @@ class GetUnderwritingService:
                 detail="non-automated underwriting has no stored zillow_property",
             )
             return None, None
+
+        return zillow_property, zillow_property.bedrooms
+
+    async def _opex_by_bedrooms(self, underwriting, *, bedrooms):
+        """The market's opex row for this underwriting's bedroom count.
+
+        Keyed on ``underwritings.bedrooms`` (resolved by the caller) rather than
+        on Zillow, so a deal whose bedroom count changed during underwriting
+        gets the furnishing/shipping prices it was actually underwritten at.
+
+        The ``market_id`` guard lives here, not in the zillow helpers: it only
+        ever gated this lookup, and a market-less deal should still get its
+        zillow data hydrated.
+        """
         if not underwriting.market_id:
             logger.warning(
                 "iron_bank.get_underwriting.no_market_id",
                 underwriting_id=underwriting.id,
                 detail="underwriting has no market_id — furnishings prices will be unavailable",
             )
-            return zillow_property, None
+            return None
+        if bedrooms is None:
+            logger.warning(
+                "iron_bank.get_underwriting.no_bedrooms",
+                underwriting_id=underwriting.id,
+                detail="underwriting has no bedrooms — furnishings prices will be unavailable",
+            )
+            return None
 
-        opex_by_bedrooms = await self._opex_by_bedrooms(
-            underwriting, bedrooms=zillow_property.bedrooms
-        )
-        return zillow_property, opex_by_bedrooms
-
-    async def _opex_by_bedrooms(self, underwriting, *, bedrooms):
         opex_by_bedrooms = (
             await self.opex_by_bedrooms_service.get_by_market_and_bedrooms(
                 bedrooms=bedrooms, market_id=underwriting.market_id

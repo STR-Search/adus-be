@@ -9,6 +9,8 @@ from app.iron_bank.services.purchase_price_reconciliation_payload_builder import
 def make_underwriting():
     return SimpleNamespace(
         is_automated=True,
+        bedrooms=4,
+        bathrooms=Decimal("2.5"),
         detail=SimpleNamespace(
             purchase_details={
                 "purchase_price": 485000,
