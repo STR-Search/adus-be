@@ -170,7 +170,7 @@ async def test_get_all_returns_paginated_results():
     assert repository.requested_page["page"] == 1
     assert repository.requested_page["page_size"] == 50
     assert repository.requested_page["zpid"] is None
-    assert repository.requested_page["market_id"] is None
+    assert repository.requested_page["market_ids"] is None
     assert result.total == 1
     assert result.page == 1
     assert result.page_size == 50
@@ -268,7 +268,7 @@ async def test_get_all_passes_filters_to_repository():
         page=1,
         page_size=20,
         zpid="12345",
-        market_id=3,
+        market_ids=[3, 5],
         deal_status="template_generated",
         analyst_id=7,
         source="legacy_sheet",
@@ -279,14 +279,14 @@ async def test_get_all_passes_filters_to_repository():
     assert requested["page"] == 1
     assert requested["page_size"] == 20
     assert requested["zpid"] == "12345"
-    assert requested["market_id"] == 3
+    assert requested["market_ids"] == [3, 5]
     assert requested["deal_status"] == "template_generated"
     assert requested["analyst_id"] == 7
     expected = {
         "page": 1,
         "page_size": 20,
         "zpid": "12345",
-        "market_id": 3,
+        "market_ids": [3, 5],
         "source": "legacy_sheet",
         "search": "fort lauderdale",
     }

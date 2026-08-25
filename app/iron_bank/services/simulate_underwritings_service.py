@@ -82,7 +82,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         page: int,
         page_size: int,
         zpid: str | None = None,
-        market_id: int | None = None,
+        market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
         source: str | None = None,
@@ -108,7 +108,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
     ) -> GetUnderwritingsResult:
         rows = await self.repository.get_simulation_inputs(
             zpid=zpid,
-            market_id=market_id,
+            market_ids=market_ids,
             deal_status=deal_status,
             analyst_id=analyst_id,
             source=source,

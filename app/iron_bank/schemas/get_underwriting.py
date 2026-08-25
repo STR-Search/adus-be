@@ -7,6 +7,7 @@ from pydantic import (
     ConfigDict,
     Field,
     computed_field,
+    field_validator,
     model_serializer,
     model_validator,
 )
@@ -180,14 +181,18 @@ class GetUnderwritingsQuery(BaseModel):
     """Query params for the underwritings list endpoint.
 
     Field names, types, and defaults mirror the previous inline ``Query(...)``
-    params exactly, so the URL contract is unchanged. The added value is the
-    cross-field ``min <= max`` validation that inline params can't express.
+    params exactly, so the URL contract is unchanged -- the one exception being
+    ``market_ids``, which is aliased back to the original ``market_id`` param
+    name. The added value is the cross-field ``min <= max`` validation that
+    inline params can't express.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     page: int = Field(1, ge=1)
     page_size: int = Field(20, ge=1, le=20)
     zpid: str | None = None
-    market_id: int | None = None
+    market_ids: list[int] | None = Field(None, alias="market_id")
     deal_status: DealStatus | None = None
     analyst_id: int | None = None
     source: UnderwritingSource | None = None
@@ -216,6 +221,26 @@ class GetUnderwritingsQuery(BaseModel):
     # the simulated values. Fractional values, e.g. 0.069 and 0.1.
     interest_rate: Decimal | None = Field(None, ge=0, lt=1)
     down_payment_pct: Decimal | None = Field(None, ge=0, le=1)
+
+    @field_validator("market_ids", mode="before")
+    @classmethod
+    def split_market_ids(cls, value):
+        """Flatten comma-separated values and normalize "no filter" to None.
+
+        An empty result becomes None rather than [] so the repository never has
+        to reason about an ``IN ()`` that would match nothing.
+        """
+        if value is None:
+            return None
+        values = value if isinstance(value, list) else [value]
+        flattened = []
+        for item in values:
+            if isinstance(item, str):
+                flattened.extend(part.strip() for part in item.split(","))
+            else:
+                flattened.append(item)
+        cleaned = [item for item in flattened if item != "" and item is not None]
+        return cleaned or None
 
     @model_validator(mode="after")
     def check_ranges(self):
