@@ -15,9 +15,11 @@ class FakeZillowPropertyService:
     def __init__(self, result):
         self.result = result
         self.called_url = None
+        self.called_market_id = None
 
-    async def fetch_property_details(self, *, url: str):
+    async def fetch_property_details(self, *, url: str, market_id: int | None = None):
         self.called_url = url
+        self.called_market_id = market_id
         return self.result
 
 

@@ -43,7 +43,7 @@ class ListingNotScrapedError(Exception):
 
 class ZillowPropertyReader(Protocol):
     async def fetch_property_details(
-        self, *, url: str
+        self, *, url: str, market_id: int | None = None
     ) -> dict[str, Any] | None: ...
 
 
@@ -74,9 +74,10 @@ class CreateUnderwritingFromUrlService:
     """Creates a draft non-automated underwriting from a Zillow URL.
 
     Orchestrates the whole non-automated entry point: guard against duplicates
-    by listing URL, fetch property details from the external API, load the
-    market context for the analyst's ``market_id`` (or a zeroed template when
-    they didn't pick one), build a seeded save payload, and persist it via the
+    by listing URL, fetch property details from the external API (passing the
+    analyst's ``market_id`` along with the URL), load the market context for
+    that ``market_id`` (or a zeroed template when they didn't pick one), build
+    a seeded save payload, and persist it via the
     generic save service. Saving itself performs no network calls. Returns the
     new underwriting id so the analyst can start filling it in via update.
     """
@@ -120,7 +121,7 @@ class CreateUnderwritingFromUrlService:
             raise UnderwritingAlreadyExistsError(existing.id)
 
         zillow_property = await self.zillow_property_service.fetch_property_details(
-            url=url
+            url=url, market_id=market_id
         )
         if zillow_property is None:
             logger.warning(
