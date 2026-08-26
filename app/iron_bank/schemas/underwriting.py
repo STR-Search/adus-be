@@ -1,5 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
+
 from pydantic import BaseModel, Field, computed_field, field_validator
 
 from app.iron_bank.enums import DealStatus, UnderwritingSource
@@ -53,8 +55,6 @@ class UnderwritingBase(BaseModel):
     state: str | None = None
     days_on_market: int | None = None
     sleep_capacity: int | None = None
-    # The analyst-approved assumption, not Zillow's observation — see the
-    # Underwriting model. details.zillow_property keeps Zillow's own figures.
     bedrooms: int | None = None
     bathrooms: Decimal | None = None
     purchase_price: Decimal | None = None
@@ -107,7 +107,9 @@ class UnderwritingBase(BaseModel):
             try:
                 return DealStatus(value)
             except ValueError:
-                raise ValueError(f"deal_status must be a valid DealStatus key, got {value!r}")
+                raise ValueError(
+                    f"deal_status must be a valid DealStatus key, got {value!r}"
+                )
         return value
 
 
@@ -133,6 +135,13 @@ class DealStatusLabelMixin(BaseModel):
 class UnderwritingRead(UnderwritingBase, DealStatusLabelMixin):
     id: int
     display_id: str | None = None  # e.g. "UW-001" — generated at API layer
+
+    # Version lineage — read-only, hence declared here and not on
+    # UnderwritingBase (which UnderwritingCreate inherits): clients must never
+    # set these, they are assigned by the duplicate path.
+    series_id: UUID | None = None
+    version: int | None = None
+    copied_from_id: int | None = None
     optimization_total: Decimal | None = None
     operating_expense_total: Decimal | None = None
 

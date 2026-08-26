@@ -8,7 +8,9 @@ from app.iron_bank.services.save_underwriting_service import SaveUnderwritingSer
 from app.iron_bank.services.underwriting_payload_builder import (
     UnderwritingPayloadBuilder,
 )
-from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
+from app.markets.repositories.construction_repository import (
+    ConstructionAmenitiesRepository,
+)
 from app.markets.repositories.market_repository import MarketRepository
 from app.markets.repositories.opex_repository import OpexByBedroomsRepository
 from app.markets.repositories.realtor_repository import RealtorRepository
@@ -31,11 +33,13 @@ class PrepareAndSaveUnderwritingJob:
         payload_builder,
         save_service,
         underwriting_repository,
+        listings_service=None,
     ):
         self.prepare_job = prepare_job
         self.payload_builder = payload_builder
         self.save_service = save_service
         self.underwriting_repository = underwriting_repository
+        self.listings_service = listings_service
 
     @classmethod
     def from_session(
@@ -66,10 +70,11 @@ class PrepareAndSaveUnderwritingJob:
                 ),
             ),
             underwriting_repository=underwriting_repository,
+            listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
         )
 
     async def run(self, zpid: str) -> dict:
-        existing = await self.underwriting_repository.get_by_zpid(zpid)
+        existing = await self._find_existing(zpid)
         if existing is not None:
             return {
                 "zpid": zpid,
@@ -96,3 +101,29 @@ class PrepareAndSaveUnderwritingJob:
             "status": "saved",
             "underwriting_id": result.underwriting_id,
         }
+
+    async def _find_existing(self, zpid: str):
+        """Any underwriting already covering this listing, by zpid or by URL.
+
+        The zpid check alone is not enough. Deals created from a URL before the
+        scrape started persisting listings carry a NULL zpid, so they are
+        invisible to it — and the automated run would then create a second,
+        unrelated deal for a property an analyst has already underwritten. The
+        listing_url fallback catches those. Roughly 1.6k such rows exist, and
+        only a fraction have a recoverable zpid (see
+        scripts/backfill_underwriting_zpids.py), so this fallback is the durable
+        guard rather than a stopgap until the backfill runs.
+        """
+        existing = await self.underwriting_repository.get_by_zpid(zpid)
+        if existing is not None:
+            return existing
+
+        if self.listings_service is None:
+            return None
+
+        listing = await self.listings_service.get_by_zpid(zpid)
+        detail_url = getattr(listing, "detail_url", None)
+        if not detail_url:
+            return None
+
+        return await self.underwriting_repository.get_by_listing_url(detail_url)

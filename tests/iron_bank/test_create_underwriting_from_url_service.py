@@ -4,6 +4,7 @@ import pytest
 
 from app.iron_bank.services.create_underwriting_from_url_service import (
     CreateUnderwritingFromUrlService,
+    ListingNotScrapedError,
     UnderwritingAlreadyExistsError,
 )
 
@@ -14,9 +15,11 @@ class FakeZillowPropertyService:
     def __init__(self, result):
         self.result = result
         self.called_url = None
+        self.called_market_id = None
 
-    async def fetch_property_details(self, *, url: str):
+    async def fetch_property_details(self, *, url: str, market_id: int | None = None):
         self.called_url = url
+        self.called_market_id = market_id
         return self.result
 
 
@@ -211,3 +214,92 @@ async def test_create_without_a_context_reader_seeds_no_line_items():
     await service.create(url=REQUEST_URL, market_id=3)
 
     assert builder.received["market_context"] is None
+
+
+class FakeListingsService:
+    """Stands in for ScheduledListingsService."""
+
+    def __init__(self, listing=None):
+        self.listing = listing
+        self.requested_zpid = None
+
+    async def get_by_zpid(self, zpid: str):
+        self.requested_zpid = zpid
+        return self.listing
+
+
+@pytest.mark.asyncio
+async def test_create_stamps_the_zpid_when_the_listing_was_scraped():
+    """Fetching details persists the listing, so the FK is satisfiable."""
+    zillow_service = FakeZillowPropertyService(result=_zillow_property())
+    save_service = FakeSaveService()
+    listings = FakeListingsService(listing=SimpleNamespace(zpid="26110417"))
+    service = CreateUnderwritingFromUrlService(
+        zillow_service,
+        save_service,
+        FakeUnderwritingReader(existing=None),
+        listings_service=listings,
+    )
+
+    await service.create(url=REQUEST_URL)
+
+    assert listings.requested_zpid == "26110417"
+    assert save_service.saved_payload.zpid == "26110417"
+    # still preserved on the stored blob as well
+    assert save_service.saved_payload.details.zillow_property.id == "26110417"
+
+
+@pytest.mark.asyncio
+async def test_create_raises_when_the_listing_never_landed():
+    zillow_service = FakeZillowPropertyService(result=_zillow_property())
+    save_service = FakeSaveService()
+    service = CreateUnderwritingFromUrlService(
+        zillow_service,
+        save_service,
+        FakeUnderwritingReader(existing=None),
+        listings_service=FakeListingsService(listing=None),
+    )
+
+    with pytest.raises(ListingNotScrapedError) as exc:
+        await service.create(url=REQUEST_URL)
+
+    assert exc.value.zpid == "26110417"
+    assert exc.value.url == REQUEST_URL
+    # nothing is persisted: a deal detached from its listing is invisible to
+    # every job that keys on zpid
+    assert save_service.saved_payload is None
+
+
+@pytest.mark.asyncio
+async def test_create_raises_when_the_fetched_property_has_no_zpid():
+    zillow_service = FakeZillowPropertyService(result=_zillow_property(id=None))
+    save_service = FakeSaveService()
+    listings = FakeListingsService(listing=SimpleNamespace(zpid="26110417"))
+    service = CreateUnderwritingFromUrlService(
+        zillow_service,
+        save_service,
+        FakeUnderwritingReader(existing=None),
+        listings_service=listings,
+    )
+
+    with pytest.raises(ListingNotScrapedError) as exc:
+        await service.create(url=REQUEST_URL)
+
+    assert exc.value.zpid is None
+    # never looked up, because there was nothing to look up with
+    assert listings.requested_zpid is None
+    assert save_service.saved_payload is None
+
+
+@pytest.mark.asyncio
+async def test_create_without_a_listings_service_leaves_zpid_null():
+    """Back-compat: callers that can't verify the listing still work."""
+    zillow_service = FakeZillowPropertyService(result=_zillow_property())
+    save_service = FakeSaveService()
+    service = CreateUnderwritingFromUrlService(
+        zillow_service, save_service, FakeUnderwritingReader(existing=None)
+    )
+
+    await service.create(url=REQUEST_URL)
+
+    assert save_service.saved_payload.zpid is None
