@@ -13,6 +13,9 @@ from app.iron_bank.controllers.create_underwriting_from_url_controller import (
     CreateUnderwritingFromUrlController,
 )
 from app.iron_bank.controllers.deal_status_controller import DealStatusController
+from app.iron_bank.controllers.duplicate_underwriting_controller import (
+    DuplicateUnderwritingController,
+)
 from app.iron_bank.controllers.get_underwriting_controller import (
     GetUnderwritingController,
 )
@@ -34,6 +37,9 @@ from app.iron_bank.schemas.job import (
 )
 from app.iron_bank.schemas.create_underwriting_from_url import (
     CreateUnderwritingFromUrlPayload,
+)
+from app.iron_bank.schemas.duplicate_underwriting import (
+    DuplicateUnderwritingResult,
 )
 from app.iron_bank.schemas.deal_status import (
     DealStatusOptionsResult,
@@ -57,6 +63,9 @@ from app.iron_bank.schemas.update_underwriting import (
 )
 from app.iron_bank.services.create_underwriting_from_url_service import (
     CreateUnderwritingFromUrlService,
+)
+from app.iron_bank.services.duplicate_underwriting_service import (
+    DuplicateUnderwritingService,
 )
 from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
 from app.iron_bank.services.simulate_underwritings_service import (
@@ -147,29 +156,45 @@ def get_create_underwriting_from_url_controller(
     from app.markets.repositories.market_repository import MarketRepository
     from app.markets.repositories.realtor_repository import RealtorRepository
     from app.markets.services.market_service import MarketService
+    from app.zillow.repositories.scheduled_listings_repository import (
+        ScheduledListingsRepository,
+    )
+    from app.zillow.services.scheduled_listings_service import ScheduledListingsService
 
     repository = UnderwritingRepository(db)
+    market_service = MarketService(
+        MarketRepository(db),
+        ConstructionAmenitiesRepository(db),
+        RealtorRepository(db),
+    )
     return CreateUnderwritingFromUrlController(
         CreateUnderwritingFromUrlService(
             zillow_property_service=ZillowPropertyService(),
             # market_service + cleaned_data_service let the save estimate
             # forecasted revenue from Airbnb comps now that this flow carries a
-            # market_id; bedrooms come off the stored zillow_property. No
-            # listings_service — a live-fetched property has no
-            # scheduled_listings row (hence the null zpid column).
+            # market_id; bedrooms come off the stored zillow_property.
             save_service=SaveUnderwritingService(
                 repository,
-                market_service=MarketService(
-                    MarketRepository(db),
-                    ConstructionAmenitiesRepository(db),
-                    RealtorRepository(db),
-                ),
+                market_service=market_service,
                 cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
                 opex_service=_opex_by_bedrooms_service(db),
             ),
             underwriting_reader=repository,
             market_context_reader=PrepareUwDataJob.from_session(db),
+            market_name_reader=market_service,
+            # Fetching property details also persists the listing to
+            # scheduled_listings, so this both verifies the scrape completed and
+            # lets the row carry a real zpid instead of a null one.
+            listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
         )
+    )
+
+
+def get_duplicate_underwriting_controller(
+    db: AsyncSession = Depends(get_db),
+) -> DuplicateUnderwritingController:
+    return DuplicateUnderwritingController(
+        DuplicateUnderwritingService(UnderwritingRepository(db))
     )
 
 
@@ -454,6 +479,25 @@ async def create_underwriting_from_url(
     return await controller.create_from_url(
         url=payload.url,
         market_id=payload.market_id,
+        current_user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/underwritings/{underwriting_id}/duplicate",
+    response_model=DuplicateUnderwritingResult,
+    status_code=201,
+    tags=["iron_bank"],
+)
+async def duplicate_underwriting(
+    underwriting_id: int,
+    controller: DuplicateUnderwritingController = Depends(
+        get_duplicate_underwriting_controller
+    ),
+    current_user=Depends(get_current_user),
+):
+    return await controller.duplicate_underwriting(
+        underwriting_id=underwriting_id,
         current_user_id=current_user.id,
     )
 

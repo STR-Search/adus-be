@@ -33,13 +33,21 @@ class BatchReconcileUnderwritingPricesJob:
             since_hours=since_hours,
             limit=limit,
         )
+        # Counts are keyed by status and seeded with the known ones so the shape
+        # of the response stays stable when a batch happens to contain none of a
+        # given outcome. setdefault on write means a new status added to the
+        # reconcile job shows up here instead of raising KeyError mid-batch.
         counts = {
             "updated": 0,
             "skipped_same_price": 0,
             "skipped_no_underwriting": 0,
             "skipped_no_purchase_price": 0,
+            "skipped_terminal_status": 0,
             "failed": 0,
         }
+        # A zpid now covers every version of the deal, so the per-listing counts
+        # above no longer say how many rows actually moved. These do.
+        underwriting_counts = dict.fromkeys(counts, 0)
         results = []
         for zpid in zpids:
             try:
@@ -57,11 +65,16 @@ class BatchReconcileUnderwritingPricesJob:
                 counts["failed"] += 1
                 results.append({"zpid": zpid, "status": "failed", "error": str(exc)})
                 continue
-            counts[result["status"]] += 1
+            counts[result["status"]] = counts.setdefault(result["status"], 0) + 1
+            for row in result.get("results", []):
+                underwriting_counts[row["status"]] = (
+                    underwriting_counts.setdefault(row["status"], 0) + 1
+                )
             results.append(result)
         return {
             "found": len(zpids),
             "processed": len(results),
             **counts,
+            "underwritings": underwriting_counts,
             "results": results,
         }

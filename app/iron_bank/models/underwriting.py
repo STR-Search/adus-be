@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import Optional
 
@@ -14,10 +15,11 @@ from sqlalchemy import (
     CheckConstraint,
     Numeric,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
@@ -52,10 +54,35 @@ class Underwriting(Base):
             unique=True,
             postgresql_where=text("sheet_number IS NOT NULL"),
         ),
+        UniqueConstraint(
+            "series_id",
+            "version",
+            name="uq_underwritings_series_version",
+        ),
         {"schema": "iron_bank"},
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Version lineage. A duplicate inherits its source's series_id and takes the
+    # next version in that series; an original gets a fresh series_id at
+    # version 0. copied_from_id records the exact row duplicated (which for a
+    # copy-of-a-copy is the copy, not the original), so the chain is
+    # reconstructable even though series_id alone groups the family.
+    series_id = Column(
+        UUID(as_uuid=True),
+        nullable=False,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    version = Column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    copied_from_id = Column(
+        Integer,
+        ForeignKey("iron_bank.underwritings.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     zpid = Column(
         Text,

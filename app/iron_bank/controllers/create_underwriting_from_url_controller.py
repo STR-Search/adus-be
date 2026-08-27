@@ -4,6 +4,8 @@ from app.core.logger import logger
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingResult
 from app.iron_bank.services.create_underwriting_from_url_service import (
     CreateUnderwritingFromUrlService,
+    ListingMarketMismatchError,
+    ListingNotScrapedError,
     UnderwritingAlreadyExistsError,
 )
 
@@ -29,6 +31,27 @@ class CreateUnderwritingFromUrlController:
                 detail={
                     "message": "An underwriting already exists for this property",
                     "underwriting_id": e.underwriting_id,
+                },
+            )
+        except ListingNotScrapedError as e:
+            # 422, not 400: the request itself is well-formed and the client can
+            # retry it unchanged once the scrape lands.
+            raise HTTPException(
+                status_code=422,
+                detail={"message": str(e), "url": e.url, "zpid": e.zpid},
+            )
+        except ListingMarketMismatchError as e:
+            # 409, matching the duplicate guard: the request is well-formed but
+            # conflicts with state the client can't see. listing_market_id is
+            # the value to re-submit with.
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": str(e),
+                    "requested_market_id": e.requested_market_id,
+                    "listing_market_id": e.listing_market_id,
+                    "listing_market_name": e.listing_market_name,
+                    "zpid": e.zpid,
                 },
             )
         except ValueError as e:

@@ -35,8 +35,14 @@ class ZillowPropertyService:
     def _is_configured(self) -> bool:
         return all((self.api_base, self.api_key))
 
-    async def fetch_property_details(self, *, url: str) -> dict[str, Any] | None:
+    async def fetch_property_details(
+        self, *, url: str, market_id: int | None = None
+    ) -> dict[str, Any] | None:
         """Fetch and map a single property by its Zillow URL.
+
+        ``market_id`` is forwarded to the upstream API alongside the URL so the
+        scrape is attributed to the analyst's market. The key is always present
+        in the request body, sent as ``null`` when no market was provided.
 
         Returns the canonical ``ZillowProperty`` dict plus address parts, or
         ``None`` if the client is not configured or the request ultimately
@@ -49,20 +55,21 @@ class ZillowPropertyService:
             )
             return None
 
-        details = await self._post_property_details(url=url)
+        details = await self._post_property_details(url=url, market_id=market_id)
         if details is None:
             return None
 
         return self._to_zillow_property(details, url=url)
 
     async def _post_property_details(
-        self, *, url: str
+        self, *, url: str, market_id: int | None = None
     ) -> ZillowPropertyDetails | None:
         endpoint = f"{self.api_base}/api/property-details"
         headers = {
             "X-API-KEY": self.api_key,
             "Content-Type": "application/json",
         }
+        body: dict[str, Any] = {"url": url, "market_id": market_id}
         for attempt in range(_MAX_ATTEMPTS):
             try:
                 async with httpx.AsyncClient(
@@ -71,7 +78,7 @@ class ZillowPropertyService:
                     response = await client.post(
                         endpoint,
                         headers=headers,
-                        json={"url": url},
+                        json=body,
                     )
                 if response.status_code == 200:
                     return self._first_property(response.json(), url=url)
@@ -81,12 +88,14 @@ class ZillowPropertyService:
                         "external_api.zillow_property.auth_rejected",
                         status_code=response.status_code,
                         url=url,
+                        market_id=market_id,
                     )
                     return None
                 logger.warning(
                     "external_api.zillow_property.fetch_failed",
                     status_code=response.status_code,
                     url=url,
+                    market_id=market_id,
                     attempt=attempt,
                 )
             except Exception as exc:
@@ -94,11 +103,16 @@ class ZillowPropertyService:
                     "external_api.zillow_property.fetch_error",
                     error=str(exc),
                     url=url,
+                    market_id=market_id,
                     attempt=attempt,
                 )
             await asyncio.sleep(0.4 + attempt * 0.4)
 
-        logger.error("external_api.zillow_property.fetch_exhausted", url=url)
+        logger.error(
+            "external_api.zillow_property.fetch_exhausted",
+            url=url,
+            market_id=market_id,
+        )
         return None
 
     def _first_property(

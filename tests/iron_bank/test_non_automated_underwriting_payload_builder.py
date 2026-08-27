@@ -106,8 +106,9 @@ def test_build_from_zillow_property_sets_non_automated_core_fields():
     assert payload.is_automated is False
     # listing_url is the request URL, not the mapped url on the property
     assert payload.listing_url == REQUEST_URL
-    # zpid stays null on the column (FK to scheduled_listings); it's preserved
-    # only inside details.zillow_property
+    # zpid stays null on the column when the caller doesn't pass one (the FK to
+    # scheduled_listings may only be set once the listing is known to exist);
+    # it's preserved inside details.zillow_property either way
     assert payload.zpid is None
     assert payload.details.zillow_property.id == "26110417"
     assert payload.property_address == "727 N Pine St, San Antonio, TX 78202"
@@ -400,3 +401,17 @@ def test_build_from_zillow_property_coerces_a_float_bedroom_count():
     )
 
     assert payload.bedrooms == 5
+
+
+def test_build_from_zillow_property_stamps_a_verified_zpid():
+    """The caller verifies the scheduled_listings row, then passes the zpid in."""
+    builder = NonAutomatedUnderwritingPayloadBuilder()
+
+    payload = builder.build_from_zillow_property(
+        listing_url=REQUEST_URL,
+        zillow_property=_zillow_property(),
+        zpid="26110417",
+    )
+
+    assert payload.zpid == "26110417"
+    assert payload.details.zillow_property.id == "26110417"

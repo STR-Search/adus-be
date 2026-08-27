@@ -22,7 +22,11 @@ STATUS_OPTIONS: tuple[tuple[DealStatus, str, int], ...] = (
     (DealStatus.PRESENT_TO_CLIENTS, "Present To Clients", 9),
     (DealStatus.CLIENT_UNDER_CONTRACT, "Client Under Contract", 10),
     (DealStatus.TRAINING_DEAL, "Training Deal", 11),
-    (DealStatus.PREVIOUSLY_UNDERWRITTEN_NO_STATUS, "Previously Underwritten - No Status", 12),
+    (
+        DealStatus.PREVIOUSLY_UNDERWRITTEN_NO_STATUS,
+        "Previously Underwritten - No Status",
+        12,
+    ),
 )
 
 DEAL_STATUS_TRANSITIONS: dict[DealStatus, set[DealStatus]] = {
@@ -74,6 +78,15 @@ DEAL_STATUS_TRANSITIONS: dict[DealStatus, set[DealStatus]] = {
     DealStatus.DELETE_DEAL: set(),
     DealStatus.PREVIOUSLY_UNDERWRITTEN_NO_STATUS: set(),
 }
+
+# Statuses a deal can never move out of. Derived from the transition table
+# rather than listed by hand, so a status that later becomes terminal (or stops
+# being terminal) is picked up automatically.
+TERMINAL_DEAL_STATUSES: frozenset[str] = frozenset(
+    status.value
+    for status, allowed_targets in DEAL_STATUS_TRANSITIONS.items()
+    if not allowed_targets
+)
 
 ROLE_ALLOWED_TARGETS: dict[str, set[DealStatus]] = {
     "analyst": {
