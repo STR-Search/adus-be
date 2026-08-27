@@ -72,6 +72,7 @@ def _row(
     purchase_details="default",
     forecasted_revenue="default",
     tax_savings=Decimal("5000"),
+    prr=None,
     sheet_number=None,
     created_at=None,
     deal_approved=None,
@@ -79,6 +80,7 @@ def _row(
     return SimpleNamespace(
         id=id,
         source=source,
+        prr=prr,
         sheet_number=sheet_number,
         created_at=created_at,
         deal_approved=deal_approved,

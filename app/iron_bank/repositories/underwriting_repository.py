@@ -72,6 +72,7 @@ class UnderwritingRepository:
         market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        owner_id: int | None = None,
         source: str | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
@@ -84,6 +85,8 @@ class UnderwritingRepository:
         max_m_cash_on_cash: Decimal | None = None,
         min_h_cash_on_cash: Decimal | None = None,
         max_h_cash_on_cash: Decimal | None = None,
+        min_prr: Decimal | None = None,
+        max_prr: Decimal | None = None,
         min_created_at: date | None = None,
         max_created_at: date | None = None,
         min_deal_approved: date | None = None,
@@ -114,6 +117,8 @@ class UnderwritingRepository:
             query = query.where(or_(*conditions))
         if analyst_id is not None:
             query = query.where(Underwriting.analyst_id == analyst_id)
+        if owner_id is not None:
+            query = query.where(Underwriting.owner_id == owner_id)
         if min_purchase_price is not None:
             query = query.where(Underwriting.purchase_price >= min_purchase_price)
         if max_purchase_price is not None:
@@ -134,6 +139,10 @@ class UnderwritingRepository:
             query = query.where(Underwriting.h_cash_on_cash >= min_h_cash_on_cash)
         if max_h_cash_on_cash is not None:
             query = query.where(Underwriting.h_cash_on_cash <= max_h_cash_on_cash)
+        if min_prr is not None:
+            query = query.where(Underwriting.prr >= min_prr)
+        if max_prr is not None:
+            query = query.where(Underwriting.prr <= max_prr)
         for condition in (
             *_date_range_conditions(
                 Underwriting.created_at, min_created_at, max_created_at
@@ -186,10 +195,13 @@ class UnderwritingRepository:
         market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        owner_id: int | None = None,
         source: str | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
+        min_prr: Decimal | None = None,
+        max_prr: Decimal | None = None,
         min_created_at: date | None = None,
         max_created_at: date | None = None,
         min_deal_approved: date | None = None,
@@ -223,6 +235,7 @@ class UnderwritingRepository:
                 # Not used in the recalculation — carried so the service can
                 # sort on them. Every UnderwritingSortBy value must be
                 # selected here or the Python sorter has nothing to read.
+                Underwriting.prr,
                 Underwriting.sheet_number,
                 Underwriting.created_at,
                 Underwriting.deal_approved,
@@ -260,10 +273,20 @@ class UnderwritingRepository:
             query = query.where(or_(*conditions))
         if analyst_id is not None:
             query = query.where(Underwriting.analyst_id == analyst_id)
+        if owner_id is not None:
+            query = query.where(Underwriting.owner_id == owner_id)
         if min_purchase_price is not None:
             query = query.where(Underwriting.purchase_price >= min_purchase_price)
         if max_purchase_price is not None:
             query = query.where(Underwriting.purchase_price <= max_purchase_price)
+        # prr is mid GROSS revenue over purchase price. The overrides only reach
+        # revenue below the gross line (debt service is subtracted out of NOI,
+        # not out of gross) and only move loan_amount, not purchase_price — so
+        # unlike the cash-on-cash bounds, prr filters in SQL here.
+        if min_prr is not None:
+            query = query.where(Underwriting.prr >= min_prr)
+        if max_prr is not None:
+            query = query.where(Underwriting.prr <= max_prr)
         # Dates are untouched by simulation, so they filter in SQL like the
         # non-simulated path rather than in Python afterwards.
         for condition in (
