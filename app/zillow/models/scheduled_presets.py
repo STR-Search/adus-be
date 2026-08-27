@@ -34,8 +34,12 @@ class ScheduledPreset(Base):
     next_run: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_daily_run: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_full_run: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    cycle_length_days: Mapped[int | None] = mapped_column(Integer, server_default=text("14"))
-    force_next_run_full: Mapped[bool | None] = mapped_column(Boolean, server_default=text("false"))
+    cycle_length_days: Mapped[int | None] = mapped_column(
+        Integer, server_default=text("14")
+    )
+    force_next_run_full: Mapped[bool | None] = mapped_column(
+        Boolean, server_default=text("false")
+    )
     filter_template: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
@@ -45,6 +49,9 @@ class ScheduledPreset(Base):
     )
     market_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("markets.market_keys_master.id")
+    )
+    is_default: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
     )
 
     listings: Mapped[list[ScheduledListing]] = relationship(

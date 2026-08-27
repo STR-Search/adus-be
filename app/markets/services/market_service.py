@@ -1,6 +1,8 @@
 from app.markets.models.market import MarketKeysMaster
 from app.markets.models.realtor import Realtor
-from app.markets.repositories.construction_repository import ConstructionAmenitiesRepository
+from app.markets.repositories.construction_repository import (
+    ConstructionAmenitiesRepository,
+)
 from app.markets.repositories.market_repository import MarketRepository
 from app.markets.repositories.realtor_repository import RealtorRepository
 from app.markets.schemas.market import (
@@ -36,7 +38,9 @@ class MarketService:
     async def _get_realtor_map(self) -> dict[int, RealtorRefSchema]:
         records = await self.realtor_repository.get_all()
         return {
-            record.id: RealtorRefSchema(id=record.id, name=record.name, email=record.email)
+            record.id: RealtorRefSchema(
+                id=record.id, name=record.name, email=record.email
+            )
             for record in records
         }
 
@@ -50,7 +54,9 @@ class MarketService:
 
     async def _get_lookup_maps(
         self,
-    ) -> tuple[dict[int, str | None], dict[int, RealtorRefSchema], dict[int, UserSummary]]:
+    ) -> tuple[
+        dict[int, str | None], dict[int, RealtorRefSchema], dict[int, UserSummary]
+    ]:
         return (
             await self._get_amenity_name_map(),
             await self._get_realtor_map(),
@@ -97,7 +103,9 @@ class MarketService:
         if ids is None:
             return None
         # IDs pointing at soft-deleted realtors are skipped.
-        return [realtor_map[realtor_id] for realtor_id in ids if realtor_id in realtor_map]
+        return [
+            realtor_map[realtor_id] for realtor_id in ids if realtor_id in realtor_map
+        ]
 
     def _to_schema(
         self,
@@ -117,8 +125,12 @@ class MarketService:
             market_notes=market.market_notes,
             map_config=market.map_config,
             filters=market.filters,
-            must_have_amenities=self._resolve_amenities(market.must_have_amenities, amenity_name_map),
-            nice_to_have_amenities=self._resolve_amenities(market.nice_to_have_amenities, amenity_name_map),
+            must_have_amenities=self._resolve_amenities(
+                market.must_have_amenities, amenity_name_map
+            ),
+            nice_to_have_amenities=self._resolve_amenities(
+                market.nice_to_have_amenities, amenity_name_map
+            ),
             realtors=self._resolve_realtors(market.realtor_ids, realtor_map),
             created_at=market.created_at,
             updated_at=market.updated_at,
@@ -129,6 +141,21 @@ class MarketService:
         if market is None:
             return None
         return self._to_schema(market, *await self._get_lookup_maps())
+
+    async def get_market_name_current(self, market_id: int) -> str | None:
+        """The display name for one market, in a single query.
+
+        ``get_by_id`` resolves amenity, realtor and user maps to build the full
+        schema; this method is a shortcut for callers that only need the name.
+
+        Falls back to ``market_name`` because ``market_name_current`` is
+        nullable, and returns None for an unknown or soft-deleted market (the
+        repository filters those out), leaving the caller to degrade to the id.
+        """
+        market = await self.repository.get_by_id(market_id)
+        if market is None:
+            return None
+        return market.market_name_current or market.market_name
 
     async def get_realtors_for_market(self, market_id: int) -> list[Realtor]:
         """Realtor rows attached to a market, in the market's realtor_ids order.
@@ -145,7 +172,9 @@ class MarketService:
         by_id = {realtor.id: realtor for realtor in realtors}
         return [by_id[realtor_id] for realtor_id in realtor_ids if realtor_id in by_id]
 
-    async def get_by_market_slug(self, market_slug: str) -> MarketKeysMasterSchema | None:
+    async def get_by_market_slug(
+        self, market_slug: str
+    ) -> MarketKeysMasterSchema | None:
         market = await self.repository.get_by_market_slug(market_slug)
         if market is None:
             return None
@@ -158,7 +187,9 @@ class MarketService:
         market = await self.repository.create(payload)
         return self._to_schema(market, *await self._get_lookup_maps())
 
-    async def update(self, market_id: int, data: MarketUpdateSchema) -> MarketKeysMasterSchema | None:
+    async def update(
+        self, market_id: int, data: MarketUpdateSchema
+    ) -> MarketKeysMasterSchema | None:
         payload = data.model_dump(exclude_unset=True)
         await self._validate_amenity_ids(payload)
         await self._validate_realtor_ids(payload)
@@ -190,7 +221,11 @@ class MarketService:
             search=search,
         )
         amenity_name_map, realtor_map, user_map = await self._get_lookup_maps()
-        return [
-            self._to_schema(item, amenity_name_map, realtor_map, user_map)
-            for item in items
-        ], total, pages
+        return (
+            [
+                self._to_schema(item, amenity_name_map, realtor_map, user_map)
+                for item in items
+            ],
+            total,
+            pages,
+        )

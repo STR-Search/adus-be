@@ -162,6 +162,11 @@ def get_create_underwriting_from_url_controller(
     from app.zillow.services.scheduled_listings_service import ScheduledListingsService
 
     repository = UnderwritingRepository(db)
+    market_service = MarketService(
+        MarketRepository(db),
+        ConstructionAmenitiesRepository(db),
+        RealtorRepository(db),
+    )
     return CreateUnderwritingFromUrlController(
         CreateUnderwritingFromUrlService(
             zillow_property_service=ZillowPropertyService(),
@@ -170,22 +175,17 @@ def get_create_underwriting_from_url_controller(
             # market_id; bedrooms come off the stored zillow_property.
             save_service=SaveUnderwritingService(
                 repository,
-                market_service=MarketService(
-                    MarketRepository(db),
-                    ConstructionAmenitiesRepository(db),
-                    RealtorRepository(db),
-                ),
+                market_service=market_service,
                 cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
                 opex_service=_opex_by_bedrooms_service(db),
             ),
             underwriting_reader=repository,
             market_context_reader=PrepareUwDataJob.from_session(db),
+            market_name_reader=market_service,
             # Fetching property details also persists the listing to
             # scheduled_listings, so this both verifies the scrape completed and
             # lets the row carry a real zpid instead of a null one.
-            listings_service=ScheduledListingsService(
-                ScheduledListingsRepository(db)
-            ),
+            listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
         )
     )
 
