@@ -52,6 +52,7 @@ class _SimulatedRow:
     y1_coc_incl_tax_savings: dict[str, Any] | None = None
     # Sort-only passthroughs: untouched by simulation, but every
     # UnderwritingSortBy value must exist here for _sort's getattr.
+    prr: Decimal | None = None
     sheet_number: int | None = None
     created_at: datetime | None = None
     deal_approved: datetime | None = None
@@ -85,6 +86,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        owner_id: int | None = None,
         source: str | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
@@ -97,6 +99,8 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         max_m_cash_on_cash: Decimal | None = None,
         min_h_cash_on_cash: Decimal | None = None,
         max_h_cash_on_cash: Decimal | None = None,
+        min_prr: Decimal | None = None,
+        max_prr: Decimal | None = None,
         min_created_at: date | None = None,
         max_created_at: date | None = None,
         min_deal_approved: date | None = None,
@@ -111,10 +115,13 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             market_ids=market_ids,
             deal_status=deal_status,
             analyst_id=analyst_id,
+            owner_id=owner_id,
             source=source,
             search=search,
             min_purchase_price=min_purchase_price,
             max_purchase_price=max_purchase_price,
+            min_prr=min_prr,
+            max_prr=max_prr,
             min_created_at=min_created_at,
             max_created_at=max_created_at,
             min_deal_approved=min_deal_approved,
@@ -291,6 +298,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         single edit here plus the repository's select list.
         """
         return {
+            "prr": row.prr,
             "sheet_number": row.sheet_number,
             "created_at": row.created_at,
             "deal_approved": row.deal_approved,

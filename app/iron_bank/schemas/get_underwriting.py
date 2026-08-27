@@ -195,6 +195,7 @@ class GetUnderwritingsQuery(BaseModel):
     market_ids: list[int] | None = Field(None, alias="market_id")
     deal_status: DealStatus | None = None
     analyst_id: int | None = None
+    owner_id: int | None = None
     source: UnderwritingSource | None = None
     # free-text match on address/city/state; numeric terms also match sheet_number
     search: str | None = Field(None, max_length=100)
@@ -208,6 +209,8 @@ class GetUnderwritingsQuery(BaseModel):
     max_m_cash_on_cash: Decimal | None = None
     min_h_cash_on_cash: Decimal | None = None
     max_h_cash_on_cash: Decimal | None = None
+    min_prr: Decimal | None = Field(None, ge=0)
+    max_prr: Decimal | None = Field(None, ge=0)
     # Calendar dates (YYYY-MM-DD), both ends inclusive: min == max selects that
     # single day. Bounds are interpreted in UTC against the stored timestamps.
     min_created_at: date | None = None
@@ -284,6 +287,12 @@ class GetUnderwritingsQuery(BaseModel):
             raise ValueError(
                 "min_h_cash_on_cash must be less than or equal to max_h_cash_on_cash"
             )
+        if (
+            self.min_prr is not None
+            and self.max_prr is not None
+            and self.min_prr > self.max_prr
+        ):
+            raise ValueError("min_prr must be less than or equal to max_prr")
         if (
             self.min_created_at is not None
             and self.max_created_at is not None

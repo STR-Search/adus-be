@@ -32,6 +32,7 @@ class UnderwritingSortBy(StrEnum):
     L_CASH_ON_CASH = "l_cash_on_cash"
     M_CASH_ON_CASH = "m_cash_on_cash"
     H_CASH_ON_CASH = "h_cash_on_cash"
+    PRR = "prr"
     SHEET_NUMBER = "sheet_number"
     CREATED_AT = "created_at"
     DEAL_APPROVED = "deal_approved"
