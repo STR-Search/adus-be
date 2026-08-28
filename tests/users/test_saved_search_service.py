@@ -193,6 +193,48 @@ def test_patch_rejects_explicit_null_on_not_null_columns(field):
         UpdateSavedSearchPayload.model_validate({field: None})
 
 
+@pytest.mark.asyncio
+async def test_filters_may_be_a_top_level_array_of_conditions():
+    service = SavedSearchService(StubRepository())
+    conditions = [
+        {"field": "market", "values": ["5"]},
+        {"field": "cash", "min": 20000, "max": 170000},
+    ]
+    payload = CreateSavedSearchPayload(
+        resource=RESOURCE, name="test", filters=conditions
+    )
+
+    created = await service.create(user_id=1, payload=payload)
+
+    # Stored verbatim — no coercion into an object wrapper.
+    assert created.filters == conditions
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [
+        {"bedrooms": 3},
+        [{"field": "market", "values": ["5"]}],
+        {},
+        [],
+    ],
+)
+def test_both_object_and_array_filter_shapes_validate(filters):
+    payload = CreateSavedSearchPayload.model_validate(
+        {"resource": RESOURCE, "name": "n", "filters": filters}
+    )
+
+    assert payload.filters == filters
+
+
+@pytest.mark.parametrize("filters", ["a string", 42, True])
+def test_scalar_filters_are_still_rejected(filters):
+    with pytest.raises(ValidationError):
+        CreateSavedSearchPayload.model_validate(
+            {"resource": RESOURCE, "name": "n", "filters": filters}
+        )
+
+
 @pytest.mark.parametrize("name", ["   ", "\t\n", ""])
 def test_whitespace_only_names_are_rejected(name):
     with pytest.raises(ValidationError):

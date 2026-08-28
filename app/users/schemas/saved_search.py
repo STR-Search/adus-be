@@ -13,11 +13,13 @@ SavedSearchName = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
 ]
 
+SavedSearchFilters = dict[str, Any] | list[Any]
+
 
 class CreateSavedSearchPayload(BaseModel):
     resource: str = Field(..., min_length=1, max_length=100, pattern=RESOURCE_PATTERN)
     name: SavedSearchName
-    filters: dict[str, Any]
+    filters: SavedSearchFilters
     query_string: str | None = Field(None, max_length=4000)
 
 
@@ -31,7 +33,7 @@ class UpdateSavedSearchPayload(BaseModel):
     """
 
     name: SavedSearchName | None = None
-    filters: dict[str, Any] | None = None
+    filters: SavedSearchFilters | None = None
     query_string: str | None = Field(None, max_length=4000)
 
     @model_validator(mode="after")
@@ -54,7 +56,7 @@ class SavedSearchResult(BaseModel):
     id: int
     resource: str
     name: str
-    filters: dict[str, Any]
+    filters: SavedSearchFilters
     query_string: str | None = None
     created_at: datetime
     updated_at: datetime
