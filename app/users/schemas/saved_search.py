@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 # Resources are free-form strings rather than an enum: constraining them to a
 # known list would mean the users domain carrying knowledge of every other
@@ -9,10 +9,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # lowercase segments joined by dots, e.g. "iron_bank.underwritings".
 RESOURCE_PATTERN = r"^[a-z0-9_]+(\.[a-z0-9_]+)*$"
 
+SavedSearchName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
+]
+
 
 class CreateSavedSearchPayload(BaseModel):
     resource: str = Field(..., min_length=1, max_length=100, pattern=RESOURCE_PATTERN)
-    name: str = Field(..., min_length=1, max_length=255)
+    name: SavedSearchName
     filters: dict[str, Any]
     query_string: str | None = Field(None, max_length=4000)
 
@@ -26,7 +30,7 @@ class UpdateSavedSearchPayload(BaseModel):
     would produce filters that mean nothing to the destination.
     """
 
-    name: str | None = Field(None, min_length=1, max_length=255)
+    name: SavedSearchName | None = None
     filters: dict[str, Any] | None = None
     query_string: str | None = Field(None, max_length=4000)
 

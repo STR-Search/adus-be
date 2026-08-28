@@ -193,6 +193,26 @@ def test_patch_rejects_explicit_null_on_not_null_columns(field):
         UpdateSavedSearchPayload.model_validate({field: None})
 
 
+@pytest.mark.parametrize("name", ["   ", "\t\n", ""])
+def test_whitespace_only_names_are_rejected(name):
+    with pytest.raises(ValidationError):
+        CreateSavedSearchPayload.model_validate(
+            {"resource": RESOURCE, "name": name, "filters": {}}
+        )
+
+
+def test_names_are_stripped_so_padding_cannot_fake_a_distinct_search():
+    payload = CreateSavedSearchPayload.model_validate(
+        {"resource": RESOURCE, "name": "  Austin 3BR  ", "filters": {}}
+    )
+
+    assert payload.name == "Austin 3BR"
+
+
+def test_patch_names_are_stripped_too():
+    assert UpdateSavedSearchPayload(name=" renamed ").name == "renamed"
+
+
 @pytest.mark.parametrize("resource", ["Bad Resource", "iron_bank..x", "", "a-b"])
 def test_create_rejects_malformed_resource(resource):
     with pytest.raises(ValidationError):
