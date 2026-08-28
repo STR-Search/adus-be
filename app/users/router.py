@@ -3,8 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.dependencies import get_current_user
+from app.users.controllers.saved_search_controller import SavedSearchController
 from app.users.controllers.user_controller import UserController
 from app.users.repositories.api_key_repository import ApiKeyRepository
+from app.users.repositories.saved_search_repository import SavedSearchRepository
 from app.users.repositories.user_repository import UserRepository
 from app.users.schemas.api_key import (
     ApiKeyListResult,
@@ -12,8 +14,15 @@ from app.users.schemas.api_key import (
     CreateApiKeyPayload,
     CreateApiKeyResult,
 )
+from app.users.schemas.saved_search import (
+    CreateSavedSearchPayload,
+    SavedSearchListResult,
+    SavedSearchResult,
+    UpdateSavedSearchPayload,
+)
 from app.users.schemas.user import UserListResult
 from app.users.services.api_key_service import ApiKeyService
+from app.users.services.saved_search_service import SavedSearchService
 from app.users.services.user_service import UserService
 import app.users.models  # noqa: F401 — ensures all models are registered with SQLAlchemy
 
@@ -26,6 +35,12 @@ def get_api_key_service(db: AsyncSession = Depends(get_db)) -> ApiKeyService:
 
 def get_user_controller(db: AsyncSession = Depends(get_db)) -> UserController:
     return UserController(UserService(UserRepository(db)))
+
+
+def get_saved_search_controller(
+    db: AsyncSession = Depends(get_db),
+) -> SavedSearchController:
+    return SavedSearchController(SavedSearchService(SavedSearchRepository(db)))
 
 
 @router.get("", response_model=UserListResult, tags=["users"])
@@ -84,3 +99,74 @@ async def revoke_api_key(
     revoked = await service.revoke_key(api_key_id=api_key_id, user_id=current_user.id)
     if not revoked:
         raise HTTPException(status_code=404, detail="API key not found")
+
+
+# Saved searches. Every route is scoped to the authenticated user — the owner
+# is taken from the token, never from the path or body, so a user can only ever
+# read and write their own rows.
+
+
+@router.get("/saved-searches", response_model=SavedSearchListResult, tags=["users"])
+async def list_saved_searches(
+    resource: str | None = Query(
+        None,
+        description=(
+            "Filter to one list view, e.g. 'iron_bank.underwritings'. "
+            "All of the user's saved searches if omitted."
+        ),
+    ),
+    controller: SavedSearchController = Depends(get_saved_search_controller),
+    current_user=Depends(get_current_user),
+):
+    return await controller.list_saved_searches(
+        user_id=current_user.id, resource=resource
+    )
+
+
+@router.post(
+    "/saved-searches",
+    response_model=SavedSearchResult,
+    status_code=status.HTTP_201_CREATED,
+    tags=["users"],
+)
+async def create_saved_search(
+    payload: CreateSavedSearchPayload,
+    controller: SavedSearchController = Depends(get_saved_search_controller),
+    current_user=Depends(get_current_user),
+):
+    return await controller.create_saved_search(
+        user_id=current_user.id, payload=payload
+    )
+
+
+@router.patch(
+    "/saved-searches/{saved_search_id}",
+    response_model=SavedSearchResult,
+    tags=["users"],
+)
+async def update_saved_search(
+    saved_search_id: int,
+    payload: UpdateSavedSearchPayload,
+    controller: SavedSearchController = Depends(get_saved_search_controller),
+    current_user=Depends(get_current_user),
+):
+    return await controller.update_saved_search(
+        saved_search_id=saved_search_id,
+        user_id=current_user.id,
+        payload=payload,
+    )
+
+
+@router.delete(
+    "/saved-searches/{saved_search_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["users"],
+)
+async def delete_saved_search(
+    saved_search_id: int,
+    controller: SavedSearchController = Depends(get_saved_search_controller),
+    current_user=Depends(get_current_user),
+):
+    await controller.delete_saved_search(
+        saved_search_id=saved_search_id, user_id=current_user.id
+    )
