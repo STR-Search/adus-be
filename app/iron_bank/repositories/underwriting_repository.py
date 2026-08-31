@@ -16,6 +16,7 @@ from app.iron_bank.models import (
     UnderwritingOptimizationItem,
     UnderwritingTax,
 )
+from app.iron_bank.schemas.underwriting import BOOLEAN_TAG_FIELDS
 
 
 def _date_range_conditions(column, minimum: date | None, maximum: date | None) -> list:
@@ -42,6 +43,28 @@ def _date_range_conditions(column, minimum: date | None, maximum: date | None) -
                 maximum + timedelta(days=1), time.min, tzinfo=timezone.utc
             )
         )
+    return conditions
+
+
+def _boolean_tag_conditions(boolean_tags: dict[str, bool] | None) -> list:
+    """WHERE conditions for the boolean deal-tag flags.
+
+    ``true`` is a strict match, but ``false`` deliberately also matches NULL.
+    The tag columns are nullable with only a Python-side ``default=False``, so
+    rows written before a tag existed — and every legacy-sheet backfill — hold
+    NULL rather than false. A bare ``column == False`` would silently drop them
+    and make "unflagged" return far fewer deals than it should, so ``false``
+    means "not flagged" (``IS NOT TRUE``).
+
+    """
+    conditions = []
+    for field, value in (boolean_tags or {}).items():
+        if field not in BOOLEAN_TAG_FIELDS:
+            raise ValueError(f"Unknown boolean deal tag filter: {field}")
+        if value is None:
+            continue
+        column = getattr(Underwriting, field)
+        conditions.append(column.is_(True) if value else column.isnot(True))
     return conditions
 
 
@@ -92,6 +115,7 @@ class UnderwritingRepository:
         max_created_at: date | None = None,
         min_deal_approved: date | None = None,
         max_deal_approved: date | None = None,
+        boolean_tags: dict[str, bool] | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
     ) -> tuple[list[Underwriting], int, int]:
@@ -153,6 +177,7 @@ class UnderwritingRepository:
             *_date_range_conditions(
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
+            *_boolean_tag_conditions(boolean_tags),
         ):
             query = query.where(condition)
 
@@ -210,6 +235,7 @@ class UnderwritingRepository:
         max_created_at: date | None = None,
         min_deal_approved: date | None = None,
         max_deal_approved: date | None = None,
+        boolean_tags: dict[str, bool] | None = None,
     ) -> list[Any]:
         """Lean full-set fetch of per-row simulation inputs.
 
@@ -294,7 +320,9 @@ class UnderwritingRepository:
         if max_prr is not None:
             query = query.where(Underwriting.prr <= max_prr)
         # Dates are untouched by simulation, so they filter in SQL like the
-        # non-simulated path rather than in Python afterwards.
+        # non-simulated path rather than in Python afterwards. The boolean deal
+        # tags are stored flags that no override can move, so they filter in SQL
+        # here too — shrinking the full-set fetch the calculator runs over.
         for condition in (
             *_date_range_conditions(
                 Underwriting.created_at, min_created_at, max_created_at
@@ -302,6 +330,7 @@ class UnderwritingRepository:
             *_date_range_conditions(
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
+            *_boolean_tag_conditions(boolean_tags),
         ):
             query = query.where(condition)
 

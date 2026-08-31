@@ -218,6 +218,23 @@ class GetUnderwritingsQuery(BaseModel):
     max_created_at: date | None = None
     min_deal_approved: date | None = None
     max_deal_approved: date | None = None
+    # Boolean deal tags. Omit a tag to ignore it; ``true`` returns only flagged
+    # deals, ``false`` only unflagged ones. Because these columns are nullable
+    # with a Python-side default, "unflagged" covers both false and NULL — see
+    # ``_boolean_tag_conditions`` in the repository. Multiple tags AND together.
+    turnkey: bool | None = None
+    furnished: bool | None = None
+    luxury: bool | None = None
+    tax_efficient: bool | None = None
+    new_construction: bool | None = None
+    existing_airbnb: bool | None = None
+    arv: bool | None = None
+    high_cash_on_cash: bool | None = None
+    low_cash_on_cash: bool | None = None
+    add_inground_pool: bool | None = None
+    waterfront: bool | None = None
+    remote: bool | None = None
+    can_support_cohost: bool | None = None
     sort_by: UnderwritingSortBy = UnderwritingSortBy.ID
     sort_order: SortOrder = SortOrder.DESC
     # Simulation mode: when either override is present, list metrics are

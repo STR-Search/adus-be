@@ -34,6 +34,26 @@ REFERENCE_TAG_FIELDS: tuple[str, ...] = (
     *SINGLE_SELECT_TAG_FIELDS,
 )
 
+# The boolean "deal tag" flags — plain on/off columns, not reference-data backed,
+# so they are deliberately kept out of REFERENCE_TAG_FIELDS. Shared by the list
+# endpoint's filter params and the repository's WHERE builder so the two can
+# never drift.
+BOOLEAN_TAG_FIELDS: tuple[str, ...] = (
+    "turnkey",
+    "furnished",
+    "luxury",
+    "tax_efficient",
+    "new_construction",
+    "existing_airbnb",
+    "arv",
+    "high_cash_on_cash",
+    "low_cash_on_cash",
+    "add_inground_pool",
+    "waterfront",
+    "remote",
+    "can_support_cohost",
+)
+
 
 class UnderwritingBase(BaseModel):
     zpid: str | None = None
