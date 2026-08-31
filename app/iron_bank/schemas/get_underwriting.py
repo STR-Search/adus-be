@@ -21,7 +21,10 @@ from app.iron_bank.enums import (
     UnderwritingSortBy,
     UnderwritingSource,
 )
-from app.iron_bank.schemas.underwriting import UnderwritingRead
+from app.iron_bank.schemas.underwriting import (
+    SINGLE_SELECT_TAG_FIELDS,
+    UnderwritingRead,
+)
 
 _SQFT_PER_ACRE = Decimal("43560")
 
@@ -218,6 +221,37 @@ class GetUnderwritingsQuery(BaseModel):
     max_created_at: date | None = None
     min_deal_approved: date | None = None
     max_deal_approved: date | None = None
+    # Boolean deal tags. Omit a tag to ignore it; ``true`` returns only flagged
+    # deals, ``false`` only unflagged ones. Because these columns are nullable
+    # with a Python-side default, "unflagged" covers both false and NULL — see
+    # ``_boolean_tag_conditions`` in the repository. Multiple tags AND together.
+    turnkey: bool | None = None
+    furnished: bool | None = None
+    luxury: bool | None = None
+    tax_efficient: bool | None = None
+    new_construction: bool | None = None
+    existing_airbnb: bool | None = None
+    arv: bool | None = None
+    high_cash_on_cash: bool | None = None
+    low_cash_on_cash: bool | None = None
+    add_inground_pool: bool | None = None
+    waterfront: bool | None = None
+    remote: bool | None = None
+    can_support_cohost: bool | None = None
+    # Single-select deal tags. Values are reference-data *keys* (the slug stored
+    # on the column), not labels — the frontend already gets them from
+    # ``GET /reference-data``. Accepts repeated or comma-separated params, so a
+    # filter UI can offer several choices for one tag: values within a tag OR
+    # together, different tags AND together. Keys are only unique within their
+    # own set (``low``/``high`` exist in three sets), which is why each tag has
+    # its own param rather than one shared one.
+    execution_type: list[str] | None = None
+    regulatory_clarity: list[str] | None = None
+    offer_competitiveness: list[str] | None = None
+    cash_flow_quality: list[str] | None = None
+    view_quality: list[str] | None = None
+    pool_type: list[str] | None = None
+    primary_guest_avatar: list[str] | None = None
     sort_by: UnderwritingSortBy = UnderwritingSortBy.ID
     sort_order: SortOrder = SortOrder.DESC
     # Simulation mode: when either override is present, list metrics are
@@ -233,6 +267,27 @@ class GetUnderwritingsQuery(BaseModel):
 
         An empty result becomes None rather than [] so the repository never has
         to reason about an ``IN ()`` that would match nothing.
+        """
+        if value is None:
+            return None
+        values = value if isinstance(value, list) else [value]
+        flattened = []
+        for item in values:
+            if isinstance(item, str):
+                flattened.extend(part.strip() for part in item.split(","))
+            else:
+                flattened.append(item)
+        cleaned = [item for item in flattened if item != "" and item is not None]
+        return cleaned or None
+
+    @field_validator(*SINGLE_SELECT_TAG_FIELDS, mode="before")
+    @classmethod
+    def split_single_select_tags(cls, value):
+        """Flatten repeated/comma-separated tag keys; "no filter" becomes None.
+
+        Only blank entries are dropped. Note ``pool_type=none`` is a real key
+        meaning "no pool", so a value is never interpreted as absence — that
+        distinction is exactly why the empty check is ``== ""`` and not falsy.
         """
         if value is None:
             return None
