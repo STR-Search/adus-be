@@ -231,6 +231,7 @@ class GetUnderwritingService:
         min_deal_approved: date | None = None,
         max_deal_approved: date | None = None,
         boolean_tags: dict[str, bool] | None = None,
+        single_select_tags: dict[str, list[str]] | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
     ) -> GetUnderwritingsResult:
@@ -262,6 +263,7 @@ class GetUnderwritingService:
             min_deal_approved=min_deal_approved,
             max_deal_approved=max_deal_approved,
             boolean_tags=boolean_tags,
+            single_select_tags=single_select_tags,
             sort_by=sort_by,
             sort_order=sort_order,
         )

@@ -66,6 +66,13 @@ class GetUnderwritingController:
         waterfront: bool | None = None,
         remote: bool | None = None,
         can_support_cohost: bool | None = None,
+        execution_type: list[str] | None = None,
+        regulatory_clarity: list[str] | None = None,
+        offer_competitiveness: list[str] | None = None,
+        cash_flow_quality: list[str] | None = None,
+        view_quality: list[str] | None = None,
+        pool_type: list[str] | None = None,
+        primary_guest_avatar: list[str] | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
         interest_rate: Decimal | None = None,
@@ -89,6 +96,19 @@ class GetUnderwritingController:
                 ("can_support_cohost", can_support_cohost),
             )
             if value is not None
+        }
+        single_select_tags = {
+            field: value
+            for field, value in (
+                ("execution_type", execution_type),
+                ("regulatory_clarity", regulatory_clarity),
+                ("offer_competitiveness", offer_competitiveness),
+                ("cash_flow_quality", cash_flow_quality),
+                ("view_quality", view_quality),
+                ("pool_type", pool_type),
+                ("primary_guest_avatar", primary_guest_avatar),
+            )
+            if value
         }
         filters = dict(
             page=page,
@@ -118,6 +138,7 @@ class GetUnderwritingController:
             min_deal_approved=min_deal_approved,
             max_deal_approved=max_deal_approved,
             boolean_tags=boolean_tags,
+            single_select_tags=single_select_tags,
             sort_by=sort_by,
             sort_order=sort_order,
         )
