@@ -69,6 +69,7 @@ class UnderwritingRepository:
         page: int,
         page_size: int,
         zpid: str | None = None,
+        bedrooms: int | None = None,
         market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
@@ -98,6 +99,8 @@ class UnderwritingRepository:
         query = select(Underwriting)
         if zpid is not None:
             query = query.where(Underwriting.zpid == zpid)
+        if bedrooms is not None:
+            query = query.where(Underwriting.bedrooms == bedrooms)
         if market_ids:
             query = query.where(Underwriting.market_id.in_(market_ids))
         if deal_status is not None:
@@ -192,6 +195,7 @@ class UnderwritingRepository:
         self,
         *,
         zpid: str | None = None,
+        bedrooms: int | None = None,
         market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
@@ -254,6 +258,8 @@ class UnderwritingRepository:
         )
         if zpid is not None:
             query = query.where(Underwriting.zpid == zpid)
+        if bedrooms is not None:
+            query = query.where(Underwriting.bedrooms == bedrooms)
         if market_ids:
             query = query.where(Underwriting.market_id.in_(market_ids))
         if deal_status is not None:

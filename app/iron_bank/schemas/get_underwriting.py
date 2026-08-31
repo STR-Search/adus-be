@@ -192,6 +192,7 @@ class GetUnderwritingsQuery(BaseModel):
     page: int = Field(1, ge=1)
     page_size: int = Field(20, ge=1, le=20)
     zpid: str | None = None
+    bedrooms: int | None = Field(None, ge=0)
     market_ids: list[int] | None = Field(None, alias="market_id")
     deal_status: DealStatus | None = None
     analyst_id: int | None = None
