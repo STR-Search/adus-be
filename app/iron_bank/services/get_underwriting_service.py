@@ -506,6 +506,15 @@ class GetUnderwritingService:
             "bedrooms": comp.bedrooms,
             "sleeps": comp.sleeps,
             "is_favourite": comp.is_favourite,
+            "has_pool": comp.has_pool,
+            "has_hot_tub": comp.has_hot_tub,
+            "has_sauna": comp.has_sauna,
+            "has_mini_golf": comp.has_mini_golf,
+            "has_game_room": comp.has_game_room,
+            "has_pickleball": comp.has_pickleball,
+            "has_movie_theater": comp.has_movie_theater,
+            "has_playground": comp.has_playground,
+            "has_waterfront": comp.has_waterfront,
         }
 
     async def _zillow_from_listing(self, underwriting) -> tuple[Any, Any]:

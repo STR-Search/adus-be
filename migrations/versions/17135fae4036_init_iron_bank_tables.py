@@ -169,6 +169,53 @@ def upgrade() -> None:
             server_default=sa.text("false"),
             nullable=False,
         ),
+        # Comp amenity flags — NOT NULL DEFAULT false, so existing rows read as
+        # "no amenity" without a backfill.
+        sa.Column(
+            "has_pool", sa.Boolean(), server_default=sa.text("false"), nullable=False
+        ),
+        sa.Column(
+            "has_hot_tub", sa.Boolean(), server_default=sa.text("false"), nullable=False
+        ),
+        sa.Column(
+            "has_sauna", sa.Boolean(), server_default=sa.text("false"), nullable=False
+        ),
+        sa.Column(
+            "has_mini_golf",
+            sa.Boolean(),
+            server_default=sa.text("false"),
+            nullable=False,
+        ),
+        sa.Column(
+            "has_game_room",
+            sa.Boolean(),
+            server_default=sa.text("false"),
+            nullable=False,
+        ),
+        sa.Column(
+            "has_pickleball",
+            sa.Boolean(),
+            server_default=sa.text("false"),
+            nullable=False,
+        ),
+        sa.Column(
+            "has_movie_theater",
+            sa.Boolean(),
+            server_default=sa.text("false"),
+            nullable=False,
+        ),
+        sa.Column(
+            "has_playground",
+            sa.Boolean(),
+            server_default=sa.text("false"),
+            nullable=False,
+        ),
+        sa.Column(
+            "has_waterfront",
+            sa.Boolean(),
+            server_default=sa.text("false"),
+            nullable=False,
+        ),
         sa.Column("sort_order", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"

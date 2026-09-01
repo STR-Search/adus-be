@@ -83,6 +83,35 @@ class UnderwritingCompSet(Base):
     is_favourite = Column(
         Boolean, nullable=False, server_default=text("false"), default=False
     )
+    # Amenity flags for the comp — plain on/off columns, same NOT NULL DEFAULT
+    # false shape as is_favourite so existing rows read as "no amenity".
+    has_pool = Column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
+    has_hot_tub = Column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
+    has_sauna = Column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
+    has_mini_golf = Column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
+    has_game_room = Column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
+    has_pickleball = Column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
+    has_movie_theater = Column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
+    has_playground = Column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
+    has_waterfront = Column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
     sort_order = Column(Integer, nullable=True)
 
     underwriting = relationship("Underwriting", back_populates="comp_set")

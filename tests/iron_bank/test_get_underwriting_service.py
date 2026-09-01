@@ -113,6 +113,15 @@ def _underwriting():
                 bedrooms=4,
                 sleeps=10,
                 is_favourite=True,
+                has_pool=True,
+                has_hot_tub=False,
+                has_sauna=False,
+                has_mini_golf=False,
+                has_game_room=False,
+                has_pickleball=False,
+                has_movie_theater=False,
+                has_playground=False,
+                has_waterfront=False,
             )
         ],
     )
