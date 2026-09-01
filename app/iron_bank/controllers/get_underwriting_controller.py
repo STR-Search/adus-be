@@ -77,6 +77,9 @@ class GetUnderwritingController:
         primary_guest_avatar: list[str] | None = None,
         renovation_level: list[int] | None = None,
         deal_complexity: list[int] | None = None,
+        market_type: list[str] | None = None,
+        seasonality: list[str] | None = None,
+        core_value_driver: list[str] | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
         interest_rate: Decimal | None = None,
@@ -122,6 +125,15 @@ class GetUnderwritingController:
             )
             if value
         }
+        multi_select_tags = {
+            field: value
+            for field, value in (
+                ("market_type", market_type),
+                ("seasonality", seasonality),
+                ("core_value_driver", core_value_driver),
+            )
+            if value
+        }
         filters = dict(
             page=page,
             page_size=page_size,
@@ -152,6 +164,7 @@ class GetUnderwritingController:
             boolean_tags=boolean_tags,
             single_select_tags=single_select_tags,
             numeric_tags=numeric_tags,
+            multi_select_tags=multi_select_tags,
             sort_by=sort_by,
             sort_order=sort_order,
         )

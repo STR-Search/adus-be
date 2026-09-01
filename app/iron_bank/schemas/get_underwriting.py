@@ -22,6 +22,7 @@ from app.iron_bank.enums import (
     UnderwritingSource,
 )
 from app.iron_bank.schemas.underwriting import (
+    MULTI_SELECT_TAG_FIELDS,
     NUMERIC_TAG_FIELDS,
     NUMERIC_TAG_MAX,
     NUMERIC_TAG_MIN,
@@ -300,6 +301,14 @@ class GetUnderwritingsQuery(BaseModel):
     # ``deal_complexity=1,2,3``), which is why there is no min_/max_ pair.
     renovation_level: list[NumericTagLevel] | None = None
     deal_complexity: list[NumericTagLevel] | None = None
+    # Multi-select deal tags, matched with ANY/overlap semantics: a deal matches
+    # if it carries *at least one* of the requested keys, so ticking more boxes
+    # can only widen the result set — the convention every faceted filter uses.
+    # ("both of these" / "only these" would be `@>` / `<@`; deliberately not
+    # offered until someone asks for them.) Different tags still AND together.
+    market_type: list[str] | None = None
+    seasonality: list[str] | None = None
+    core_value_driver: list[str] | None = None
     sort_by: UnderwritingSortBy = UnderwritingSortBy.ID
     sort_order: SortOrder = SortOrder.DESC
     # Simulation mode: when either override is present, list metrics are
@@ -314,16 +323,19 @@ class GetUnderwritingsQuery(BaseModel):
         return _flatten_repeated_params(value)
 
     @field_validator(
-        *SINGLE_SELECT_TAG_FIELDS, *NUMERIC_TAG_FIELDS, mode="before"
+        *SINGLE_SELECT_TAG_FIELDS,
+        *MULTI_SELECT_TAG_FIELDS,
+        *NUMERIC_TAG_FIELDS,
+        mode="before",
     )
     @classmethod
     def split_tag_values(cls, value):
         """Flatten repeated/comma-separated tag values; "no filter" -> None.
 
-        Shared by the single-select keys and the graded levels: both are
-        "one column, several acceptable values" filters. The levels stay
-        strings here and are coerced (and bounds-checked) by
-        ``NumericTagLevel`` afterwards.
+        Shared by all three value-list tag families — the selected keys or
+        levels are a set of candidates either way; only the comparison against
+        the column differs. Levels stay strings here and are coerced (and
+        bounds-checked) by ``NumericTagLevel`` afterwards.
         """
         return _flatten_repeated_params(value)
 

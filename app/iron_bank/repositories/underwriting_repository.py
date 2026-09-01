@@ -18,6 +18,7 @@ from app.iron_bank.models import (
 )
 from app.iron_bank.schemas.underwriting import (
     BOOLEAN_TAG_FIELDS,
+    MULTI_SELECT_TAG_FIELDS,
     NUMERIC_TAG_FIELDS,
     SINGLE_SELECT_TAG_FIELDS,
 )
@@ -114,6 +115,32 @@ def _single_select_tag_conditions(
     )
 
 
+def _multi_select_tag_conditions(
+    multi_select_tags: dict[str, list[str]] | None,
+) -> list:
+    """Conditions for the multi-select (``text[]``) deal tags — ANY semantics.
+
+    Uses the array-overlap operator ``&&``: a deal matches when its stored keys
+    share at least one element with the requested set, so ``seasonality=feb,jun``
+    returns a deal tagged ``[jan, feb, mar]``. Ticking another box can only widen
+    the results, which is what a faceted filter implies. "Has all of these" and
+    "has only these" would be ``@>`` and ``<@`` — a one-operator change here if
+    the product ever wants them.
+
+    Both spellings of "untagged" fall out correctly and identically: ``NULL &&``
+    yields NULL and ``'{}' &&`` yields false, so neither matches. (``<@`` would
+    *not* be so forgiving — an empty array is a subset of everything.)
+    """
+    conditions = []
+    for field, values in (multi_select_tags or {}).items():
+        if field not in MULTI_SELECT_TAG_FIELDS:
+            raise ValueError(f"Unknown multi-select deal tag filter: {field}")
+        if not values:
+            continue
+        conditions.append(getattr(Underwriting, field).overlap(values))
+    return conditions
+
+
 def _numeric_tag_conditions(numeric_tags: dict[str, list[int]] | None) -> list:
     """Conditions for the graded deal tags (``renovation_level`` and friends).
 
@@ -174,6 +201,7 @@ class UnderwritingRepository:
         boolean_tags: dict[str, bool] | None = None,
         single_select_tags: dict[str, list[str]] | None = None,
         numeric_tags: dict[str, list[int]] | None = None,
+        multi_select_tags: dict[str, list[str]] | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
     ) -> tuple[list[Underwriting], int, int]:
@@ -238,6 +266,7 @@ class UnderwritingRepository:
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
             *_numeric_tag_conditions(numeric_tags),
+            *_multi_select_tag_conditions(multi_select_tags),
         ):
             query = query.where(condition)
 
@@ -298,6 +327,7 @@ class UnderwritingRepository:
         boolean_tags: dict[str, bool] | None = None,
         single_select_tags: dict[str, list[str]] | None = None,
         numeric_tags: dict[str, list[int]] | None = None,
+        multi_select_tags: dict[str, list[str]] | None = None,
     ) -> list[Any]:
         """Lean full-set fetch of per-row simulation inputs.
 
@@ -396,6 +426,7 @@ class UnderwritingRepository:
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
             *_numeric_tag_conditions(numeric_tags),
+            *_multi_select_tag_conditions(multi_select_tags),
         ):
             query = query.where(condition)
 
