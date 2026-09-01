@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import (
     BaseModel,
@@ -22,11 +22,45 @@ from app.iron_bank.enums import (
     UnderwritingSource,
 )
 from app.iron_bank.schemas.underwriting import (
+    MULTI_SELECT_TAG_FIELDS,
+    NUMERIC_TAG_FIELDS,
+    NUMERIC_TAG_MAX,
+    NUMERIC_TAG_MIN,
     SINGLE_SELECT_TAG_FIELDS,
     UnderwritingRead,
 )
 
 _SQFT_PER_ACRE = Decimal("43560")
+
+# One level on a graded deal tag's 1-5 scale. Bounding the *item* rather than
+# the list means an out-of-range value is rejected with a 422 naming the
+# offending element, instead of being silently dropped or matching nothing.
+NumericTagLevel = Annotated[
+    int, Field(ge=NUMERIC_TAG_MIN, le=NUMERIC_TAG_MAX)
+]
+
+
+def _flatten_repeated_params(value):
+    """Flatten repeated and/or comma-separated query params into one list.
+
+    ``?x=1&x=2`` and ``?x=1,2`` are both accepted, so a filter UI can send
+    whichever it finds natural. An all-blank result collapses to None rather
+    than [] so the repository never has to reason about an ``IN ()`` that would
+    match nothing. Only blank entries are dropped — never a meaningful value
+    such as ``pool_type=none`` or a level of ``0`` — so the emptiness test is an
+    explicit ``== ""`` rather than a falsy check.
+    """
+    if value is None:
+        return None
+    values = value if isinstance(value, list) else [value]
+    flattened = []
+    for item in values:
+        if isinstance(item, str):
+            flattened.extend(part.strip() for part in item.split(","))
+        else:
+            flattened.append(item)
+    cleaned = [item for item in flattened if item != "" and item is not None]
+    return cleaned or None
 
 
 class ZillowProperty(BaseModel):
@@ -261,6 +295,20 @@ class GetUnderwritingsQuery(BaseModel):
     view_quality: list[str] | None = None
     pool_type: list[str] | None = None
     primary_guest_avatar: list[str] | None = None
+    # Graded deal tags on a 1-5 scale. Accepts repeated or comma-separated
+    # levels; levels within a tag OR together, different tags AND together. With
+    # only five levels a list also expresses any range ("complexity 1-3" is
+    # ``deal_complexity=1,2,3``), which is why there is no min_/max_ pair.
+    renovation_level: list[NumericTagLevel] | None = None
+    deal_complexity: list[NumericTagLevel] | None = None
+    # Multi-select deal tags, matched with ANY/overlap semantics: a deal matches
+    # if it carries *at least one* of the requested keys, so ticking more boxes
+    # can only widen the result set — the convention every faceted filter uses.
+    # ("both of these" / "only these" would be `@>` / `<@`; deliberately not
+    # offered until someone asks for them.) Different tags still AND together.
+    market_type: list[str] | None = None
+    seasonality: list[str] | None = None
+    core_value_driver: list[str] | None = None
     sort_by: UnderwritingSortBy = UnderwritingSortBy.ID
     sort_order: SortOrder = SortOrder.DESC
     # Simulation mode: when either override is present, list metrics are
@@ -272,43 +320,24 @@ class GetUnderwritingsQuery(BaseModel):
     @field_validator("market_ids", mode="before")
     @classmethod
     def split_market_ids(cls, value):
-        """Flatten comma-separated values and normalize "no filter" to None.
+        return _flatten_repeated_params(value)
 
-        An empty result becomes None rather than [] so the repository never has
-        to reason about an ``IN ()`` that would match nothing.
-        """
-        if value is None:
-            return None
-        values = value if isinstance(value, list) else [value]
-        flattened = []
-        for item in values:
-            if isinstance(item, str):
-                flattened.extend(part.strip() for part in item.split(","))
-            else:
-                flattened.append(item)
-        cleaned = [item for item in flattened if item != "" and item is not None]
-        return cleaned or None
-
-    @field_validator(*SINGLE_SELECT_TAG_FIELDS, mode="before")
+    @field_validator(
+        *SINGLE_SELECT_TAG_FIELDS,
+        *MULTI_SELECT_TAG_FIELDS,
+        *NUMERIC_TAG_FIELDS,
+        mode="before",
+    )
     @classmethod
-    def split_single_select_tags(cls, value):
-        """Flatten repeated/comma-separated tag keys; "no filter" becomes None.
+    def split_tag_values(cls, value):
+        """Flatten repeated/comma-separated tag values; "no filter" -> None.
 
-        Only blank entries are dropped. Note ``pool_type=none`` is a real key
-        meaning "no pool", so a value is never interpreted as absence — that
-        distinction is exactly why the empty check is ``== ""`` and not falsy.
+        Shared by all three value-list tag families — the selected keys or
+        levels are a set of candidates either way; only the comparison against
+        the column differs. Levels stay strings here and are coerced (and
+        bounds-checked) by ``NumericTagLevel`` afterwards.
         """
-        if value is None:
-            return None
-        values = value if isinstance(value, list) else [value]
-        flattened = []
-        for item in values:
-            if isinstance(item, str):
-                flattened.extend(part.strip() for part in item.split(","))
-            else:
-                flattened.append(item)
-        cleaned = [item for item in flattened if item != "" and item is not None]
-        return cleaned or None
+        return _flatten_repeated_params(value)
 
     @model_validator(mode="after")
     def check_ranges(self):

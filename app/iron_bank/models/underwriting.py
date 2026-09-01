@@ -3,7 +3,6 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
-    ARRAY,
     Column,
     DateTime,
     ForeignKey,
@@ -19,7 +18,10 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+# The multi-select tag columns use the PostgreSQL ARRAY rather than the generic
+# one: identical DDL (``text[]``), but it carries the array operators — notably
+# ``&&`` via ``.overlap()``, which the list endpoint's multi-select filters need.
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
