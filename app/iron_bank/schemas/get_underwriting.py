@@ -476,6 +476,11 @@ class EditContextualData(BaseModel):
     opex_options: list[OpexOption] = Field(default_factory=list)
 
 
+class DealTagOptionsResult(BaseModel):
+    # Same payload as EditContextualData.deal_tag_options, served standalone.
+    deal_tag_options: dict[str, list[ReferenceDataOption]] = Field(default_factory=dict)
+
+
 class EditContextData(BaseModel):
     underwriting: GetUnderwritingResult
     contextual: EditContextualData

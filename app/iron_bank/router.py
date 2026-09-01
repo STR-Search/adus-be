@@ -48,6 +48,7 @@ from app.iron_bank.schemas.deal_status import (
     UpdateDealStatusResult,
 )
 from app.iron_bank.schemas.get_underwriting import (
+    DealTagOptionsResult,
     GetUnderwritingEditContextResult,
     GetUnderwritingsQuery,
     GetUnderwritingsResult,
@@ -535,6 +536,17 @@ async def update_underwriting_deal_status(
         deal_status=payload.deal_status,
         actor_user_id=current_user.id,
     )
+
+
+@router.get(
+    "/deal-tag-options",
+    response_model=DealTagOptionsResult,
+    tags=["iron_bank"],
+)
+async def get_deal_tag_options(
+    controller: GetUnderwritingController = Depends(get_get_underwriting_controller),
+):
+    return await controller.get_deal_tag_options()
 
 
 @router.get("/underwritings", response_model=GetUnderwritingsResult, tags=["iron_bank"])

@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Any
 
 from app.core.logger import logger
+from app.core.reference_data.schemas import ReferenceDataOption
 from app.iron_bank.enums import SortOrder, UnderwritingSortBy
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
 from app.iron_bank.schemas.get_underwriting import (
@@ -100,16 +101,10 @@ class GetUnderwritingService:
         amenities = await self.construction_amenities_service.get_all()
         remodeling = await self.construction_remodeling_service.get_all()
 
-        # iron_bank reference data (deal tag options), grouped by set_code. The
-        # (domain="iron_bank") options were already fetched into the service's
-        # per-request cache by _populate_reference_labels, so this is a cache
-        # hit rather than a second query.
-        deal_tag_options: dict = {}
-        if self.reference_data_service is not None:
-            reference_data = await self.reference_data_service.get_reference_data(
-                domain="iron_bank"
-            )
-            deal_tag_options = reference_data.options
+        # The (domain="iron_bank") options were already fetched into the
+        # service's per-request cache by _populate_reference_labels, so this is
+        # a cache hit rather than a second query.
+        deal_tag_options = await self.get_deal_tag_options()
 
         # zillow_property was just coerced onto details, so its area is the
         # single source for the cribs fee tier (both automated and stored
@@ -153,6 +148,20 @@ class GetUnderwritingService:
                 ),
             )
         )
+
+    async def get_deal_tag_options(self) -> dict[str, list[ReferenceDataOption]]:
+        """iron_bank reference data (deal tag options), grouped by set_code.
+
+        The same payload the edit context carries under ``deal_tag_options``,
+        served on its own so a client can fill the tag filters/selects without
+        loading an underwriting first.
+        """
+        if self.reference_data_service is None:
+            return {}
+        reference_data = await self.reference_data_service.get_reference_data(
+            domain="iron_bank"
+        )
+        return reference_data.options
 
     async def _opex_options(
         self, underwriting, *, opex_by_bedrooms, area
