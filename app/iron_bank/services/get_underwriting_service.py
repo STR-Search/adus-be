@@ -20,7 +20,7 @@ from app.iron_bank.schemas.get_underwriting import (
     UserRef,
     ZillowProperty,
 )
-from app.iron_bank.schemas.underwriting import UnderwritingRead
+from app.iron_bank.schemas.underwriting import BOOLEAN_TAG_LABELS, UnderwritingRead
 from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 from app.iron_bank.services.reference_label_resolver import apply_reference_labels
@@ -162,6 +162,16 @@ class GetUnderwritingService:
             domain="iron_bank"
         )
         return reference_data.options
+
+    @staticmethod
+    def get_boolean_tag_options() -> dict[str, str]:
+        """The boolean deal-tag flags as ``field -> label``.
+
+        These columns aren't reference-data backed yet, so the labels come from
+        the hardcoded map; move this to ``ReferenceDataService`` once the flags
+        live in ``reference.enum_options``.
+        """
+        return dict(BOOLEAN_TAG_LABELS)
 
     async def _opex_options(
         self, underwriting, *, opex_by_bedrooms, area
