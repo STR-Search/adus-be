@@ -6,6 +6,8 @@ from fastapi import HTTPException
 from app.core.logger import logger
 from app.iron_bank.enums import SortOrder, UnderwritingSortBy
 from app.iron_bank.schemas.get_underwriting import (
+    BooleanTagOptionsResult,
+    DealTagOptionsResult,
     GetUnderwritingEditContextResult,
     GetUnderwritingsResult,
 )
@@ -162,6 +164,22 @@ class GetUnderwritingController:
                 error=str(e),
             )
             raise HTTPException(status_code=500, detail="Failed to fetch underwritings")
+
+    async def get_deal_tag_options(self) -> DealTagOptionsResult:
+        try:
+            return DealTagOptionsResult(
+                deal_tag_options=await self.service.get_deal_tag_options()
+            )
+        except Exception as e:
+            logger.error("iron_bank.get_deal_tag_options.error", error=str(e))
+            raise HTTPException(
+                status_code=500, detail="Failed to fetch deal tag options"
+            )
+
+    def get_boolean_tag_options(self) -> BooleanTagOptionsResult:
+        return BooleanTagOptionsResult(
+            boolean_tag_options=self.service.get_boolean_tag_options()
+        )
 
     async def get_underwriting(
         self, underwriting_id: int

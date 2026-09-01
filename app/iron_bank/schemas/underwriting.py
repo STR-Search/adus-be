@@ -37,22 +37,26 @@ REFERENCE_TAG_FIELDS: tuple[str, ...] = (
 # The boolean "deal tag" flags — plain on/off columns, not reference-data backed,
 # so they are deliberately kept out of REFERENCE_TAG_FIELDS. Shared by the list
 # endpoint's filter params and the repository's WHERE builder so the two can
-# never drift.
-BOOLEAN_TAG_FIELDS: tuple[str, ...] = (
-    "turnkey",
-    "furnished",
-    "luxury",
-    "tax_efficient",
-    "new_construction",
-    "existing_airbnb",
-    "arv",
-    "high_cash_on_cash",
-    "low_cash_on_cash",
-    "add_inground_pool",
-    "waterfront",
-    "remote",
-    "can_support_cohost",
-)
+# never drift. Labels are hardcoded here until the flags move into
+# ``reference.enum_options`` alongside the other deal tags; insertion order is
+# the display order, and BOOLEAN_TAG_FIELDS is derived from the keys so the two
+# stay in sync.
+BOOLEAN_TAG_LABELS: dict[str, str] = {
+    "turnkey": "Turnkey",
+    "furnished": "Furnished",
+    "luxury": "Luxury",
+    "tax_efficient": "Tax Efficient",
+    "new_construction": "New Construction",
+    "existing_airbnb": "Existing Airbnb",
+    "arv": "ARV",
+    "high_cash_on_cash": "High Cash on Cash",
+    "low_cash_on_cash": "Low Cash on Cash",
+    "add_inground_pool": "Add Inground Pool",
+    "waterfront": "Waterfront",
+    "remote": "Remote",
+    "can_support_cohost": "Can Support Cohost",
+}
+BOOLEAN_TAG_FIELDS: tuple[str, ...] = tuple(BOOLEAN_TAG_LABELS)
 
 
 class UnderwritingBase(BaseModel):

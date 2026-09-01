@@ -476,6 +476,17 @@ class EditContextualData(BaseModel):
     opex_options: list[OpexOption] = Field(default_factory=list)
 
 
+class DealTagOptionsResult(BaseModel):
+    # Same payload as EditContextualData.deal_tag_options, served standalone.
+    deal_tag_options: dict[str, list[ReferenceDataOption]] = Field(default_factory=dict)
+
+
+class BooleanTagOptionsResult(BaseModel):
+    # ``field -> label`` for the plain boolean deal-tag flags. Hardcoded until
+    # they move into reference.enum_options like the other deal tags.
+    boolean_tag_options: dict[str, str] = Field(default_factory=dict)
+
+
 class EditContextData(BaseModel):
     underwriting: GetUnderwritingResult
     contextual: EditContextualData
