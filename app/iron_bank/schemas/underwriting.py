@@ -58,6 +58,18 @@ BOOLEAN_TAG_LABELS: dict[str, str] = {
 }
 BOOLEAN_TAG_FIELDS: tuple[str, ...] = tuple(BOOLEAN_TAG_LABELS)
 
+# The graded "deal tag" columns: small integers on a 1-5 scale rather than flags
+# or reference-data keys. The bounds live here so the list endpoint's filter
+# validation has a single source of truth. Note they are enforced at the API
+# boundary only — the columns are plain nullable smallints with no CHECK
+# constraint, and the write schemas take a bare ``int | None``.
+NUMERIC_TAG_MIN = 1
+NUMERIC_TAG_MAX = 5
+NUMERIC_TAG_FIELDS: tuple[str, ...] = (
+    "renovation_level",
+    "deal_complexity",
+)
+
 
 class UnderwritingBase(BaseModel):
     zpid: str | None = None

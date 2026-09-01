@@ -18,6 +18,7 @@ from app.iron_bank.models import (
 )
 from app.iron_bank.schemas.underwriting import (
     BOOLEAN_TAG_FIELDS,
+    NUMERIC_TAG_FIELDS,
     SINGLE_SELECT_TAG_FIELDS,
 )
 
@@ -71,25 +72,23 @@ def _boolean_tag_conditions(boolean_tags: dict[str, bool] | None) -> list:
     return conditions
 
 
-def _single_select_tag_conditions(
-    single_select_tags: dict[str, list[str]] | None,
-) -> list:
-    """WHERE conditions for the single-select deal tags.
+def _value_set_conditions(tags, allowed_fields: tuple[str, ...], kind: str) -> list:
+    """WHERE conditions for "one column, any of these values" tag filters.
 
-    Values are reference-data keys, stored verbatim on the column, so these are
-    plain equality/``IN`` comparisons — no label lookup, and deliberately no
-    round-trip to validate the keys: the option set is DB-editable, and an
-    unknown key returning nothing is the same answer validation would give.
+    Shared by the single-select keys and the graded numeric levels: both store a
+    single scalar per row, so several requested values OR together via ``IN``
+    (a lone value compiling to plain equality), while separate tags AND together
+    as usual. Values are always bound parameters, never interpolated.
 
-    Keys are unique only within their own set, so each tag is matched against
-    its own column; several values for one tag OR together via ``IN``, while
-    separate tags AND together as usual. NULL never matches, which is correct
-    here — an untagged deal is not a member of any option.
+    NULL never matches, which is right for both — an untagged deal is not a
+    member of any option, and there is no "unset" level to ask for. Unknown
+    field names raise rather than being skipped: a typo that quietly widened the
+    result set would look like a data problem, not a bug.
     """
     conditions = []
-    for field, values in (single_select_tags or {}).items():
-        if field not in SINGLE_SELECT_TAG_FIELDS:
-            raise ValueError(f"Unknown single-select deal tag filter: {field}")
+    for field, values in (tags or {}).items():
+        if field not in allowed_fields:
+            raise ValueError(f"Unknown {kind} deal tag filter: {field}")
         if not values:
             continue
         column = getattr(Underwriting, field)
@@ -97,6 +96,32 @@ def _single_select_tag_conditions(
             column == values[0] if len(values) == 1 else column.in_(values)
         )
     return conditions
+
+
+def _single_select_tag_conditions(
+    single_select_tags: dict[str, list[str]] | None,
+) -> list:
+    """Conditions for the single-select deal tags.
+
+    Values are reference-data keys, stored verbatim on the column, so no label
+    lookup is needed and deliberately no round-trip validates the keys: the
+    option set is DB-editable, and an unknown key returning nothing is the same
+    answer validation would give. Keys are unique only within their own set,
+    which is why each tag matches against its own column.
+    """
+    return _value_set_conditions(
+        single_select_tags, SINGLE_SELECT_TAG_FIELDS, "single-select"
+    )
+
+
+def _numeric_tag_conditions(numeric_tags: dict[str, list[int]] | None) -> list:
+    """Conditions for the graded deal tags (``renovation_level`` and friends).
+
+    The 1-5 bound is enforced at the API boundary, not here: the columns carry
+    no CHECK constraint, so a level outside the range is a value the DB would
+    happily hold — filtering on it should return nothing rather than raise.
+    """
+    return _value_set_conditions(numeric_tags, NUMERIC_TAG_FIELDS, "numeric")
 
 
 class UnderwritingRepository:
@@ -148,6 +173,7 @@ class UnderwritingRepository:
         max_deal_approved: date | None = None,
         boolean_tags: dict[str, bool] | None = None,
         single_select_tags: dict[str, list[str]] | None = None,
+        numeric_tags: dict[str, list[int]] | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
     ) -> tuple[list[Underwriting], int, int]:
@@ -211,6 +237,7 @@ class UnderwritingRepository:
             ),
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
+            *_numeric_tag_conditions(numeric_tags),
         ):
             query = query.where(condition)
 
@@ -270,6 +297,7 @@ class UnderwritingRepository:
         max_deal_approved: date | None = None,
         boolean_tags: dict[str, bool] | None = None,
         single_select_tags: dict[str, list[str]] | None = None,
+        numeric_tags: dict[str, list[int]] | None = None,
     ) -> list[Any]:
         """Lean full-set fetch of per-row simulation inputs.
 
@@ -367,6 +395,7 @@ class UnderwritingRepository:
             ),
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
+            *_numeric_tag_conditions(numeric_tags),
         ):
             query = query.where(condition)
 

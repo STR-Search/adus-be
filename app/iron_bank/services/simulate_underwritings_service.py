@@ -108,6 +108,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         max_deal_approved: date | None = None,
         boolean_tags: dict[str, bool] | None = None,
         single_select_tags: dict[str, list[str]] | None = None,
+        numeric_tags: dict[str, list[int]] | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
         interest_rate: Decimal | None = None,
@@ -132,6 +133,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             max_deal_approved=max_deal_approved,
             boolean_tags=boolean_tags,
             single_select_tags=single_select_tags,
+            numeric_tags=numeric_tags,
         )
 
         simulated_rows = [

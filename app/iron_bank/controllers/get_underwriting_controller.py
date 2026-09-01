@@ -75,6 +75,8 @@ class GetUnderwritingController:
         view_quality: list[str] | None = None,
         pool_type: list[str] | None = None,
         primary_guest_avatar: list[str] | None = None,
+        renovation_level: list[int] | None = None,
+        deal_complexity: list[int] | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
         interest_rate: Decimal | None = None,
@@ -112,6 +114,14 @@ class GetUnderwritingController:
             )
             if value
         }
+        numeric_tags = {
+            field: value
+            for field, value in (
+                ("renovation_level", renovation_level),
+                ("deal_complexity", deal_complexity),
+            )
+            if value
+        }
         filters = dict(
             page=page,
             page_size=page_size,
@@ -141,6 +151,7 @@ class GetUnderwritingController:
             max_deal_approved=max_deal_approved,
             boolean_tags=boolean_tags,
             single_select_tags=single_select_tags,
+            numeric_tags=numeric_tags,
             sort_by=sort_by,
             sort_order=sort_order,
         )
