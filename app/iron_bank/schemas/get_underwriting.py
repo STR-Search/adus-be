@@ -242,6 +242,7 @@ class GetUnderwritingsQuery(BaseModel):
     market_ids: list[int] | None = Field(None, alias="market_id")
     deal_status: DealStatus | None = None
     analyst_id: int | None = None
+    approver_id: int | None = None
     owner_id: int | None = None
     source: UnderwritingSource | None = None
     # free-text match on address/city/state; numeric terms also match sheet_number
