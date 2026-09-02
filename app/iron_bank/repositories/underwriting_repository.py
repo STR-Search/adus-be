@@ -179,6 +179,7 @@ class UnderwritingRepository:
         market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        approver_id: int | None = None,
         owner_id: int | None = None,
         source: str | None = None,
         search: str | None = None,
@@ -230,6 +231,8 @@ class UnderwritingRepository:
             query = query.where(or_(*conditions))
         if analyst_id is not None:
             query = query.where(Underwriting.analyst_id == analyst_id)
+        if approver_id is not None:
+            query = query.where(Underwriting.approver_id == approver_id)
         if owner_id is not None:
             query = query.where(Underwriting.owner_id == owner_id)
         if min_purchase_price is not None:
@@ -313,6 +316,7 @@ class UnderwritingRepository:
         market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        approver_id: int | None = None,
         owner_id: int | None = None,
         source: str | None = None,
         search: str | None = None,
@@ -397,6 +401,8 @@ class UnderwritingRepository:
             query = query.where(or_(*conditions))
         if analyst_id is not None:
             query = query.where(Underwriting.analyst_id == analyst_id)
+        if approver_id is not None:
+            query = query.where(Underwriting.approver_id == approver_id)
         if owner_id is not None:
             query = query.where(Underwriting.owner_id == owner_id)
         if min_purchase_price is not None:
