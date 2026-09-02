@@ -289,6 +289,30 @@ async def test_save_builds_missing_forecasted_revenue_from_airbnb_percentiles():
     assert repository.underwriting_data["h_cash_on_cash"] == Decimal("0.5901")
 
 
+@pytest.mark.asyncio
+async def test_save_rounds_forecasted_revenue_percentiles_to_two_decimals():
+    """``percentile_cont`` interpolates, so the raw floats carry full precision."""
+    repository = FakeUnderwritingRepository()
+    cleaned_data_service = FakeCleanedDataService(
+        low=74821.33333333333,
+        mid=88450.666666666,
+        high=101234.565,
+    )
+    service = SaveUnderwritingService(
+        repository,
+        market_service=FakeMarketService(),
+        listings_service=FakeListingsService(),
+        cleaned_data_service=cleaned_data_service,
+    )
+
+    await service.save(_forecast_payload())
+
+    scenarios = repository.detail_data["forecasted_revenue"]["scenarios"]
+    assert scenarios["low"]["forecasted_revenue"] == 74821.33
+    assert scenarios["mid"]["forecasted_revenue"] == 88450.67
+    assert scenarios["high"]["forecasted_revenue"] == 101234.57
+
+
 def _forecast_payload(market_id=3):
     return SaveUnderwritingPayload.model_validate(
         {
