@@ -34,6 +34,42 @@ REFERENCE_TAG_FIELDS: tuple[str, ...] = (
     *SINGLE_SELECT_TAG_FIELDS,
 )
 
+# The boolean "deal tag" flags — plain on/off columns, not reference-data backed,
+# so they are deliberately kept out of REFERENCE_TAG_FIELDS. Shared by the list
+# endpoint's filter params and the repository's WHERE builder so the two can
+# never drift. Labels are hardcoded here until the flags move into
+# ``reference.enum_options`` alongside the other deal tags; insertion order is
+# the display order, and BOOLEAN_TAG_FIELDS is derived from the keys so the two
+# stay in sync.
+BOOLEAN_TAG_LABELS: dict[str, str] = {
+    "turnkey": "Turnkey",
+    "furnished": "Furnished",
+    "luxury": "Luxury",
+    "tax_efficient": "Tax Efficient",
+    "new_construction": "New Construction",
+    "existing_airbnb": "Existing Airbnb",
+    "arv": "ARV",
+    "high_cash_on_cash": "High Cash on Cash",
+    "low_cash_on_cash": "Low Cash on Cash",
+    "add_inground_pool": "Add Inground Pool",
+    "waterfront": "Waterfront",
+    "remote": "Remote",
+    "can_support_cohost": "Can Support Cohost",
+}
+BOOLEAN_TAG_FIELDS: tuple[str, ...] = tuple(BOOLEAN_TAG_LABELS)
+
+# The graded "deal tag" columns: small integers on a 1-5 scale rather than flags
+# or reference-data keys. The bounds live here so the list endpoint's filter
+# validation has a single source of truth. Note they are enforced at the API
+# boundary only — the columns are plain nullable smallints with no CHECK
+# constraint, and the write schemas take a bare ``int | None``.
+NUMERIC_TAG_MIN = 1
+NUMERIC_TAG_MAX = 5
+NUMERIC_TAG_FIELDS: tuple[str, ...] = (
+    "renovation_level",
+    "deal_complexity",
+)
+
 
 class UnderwritingBase(BaseModel):
     zpid: str | None = None

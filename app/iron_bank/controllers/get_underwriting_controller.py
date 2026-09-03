@@ -6,6 +6,8 @@ from fastapi import HTTPException
 from app.core.logger import logger
 from app.iron_bank.enums import SortOrder, UnderwritingSortBy
 from app.iron_bank.schemas.get_underwriting import (
+    BooleanTagOptionsResult,
+    DealTagOptionsResult,
     GetUnderwritingEditContextResult,
     GetUnderwritingsResult,
 )
@@ -34,6 +36,7 @@ class GetUnderwritingController:
         market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        approver_id: int | None = None,
         owner_id: int | None = None,
         source: str | None = None,
         search: str | None = None,
@@ -53,11 +56,85 @@ class GetUnderwritingController:
         max_created_at: date | None = None,
         min_deal_approved: date | None = None,
         max_deal_approved: date | None = None,
+        turnkey: bool | None = None,
+        furnished: bool | None = None,
+        luxury: bool | None = None,
+        tax_efficient: bool | None = None,
+        new_construction: bool | None = None,
+        existing_airbnb: bool | None = None,
+        arv: bool | None = None,
+        high_cash_on_cash: bool | None = None,
+        low_cash_on_cash: bool | None = None,
+        add_inground_pool: bool | None = None,
+        waterfront: bool | None = None,
+        remote: bool | None = None,
+        can_support_cohost: bool | None = None,
+        execution_type: list[str] | None = None,
+        regulatory_clarity: list[str] | None = None,
+        offer_competitiveness: list[str] | None = None,
+        cash_flow_quality: list[str] | None = None,
+        view_quality: list[str] | None = None,
+        pool_type: list[str] | None = None,
+        primary_guest_avatar: list[str] | None = None,
+        renovation_level: list[int] | None = None,
+        deal_complexity: list[int] | None = None,
+        market_type: list[str] | None = None,
+        seasonality: list[str] | None = None,
+        core_value_driver: list[str] | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
         interest_rate: Decimal | None = None,
         down_payment_pct: Decimal | None = None,
     ) -> GetUnderwritingsResult:
+        boolean_tags = {
+            field: value
+            for field, value in (
+                ("turnkey", turnkey),
+                ("furnished", furnished),
+                ("luxury", luxury),
+                ("tax_efficient", tax_efficient),
+                ("new_construction", new_construction),
+                ("existing_airbnb", existing_airbnb),
+                ("arv", arv),
+                ("high_cash_on_cash", high_cash_on_cash),
+                ("low_cash_on_cash", low_cash_on_cash),
+                ("add_inground_pool", add_inground_pool),
+                ("waterfront", waterfront),
+                ("remote", remote),
+                ("can_support_cohost", can_support_cohost),
+            )
+            if value is not None
+        }
+        single_select_tags = {
+            field: value
+            for field, value in (
+                ("execution_type", execution_type),
+                ("regulatory_clarity", regulatory_clarity),
+                ("offer_competitiveness", offer_competitiveness),
+                ("cash_flow_quality", cash_flow_quality),
+                ("view_quality", view_quality),
+                ("pool_type", pool_type),
+                ("primary_guest_avatar", primary_guest_avatar),
+            )
+            if value
+        }
+        numeric_tags = {
+            field: value
+            for field, value in (
+                ("renovation_level", renovation_level),
+                ("deal_complexity", deal_complexity),
+            )
+            if value
+        }
+        multi_select_tags = {
+            field: value
+            for field, value in (
+                ("market_type", market_type),
+                ("seasonality", seasonality),
+                ("core_value_driver", core_value_driver),
+            )
+            if value
+        }
         filters = dict(
             page=page,
             page_size=page_size,
@@ -66,6 +143,7 @@ class GetUnderwritingController:
             market_ids=market_ids,
             deal_status=deal_status,
             analyst_id=analyst_id,
+            approver_id=approver_id,
             owner_id=owner_id,
             source=source,
             search=search,
@@ -85,6 +163,10 @@ class GetUnderwritingController:
             max_created_at=max_created_at,
             min_deal_approved=min_deal_approved,
             max_deal_approved=max_deal_approved,
+            boolean_tags=boolean_tags,
+            single_select_tags=single_select_tags,
+            numeric_tags=numeric_tags,
+            multi_select_tags=multi_select_tags,
             sort_by=sort_by,
             sort_order=sort_order,
         )
@@ -108,6 +190,22 @@ class GetUnderwritingController:
                 error=str(e),
             )
             raise HTTPException(status_code=500, detail="Failed to fetch underwritings")
+
+    async def get_deal_tag_options(self) -> DealTagOptionsResult:
+        try:
+            return DealTagOptionsResult(
+                deal_tag_options=await self.service.get_deal_tag_options()
+            )
+        except Exception as e:
+            logger.error("iron_bank.get_deal_tag_options.error", error=str(e))
+            raise HTTPException(
+                status_code=500, detail="Failed to fetch deal tag options"
+            )
+
+    def get_boolean_tag_options(self) -> BooleanTagOptionsResult:
+        return BooleanTagOptionsResult(
+            boolean_tag_options=self.service.get_boolean_tag_options()
+        )
 
     async def get_underwriting(
         self, underwriting_id: int

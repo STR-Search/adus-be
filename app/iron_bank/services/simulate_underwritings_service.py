@@ -87,6 +87,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        approver_id: int | None = None,
         owner_id: int | None = None,
         source: str | None = None,
         search: str | None = None,
@@ -106,6 +107,10 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         max_created_at: date | None = None,
         min_deal_approved: date | None = None,
         max_deal_approved: date | None = None,
+        boolean_tags: dict[str, bool] | None = None,
+        single_select_tags: dict[str, list[str]] | None = None,
+        numeric_tags: dict[str, list[int]] | None = None,
+        multi_select_tags: dict[str, list[str]] | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
         interest_rate: Decimal | None = None,
@@ -117,6 +122,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             market_ids=market_ids,
             deal_status=deal_status,
             analyst_id=analyst_id,
+            approver_id=approver_id,
             owner_id=owner_id,
             source=source,
             search=search,
@@ -128,6 +134,10 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             max_created_at=max_created_at,
             min_deal_approved=min_deal_approved,
             max_deal_approved=max_deal_approved,
+            boolean_tags=boolean_tags,
+            single_select_tags=single_select_tags,
+            numeric_tags=numeric_tags,
+            multi_select_tags=multi_select_tags,
         )
 
         simulated_rows = [

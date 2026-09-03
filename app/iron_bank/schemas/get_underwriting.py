@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import (
     BaseModel,
@@ -21,9 +21,46 @@ from app.iron_bank.enums import (
     UnderwritingSortBy,
     UnderwritingSource,
 )
-from app.iron_bank.schemas.underwriting import UnderwritingRead
+from app.iron_bank.schemas.underwriting import (
+    MULTI_SELECT_TAG_FIELDS,
+    NUMERIC_TAG_FIELDS,
+    NUMERIC_TAG_MAX,
+    NUMERIC_TAG_MIN,
+    SINGLE_SELECT_TAG_FIELDS,
+    UnderwritingRead,
+)
 
 _SQFT_PER_ACRE = Decimal("43560")
+
+# One level on a graded deal tag's 1-5 scale. Bounding the *item* rather than
+# the list means an out-of-range value is rejected with a 422 naming the
+# offending element, instead of being silently dropped or matching nothing.
+NumericTagLevel = Annotated[
+    int, Field(ge=NUMERIC_TAG_MIN, le=NUMERIC_TAG_MAX)
+]
+
+
+def _flatten_repeated_params(value):
+    """Flatten repeated and/or comma-separated query params into one list.
+
+    ``?x=1&x=2`` and ``?x=1,2`` are both accepted, so a filter UI can send
+    whichever it finds natural. An all-blank result collapses to None rather
+    than [] so the repository never has to reason about an ``IN ()`` that would
+    match nothing. Only blank entries are dropped — never a meaningful value
+    such as ``pool_type=none`` or a level of ``0`` — so the emptiness test is an
+    explicit ``== ""`` rather than a falsy check.
+    """
+    if value is None:
+        return None
+    values = value if isinstance(value, list) else [value]
+    flattened = []
+    for item in values:
+        if isinstance(item, str):
+            flattened.extend(part.strip() for part in item.split(","))
+        else:
+            flattened.append(item)
+    cleaned = [item for item in flattened if item != "" and item is not None]
+    return cleaned or None
 
 
 class ZillowProperty(BaseModel):
@@ -112,6 +149,15 @@ class GetUnderwritingCompSet(BaseModel):
     bedrooms: int | None = None
     sleeps: int | None = None
     is_favourite: bool = False
+    has_pool: bool = False
+    has_hot_tub: bool = False
+    has_sauna: bool = False
+    has_mini_golf: bool = False
+    has_game_room: bool = False
+    has_pickleball: bool = False
+    has_movie_theater: bool = False
+    has_playground: bool = False
+    has_waterfront: bool = False
 
 
 class UserRef(BaseModel):
@@ -196,6 +242,7 @@ class GetUnderwritingsQuery(BaseModel):
     market_ids: list[int] | None = Field(None, alias="market_id")
     deal_status: DealStatus | None = None
     analyst_id: int | None = None
+    approver_id: int | None = None
     owner_id: int | None = None
     source: UnderwritingSource | None = None
     # free-text match on address/city/state; numeric terms also match sheet_number
@@ -218,6 +265,51 @@ class GetUnderwritingsQuery(BaseModel):
     max_created_at: date | None = None
     min_deal_approved: date | None = None
     max_deal_approved: date | None = None
+    # Boolean deal tags. Omit a tag to ignore it; ``true`` returns only flagged
+    # deals, ``false`` only unflagged ones. Because these columns are nullable
+    # with a Python-side default, "unflagged" covers both false and NULL — see
+    # ``_boolean_tag_conditions`` in the repository. Multiple tags AND together.
+    turnkey: bool | None = None
+    furnished: bool | None = None
+    luxury: bool | None = None
+    tax_efficient: bool | None = None
+    new_construction: bool | None = None
+    existing_airbnb: bool | None = None
+    arv: bool | None = None
+    high_cash_on_cash: bool | None = None
+    low_cash_on_cash: bool | None = None
+    add_inground_pool: bool | None = None
+    waterfront: bool | None = None
+    remote: bool | None = None
+    can_support_cohost: bool | None = None
+    # Single-select deal tags. Values are reference-data *keys* (the slug stored
+    # on the column), not labels — the frontend already gets them from
+    # ``GET /reference-data``. Accepts repeated or comma-separated params, so a
+    # filter UI can offer several choices for one tag: values within a tag OR
+    # together, different tags AND together. Keys are only unique within their
+    # own set (``low``/``high`` exist in three sets), which is why each tag has
+    # its own param rather than one shared one.
+    execution_type: list[str] | None = None
+    regulatory_clarity: list[str] | None = None
+    offer_competitiveness: list[str] | None = None
+    cash_flow_quality: list[str] | None = None
+    view_quality: list[str] | None = None
+    pool_type: list[str] | None = None
+    primary_guest_avatar: list[str] | None = None
+    # Graded deal tags on a 1-5 scale. Accepts repeated or comma-separated
+    # levels; levels within a tag OR together, different tags AND together. With
+    # only five levels a list also expresses any range ("complexity 1-3" is
+    # ``deal_complexity=1,2,3``), which is why there is no min_/max_ pair.
+    renovation_level: list[NumericTagLevel] | None = None
+    deal_complexity: list[NumericTagLevel] | None = None
+    # Multi-select deal tags, matched with ANY/overlap semantics: a deal matches
+    # if it carries *at least one* of the requested keys, so ticking more boxes
+    # can only widen the result set — the convention every faceted filter uses.
+    # ("both of these" / "only these" would be `@>` / `<@`; deliberately not
+    # offered until someone asks for them.) Different tags still AND together.
+    market_type: list[str] | None = None
+    seasonality: list[str] | None = None
+    core_value_driver: list[str] | None = None
     sort_by: UnderwritingSortBy = UnderwritingSortBy.ID
     sort_order: SortOrder = SortOrder.DESC
     # Simulation mode: when either override is present, list metrics are
@@ -229,22 +321,24 @@ class GetUnderwritingsQuery(BaseModel):
     @field_validator("market_ids", mode="before")
     @classmethod
     def split_market_ids(cls, value):
-        """Flatten comma-separated values and normalize "no filter" to None.
+        return _flatten_repeated_params(value)
 
-        An empty result becomes None rather than [] so the repository never has
-        to reason about an ``IN ()`` that would match nothing.
+    @field_validator(
+        *SINGLE_SELECT_TAG_FIELDS,
+        *MULTI_SELECT_TAG_FIELDS,
+        *NUMERIC_TAG_FIELDS,
+        mode="before",
+    )
+    @classmethod
+    def split_tag_values(cls, value):
+        """Flatten repeated/comma-separated tag values; "no filter" -> None.
+
+        Shared by all three value-list tag families — the selected keys or
+        levels are a set of candidates either way; only the comparison against
+        the column differs. Levels stay strings here and are coerced (and
+        bounds-checked) by ``NumericTagLevel`` afterwards.
         """
-        if value is None:
-            return None
-        values = value if isinstance(value, list) else [value]
-        flattened = []
-        for item in values:
-            if isinstance(item, str):
-                flattened.extend(part.strip() for part in item.split(","))
-            else:
-                flattened.append(item)
-        cleaned = [item for item in flattened if item != "" and item is not None]
-        return cleaned or None
+        return _flatten_repeated_params(value)
 
     @model_validator(mode="after")
     def check_ranges(self):
@@ -419,6 +513,17 @@ class EditContextualData(BaseModel):
     # bedroom count — there is no truth table to show, and a blank catalog is
     # honest about that.
     opex_options: list[OpexOption] = Field(default_factory=list)
+
+
+class DealTagOptionsResult(BaseModel):
+    # Same payload as EditContextualData.deal_tag_options, served standalone.
+    deal_tag_options: dict[str, list[ReferenceDataOption]] = Field(default_factory=dict)
+
+
+class BooleanTagOptionsResult(BaseModel):
+    # ``field -> label`` for the plain boolean deal-tag flags. Hardcoded until
+    # they move into reference.enum_options like the other deal tags.
+    boolean_tag_options: dict[str, str] = Field(default_factory=dict)
 
 
 class EditContextData(BaseModel):

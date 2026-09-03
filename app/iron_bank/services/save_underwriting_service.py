@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Protocol
 
 import structlog
@@ -416,9 +416,15 @@ class SaveUnderwritingService:
                     bedrooms=bedrooms,
                 ),
                 "scenarios": {
-                    "low": {"forecasted_revenue": percentiles.low},
-                    "mid": {"forecasted_revenue": percentiles.mid},
-                    "high": {"forecasted_revenue": percentiles.high},
+                    "low": {
+                        "forecasted_revenue": self._to_money(percentiles.low),
+                    },
+                    "mid": {
+                        "forecasted_revenue": self._to_money(percentiles.mid),
+                    },
+                    "high": {
+                        "forecasted_revenue": self._to_money(percentiles.high),
+                    },
                 },
             }
         )
@@ -431,6 +437,16 @@ class SaveUnderwritingService:
             high_forecasted_revenue=forecasted_revenue_input.scenarios.high.forecasted_revenue,
         )
         return forecasted_revenue_input
+
+    @staticmethod
+    def _to_money(value: float) -> Decimal:
+        """Round a percentile aggregate to a currency amount.
+
+        ``percentile_cont`` interpolates between comps, so the raw values carry
+        full float precision (e.g. ``74821.33333333333``) which is meaningless
+        for an annual revenue figure and noisy in the stored payload.
+        """
+        return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     async def _resolve_appreciation_pct(
         self,

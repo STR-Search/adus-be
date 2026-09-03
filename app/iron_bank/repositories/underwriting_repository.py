@@ -16,6 +16,12 @@ from app.iron_bank.models import (
     UnderwritingOptimizationItem,
     UnderwritingTax,
 )
+from app.iron_bank.schemas.underwriting import (
+    BOOLEAN_TAG_FIELDS,
+    MULTI_SELECT_TAG_FIELDS,
+    NUMERIC_TAG_FIELDS,
+    SINGLE_SELECT_TAG_FIELDS,
+)
 
 
 def _date_range_conditions(column, minimum: date | None, maximum: date | None) -> list:
@@ -43,6 +49,106 @@ def _date_range_conditions(column, minimum: date | None, maximum: date | None) -
             )
         )
     return conditions
+
+
+def _boolean_tag_conditions(boolean_tags: dict[str, bool] | None) -> list:
+    """WHERE conditions for the boolean deal-tag flags.
+
+    ``true`` is a strict match, but ``false`` deliberately also matches NULL.
+    The tag columns are nullable with only a Python-side ``default=False``, so
+    rows written before a tag existed — and every legacy-sheet backfill — hold
+    NULL rather than false. A bare ``column == False`` would silently drop them
+    and make "unflagged" return far fewer deals than it should, so ``false``
+    means "not flagged" (``IS NOT TRUE``).
+
+    """
+    conditions = []
+    for field, value in (boolean_tags or {}).items():
+        if field not in BOOLEAN_TAG_FIELDS:
+            raise ValueError(f"Unknown boolean deal tag filter: {field}")
+        if value is None:
+            continue
+        column = getattr(Underwriting, field)
+        conditions.append(column.is_(True) if value else column.isnot(True))
+    return conditions
+
+
+def _value_set_conditions(tags, allowed_fields: tuple[str, ...], kind: str) -> list:
+    """WHERE conditions for "one column, any of these values" tag filters.
+
+    Shared by the single-select keys and the graded numeric levels: both store a
+    single scalar per row, so several requested values OR together via ``IN``
+    (a lone value compiling to plain equality), while separate tags AND together
+    as usual. Values are always bound parameters, never interpolated.
+
+    NULL never matches, which is right for both — an untagged deal is not a
+    member of any option, and there is no "unset" level to ask for. Unknown
+    field names raise rather than being skipped: a typo that quietly widened the
+    result set would look like a data problem, not a bug.
+    """
+    conditions = []
+    for field, values in (tags or {}).items():
+        if field not in allowed_fields:
+            raise ValueError(f"Unknown {kind} deal tag filter: {field}")
+        if not values:
+            continue
+        column = getattr(Underwriting, field)
+        conditions.append(
+            column == values[0] if len(values) == 1 else column.in_(values)
+        )
+    return conditions
+
+
+def _single_select_tag_conditions(
+    single_select_tags: dict[str, list[str]] | None,
+) -> list:
+    """Conditions for the single-select deal tags.
+
+    Values are reference-data keys, stored verbatim on the column, so no label
+    lookup is needed and deliberately no round-trip validates the keys: the
+    option set is DB-editable, and an unknown key returning nothing is the same
+    answer validation would give. Keys are unique only within their own set,
+    which is why each tag matches against its own column.
+    """
+    return _value_set_conditions(
+        single_select_tags, SINGLE_SELECT_TAG_FIELDS, "single-select"
+    )
+
+
+def _multi_select_tag_conditions(
+    multi_select_tags: dict[str, list[str]] | None,
+) -> list:
+    """Conditions for the multi-select (``text[]``) deal tags — ANY semantics.
+
+    Uses the array-overlap operator ``&&``: a deal matches when its stored keys
+    share at least one element with the requested set, so ``seasonality=feb,jun``
+    returns a deal tagged ``[jan, feb, mar]``. Ticking another box can only widen
+    the results, which is what a faceted filter implies. "Has all of these" and
+    "has only these" would be ``@>`` and ``<@`` — a one-operator change here if
+    the product ever wants them.
+
+    Both spellings of "untagged" fall out correctly and identically: ``NULL &&``
+    yields NULL and ``'{}' &&`` yields false, so neither matches. (``<@`` would
+    *not* be so forgiving — an empty array is a subset of everything.)
+    """
+    conditions = []
+    for field, values in (multi_select_tags or {}).items():
+        if field not in MULTI_SELECT_TAG_FIELDS:
+            raise ValueError(f"Unknown multi-select deal tag filter: {field}")
+        if not values:
+            continue
+        conditions.append(getattr(Underwriting, field).overlap(values))
+    return conditions
+
+
+def _numeric_tag_conditions(numeric_tags: dict[str, list[int]] | None) -> list:
+    """Conditions for the graded deal tags (``renovation_level`` and friends).
+
+    The 1-5 bound is enforced at the API boundary, not here: the columns carry
+    no CHECK constraint, so a level outside the range is a value the DB would
+    happily hold — filtering on it should return nothing rather than raise.
+    """
+    return _value_set_conditions(numeric_tags, NUMERIC_TAG_FIELDS, "numeric")
 
 
 class UnderwritingRepository:
@@ -73,6 +179,7 @@ class UnderwritingRepository:
         market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        approver_id: int | None = None,
         owner_id: int | None = None,
         source: str | None = None,
         search: str | None = None,
@@ -92,6 +199,10 @@ class UnderwritingRepository:
         max_created_at: date | None = None,
         min_deal_approved: date | None = None,
         max_deal_approved: date | None = None,
+        boolean_tags: dict[str, bool] | None = None,
+        single_select_tags: dict[str, list[str]] | None = None,
+        numeric_tags: dict[str, list[int]] | None = None,
+        multi_select_tags: dict[str, list[str]] | None = None,
         sort_by: UnderwritingSortBy = UnderwritingSortBy.ID,
         sort_order: SortOrder = SortOrder.DESC,
     ) -> tuple[list[Underwriting], int, int]:
@@ -120,6 +231,8 @@ class UnderwritingRepository:
             query = query.where(or_(*conditions))
         if analyst_id is not None:
             query = query.where(Underwriting.analyst_id == analyst_id)
+        if approver_id is not None:
+            query = query.where(Underwriting.approver_id == approver_id)
         if owner_id is not None:
             query = query.where(Underwriting.owner_id == owner_id)
         if min_purchase_price is not None:
@@ -153,6 +266,10 @@ class UnderwritingRepository:
             *_date_range_conditions(
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
+            *_boolean_tag_conditions(boolean_tags),
+            *_single_select_tag_conditions(single_select_tags),
+            *_numeric_tag_conditions(numeric_tags),
+            *_multi_select_tag_conditions(multi_select_tags),
         ):
             query = query.where(condition)
 
@@ -199,6 +316,7 @@ class UnderwritingRepository:
         market_ids: list[int] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
+        approver_id: int | None = None,
         owner_id: int | None = None,
         source: str | None = None,
         search: str | None = None,
@@ -210,6 +328,10 @@ class UnderwritingRepository:
         max_created_at: date | None = None,
         min_deal_approved: date | None = None,
         max_deal_approved: date | None = None,
+        boolean_tags: dict[str, bool] | None = None,
+        single_select_tags: dict[str, list[str]] | None = None,
+        numeric_tags: dict[str, list[int]] | None = None,
+        multi_select_tags: dict[str, list[str]] | None = None,
     ) -> list[Any]:
         """Lean full-set fetch of per-row simulation inputs.
 
@@ -279,6 +401,8 @@ class UnderwritingRepository:
             query = query.where(or_(*conditions))
         if analyst_id is not None:
             query = query.where(Underwriting.analyst_id == analyst_id)
+        if approver_id is not None:
+            query = query.where(Underwriting.approver_id == approver_id)
         if owner_id is not None:
             query = query.where(Underwriting.owner_id == owner_id)
         if min_purchase_price is not None:
@@ -294,7 +418,10 @@ class UnderwritingRepository:
         if max_prr is not None:
             query = query.where(Underwriting.prr <= max_prr)
         # Dates are untouched by simulation, so they filter in SQL like the
-        # non-simulated path rather than in Python afterwards.
+        # non-simulated path rather than in Python afterwards. The deal tags —
+        # boolean flags and single-select keys alike — are stored values no
+        # override can move, so they filter in SQL here too, shrinking the
+        # full-set fetch the calculator runs over.
         for condition in (
             *_date_range_conditions(
                 Underwriting.created_at, min_created_at, max_created_at
@@ -302,6 +429,10 @@ class UnderwritingRepository:
             *_date_range_conditions(
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
+            *_boolean_tag_conditions(boolean_tags),
+            *_single_select_tag_conditions(single_select_tags),
+            *_numeric_tag_conditions(numeric_tags),
+            *_multi_select_tag_conditions(multi_select_tags),
         ):
             query = query.where(condition)
 
