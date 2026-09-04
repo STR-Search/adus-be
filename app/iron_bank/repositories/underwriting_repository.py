@@ -7,7 +7,7 @@ from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.iron_bank.enums import SortOrder, UnderwritingSortBy
+from app.iron_bank.enums import DealStatus, SortOrder, UnderwritingSortBy
 from app.iron_bank.models import (
     Underwriting,
     UnderwritingCompSet,
@@ -21,6 +21,11 @@ from app.iron_bank.schemas.underwriting import (
     MULTI_SELECT_TAG_FIELDS,
     NUMERIC_TAG_FIELDS,
     SINGLE_SELECT_TAG_FIELDS,
+)
+
+_SIMULATION_EXCLUDED_DEAL_STATUSES = (
+    DealStatus.DELETE_ZILLOW,
+    DealStatus.DELETE_DEAL,
 )
 
 
@@ -341,6 +346,9 @@ class UnderwritingRepository:
         stored fallback values for sort/filter, the detail JSON calculation
         inputs, and the child-collection totals the calculator sums over.
 
+        Deals tagged ``delete_zillow``/``delete_deal`` are dropped here
+        unconditionally — recalculating them is wasted work.
+
         Only filters that simulation does NOT change are applied here; the
         total_oop / l_/m_/h_cash_on_cash bounds are applied by the service in Python
         against the simulated values (filtering them in SQL would compare
@@ -376,6 +384,12 @@ class UnderwritingRepository:
             .outerjoin(
                 UnderwritingTax,
                 UnderwritingTax.underwriting_id == Underwriting.id,
+            )
+            .where(
+                or_(
+                    Underwriting.deal_status.is_(None),
+                    Underwriting.deal_status.notin_(_SIMULATION_EXCLUDED_DEAL_STATUSES),
+                )
             )
         )
         if zpid is not None:
