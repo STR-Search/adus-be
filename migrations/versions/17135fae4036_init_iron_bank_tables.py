@@ -169,53 +169,19 @@ def upgrade() -> None:
             server_default=sa.text("false"),
             nullable=False,
         ),
-        # Comp amenity flags — NOT NULL DEFAULT false, so existing rows read as
-        # "no amenity" without a backfill.
-        sa.Column(
-            "has_pool", sa.Boolean(), server_default=sa.text("false"), nullable=False
-        ),
-        sa.Column(
-            "has_hot_tub", sa.Boolean(), server_default=sa.text("false"), nullable=False
-        ),
-        sa.Column(
-            "has_sauna", sa.Boolean(), server_default=sa.text("false"), nullable=False
-        ),
-        sa.Column(
-            "has_mini_golf",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
-        sa.Column(
-            "has_game_room",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
-        sa.Column(
-            "has_pickleball",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
-        sa.Column(
-            "has_movie_theater",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
-        sa.Column(
-            "has_playground",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
-        sa.Column(
-            "has_waterfront",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
+        # Comp amenity flags — nullable with no default, so a flag nobody
+        # answered stays NULL ("unknown") rather than reading as a definite
+        # "no amenity". Unlike is_favourite above, which is a deliberate analyst
+        # action and so is always one of true/false.
+        sa.Column("has_pool", sa.Boolean(), nullable=True),
+        sa.Column("has_hot_tub", sa.Boolean(), nullable=True),
+        sa.Column("has_sauna", sa.Boolean(), nullable=True),
+        sa.Column("has_mini_golf", sa.Boolean(), nullable=True),
+        sa.Column("has_game_room", sa.Boolean(), nullable=True),
+        sa.Column("has_pickleball", sa.Boolean(), nullable=True),
+        sa.Column("has_movie_theater", sa.Boolean(), nullable=True),
+        sa.Column("has_playground", sa.Boolean(), nullable=True),
+        sa.Column("has_waterfront", sa.Boolean(), nullable=True),
         sa.Column("sort_order", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"
