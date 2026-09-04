@@ -9,15 +9,17 @@ class CompSetBase(BaseModel):
     bedrooms: int | None = None
     sleeps: int | None = None
     is_favourite: bool = False
-    has_pool: bool = False
-    has_hot_tub: bool = False
-    has_sauna: bool = False
-    has_mini_golf: bool = False
-    has_game_room: bool = False
-    has_pickleball: bool = False
-    has_movie_theater: bool = False
-    has_playground: bool = False
-    has_waterfront: bool = False
+    # Amenity flags default to None, not False: an omitted flag is unknown, and
+    # the column is nullable so it stays that way (see UnderwritingCompSet).
+    has_pool: bool | None = None
+    has_hot_tub: bool | None = None
+    has_sauna: bool | None = None
+    has_mini_golf: bool | None = None
+    has_game_room: bool | None = None
+    has_pickleball: bool | None = None
+    has_movie_theater: bool | None = None
+    has_playground: bool | None = None
+    has_waterfront: bool | None = None
 
 class CompSetCreate(CompSetBase):
     pass
