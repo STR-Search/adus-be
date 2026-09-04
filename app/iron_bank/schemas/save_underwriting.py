@@ -212,7 +212,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "metric": "sqft",
                         "base_price": 15,
                         "spec": "@$15/sqft x 1,800 sqft",
-                        "tier": "Mid",
+                        "tier": "Low",
                     },
                     {
                         "category": "Interior Painting",
@@ -220,7 +220,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "metric": "sqft",
                         "base_price": 5,
                         "spec": "@$5/sqft x 2,400 sqft",
-                        "tier": "Mid",
+                        "tier": "Low",
                     },
                     {
                         "category": "Exterior Painting",
@@ -228,7 +228,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "metric": "sqft",
                         "base_price": 6,
                         "spec": "@$6/sqft x 2,200 sqft",
-                        "tier": "Mid",
+                        "tier": "Low",
                     },
                     {
                         "category": "Accent Wall Paint",
@@ -236,7 +236,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "metric": "number of",
                         "base_price": 600,
                         "spec": "@$600 x 3 walls",
-                        "tier": "Mid",
+                        "tier": "Low",
                     },
                     {
                         "category": "Furniture / Decor / Essentials",
@@ -252,7 +252,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "metric": "flat",
                         "base_price": 3500,
                         "spec": "Jets, cover, and chemical system replacement",
-                        "tier": "Mid",
+                        "tier": "Low",
                     },
                     {
                         "category": "Outdoor Lighting & Fire Pit",
@@ -260,7 +260,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "metric": "flat",
                         "base_price": 2200,
                         "spec": "String lights + gas fire pit install",
-                        "tier": "Mid",
+                        "tier": "Low",
                     },
                 ],
                 "operating_expenses": [

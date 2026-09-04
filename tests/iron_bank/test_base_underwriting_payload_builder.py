@@ -11,7 +11,13 @@ def _builder():
 
 
 def _option(option_id: int, name: str, price=1000) -> dict:
-    return {"id": option_id, "amenity_name": name, "price_tier_2": price}
+    return {
+        "id": option_id,
+        "amenity_name": name,
+        "price_tier_1": price,
+        "price_tier_2": price,
+        "price_tier_3": price,
+    }
 
 
 class TestOperatingExpenseOrder:
@@ -211,6 +217,51 @@ class TestOptimizationListOrder:
                 PrepareUwDataService.FURNISHINGS_OPTION_ID,
             ]
         ) == ["Furnishings", "Hot Tub", "Project Mgmt", "Shipping"]
+
+    def test_furnishings_seeds_at_mid_and_everything_else_at_low(self):
+        # Priced per tier so the row proves which field it was read from.
+        catalog = [
+            {
+                "id": PrepareUwDataService.FURNISHINGS_OPTION_ID,
+                "amenity_name": "Furnishings",
+                "price_tier_1": 25000,
+                "price_tier_2": 40000,
+                "price_tier_3": 60000,
+            },
+            {
+                "id": 1,
+                "amenity_name": "Hot Tub",
+                "price_tier_1": 8000,
+                "price_tier_2": 12000,
+                "price_tier_3": 15000,
+            },
+        ]
+
+        items = _builder()._build_optimization_list(
+            {"construction_amenities": catalog, "must_have_amenity_ids": [1]}
+        )
+        by_category = {item["category"]: item for item in items}
+
+        assert by_category["Furnishings"]["tier"] == "Mid"
+        assert by_category["Furnishings"]["total_price"] == 40000
+        assert by_category["Furnishings"]["base_price"] == 40000
+        assert by_category["Hot Tub"]["tier"] == "Low"
+        assert by_category["Hot Tub"]["total_price"] == 8000
+        assert by_category["Hot Tub"]["base_price"] == 8000
+
+    def test_the_furnishings_tier_override_is_keyed_on_the_id_not_the_name(self):
+        # The display name is reworded independently of the columns behind it,
+        # so a renamed furnishings option must still seed at mid.
+        items = _builder()._build_optimization_list(
+            {
+                "construction_amenities": [
+                    _option(PrepareUwDataService.FURNISHINGS_OPTION_ID, "Renamed")
+                ],
+                "must_have_amenity_ids": [],
+            }
+        )
+
+        assert [item["tier"] for item in items] == ["Mid"]
 
     def test_every_seeded_option_is_placed_in_the_bracket(self):
         # Guards drift: a fourth synthetic option added to the prepare service

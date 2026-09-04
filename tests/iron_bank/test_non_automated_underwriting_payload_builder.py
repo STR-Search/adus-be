@@ -251,16 +251,18 @@ class TestWithMarketContext:
             "Install / Staging / Warehousing",
         ]
         by_category = {item.category: item for item in payload.optimization_list}
-        # tier-2 pricing, matching the automated flow
-        assert by_category["Furniture / Decor / Essentials"].total_price == Decimal(
-            "40000"
-        )
+        # furnishings prices at the mid tier, matching the automated flow...
+        furnishings = by_category["Furniture / Decor / Essentials"]
+        assert furnishings.total_price == Decimal("40000")
+        assert furnishings.tier == "Mid"
+        # ...and the two service options carry one price across every tier
         assert by_category["Install / Staging / Warehousing"].total_price == Decimal(
             "18225"
         )
         assert by_category["Design / Project Management"].total_price == Decimal("9500")
-        assert by_category["Hot Tub"].total_price == Decimal("12000")
-        assert by_category["Hot Tub"].tier == "Mid"
+        # a catalog amenity prices at the low tier (8000), not the mid one (12000)
+        assert by_category["Hot Tub"].total_price == Decimal("8000")
+        assert by_category["Hot Tub"].tier == "Low"
         assert by_category["Hot Tub"].metric == "flat"
 
     def test_uses_market_derived_financing_and_tax_terms(self):
@@ -325,12 +327,16 @@ class TestWithTemplateMarketContext:
             "Design / Project Management",
             "Install / Staging / Warehousing",
         ]
+        by_category = {item.category: item for item in payload.optimization_list}
         for item in payload.optimization_list:
             assert item.total_price == Decimal("0")
             assert item.base_price == Decimal("0")
-            # everything else about the row is unchanged
-            assert item.tier == "Mid"
             assert item.metric == "flat"
+        # the template zeroes every tier, so the tier each row claims is the
+        # only thing left to distinguish them
+        assert by_category["Furniture / Decor / Essentials"].tier == "Mid"
+        assert by_category["Design / Project Management"].tier == "Low"
+        assert by_category["Install / Staging / Warehousing"].tier == "Low"
 
     def test_uses_default_tax_terms_not_the_template_market_s(self):
         payload = self._build()
