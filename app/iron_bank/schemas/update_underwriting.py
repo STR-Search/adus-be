@@ -11,6 +11,7 @@ from app.iron_bank.schemas.save_underwriting import (
     UnderwritingDetailsInput,
     UnderwritingTaxInput,
 )
+from app.iron_bank.schemas.underwriting import check_sleep_count_range
 
 
 class UpdateUnderwritingPayload(BaseModel):
@@ -30,7 +31,8 @@ class UpdateUnderwritingPayload(BaseModel):
     city: str | None = None
     state: str | None = None
     days_on_market: int | None = None
-    sleep_capacity: int | None = None
+    sleep_count_low: int | None = None
+    sleep_count_high: int | None = None
     # Sent alongside the FE-placed opex/optimization values when the analyst
     # changes the bedroom count (see GET /iron-bank/bedroom-context).
     bedrooms: int | None = None
@@ -83,6 +85,10 @@ class UpdateUnderwritingPayload(BaseModel):
     optimization_list: list[OptimizationItemInput] = Field(default_factory=list)
     operating_expenses: list[OperatingExpenseInput] = Field(default_factory=list)
     comp_set: list[CompSetInput] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_sleep_count_range(self):
+        return check_sleep_count_range(self)
 
     @model_validator(mode="after")
     def require_collections_with_purchase_details(self):

@@ -2,7 +2,13 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from app.iron_bank.enums import DealStatus, UnderwritingSource
 from app.iron_bank.services.deal_status_service import STATUS_OPTIONS
@@ -71,6 +77,24 @@ NUMERIC_TAG_FIELDS: tuple[str, ...] = (
 )
 
 
+def check_sleep_count_range(model):
+    """Rejects an inverted sleep-count range.
+
+    The two columns carry no DB CHECK constraint, so this is the only guard —
+    shared by every payload that accepts the pair (see UnderwritingBase and
+    UpdateUnderwritingPayload). Either bound may be NULL on its own ("open
+    ended"); only a fully specified pair is compared. Partial updates that send
+    just one bound are therefore unvalidated against the stored other bound.
+    """
+    low = model.sleep_count_low
+    high = model.sleep_count_high
+    if low is not None and high is not None and low > high:
+        raise ValueError(
+            f"sleep_count_low ({low}) must not exceed sleep_count_high ({high})"
+        )
+    return model
+
+
 class UnderwritingBase(BaseModel):
     zpid: str | None = None
     market_id: int | None = None
@@ -90,7 +114,8 @@ class UnderwritingBase(BaseModel):
     city: str | None = None
     state: str | None = None
     days_on_market: int | None = None
-    sleep_capacity: int | None = None
+    sleep_count_low: int | None = None
+    sleep_count_high: int | None = None
     bedrooms: int | None = None
     bathrooms: Decimal | None = None
     purchase_price: Decimal | None = None
@@ -147,6 +172,10 @@ class UnderwritingBase(BaseModel):
                     f"deal_status must be a valid DealStatus key, got {value!r}"
                 )
         return value
+
+    @model_validator(mode="after")
+    def check_sleep_count_range(self):
+        return check_sleep_count_range(self)
 
 
 class UnderwritingCreate(UnderwritingBase):
