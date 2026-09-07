@@ -87,7 +87,7 @@ STATUS_MAP: dict[str, str] = {
 # Values are matched against "first_name last_name" (lowercased). Extend as the
 # unmatched-name warnings surface real cases.
 NICKNAME_OVERRIDES: dict[str, str] = {
-    # "rizz (ahmed)": "ahmed <last name>",
+    "rizz (ahmed)": "ahmed mohamed rizk elsayed",
 }
 
 
@@ -164,36 +164,55 @@ def jsonable(value: Any) -> Any:
 # summary rows (Main_Sheet / Delete_Properties)
 # ---------------------------------------------------------------------------
 
-# Both tabs share column names for the fields we need; only header row differs.
-SUMMARY_FIELDS = {
-    "Deal_Status": "raw_status",
-    "Property Address": "property_address",
-    "City": "city",
-    "ST": "state",
-    "Analyst": "analyst_name",
-    "Approved By": "approver_name",
-    "Approved Time": "deal_approved",
-    "PP": "purchase_price",
-    "Cash Needed": "total_oop",
-    "PRR": "prr",
-    "Low": "low_gross_revenue",
-    "Mid": "mid_gross_revenue",
-    "High": "high_gross_revenue",
-    "L": "l_cash_on_cash",
-    "M": "m_cash_on_cash",
-    "H": "h_cash_on_cash",
-    "Date_Added": "deal_added",
-    "Bedrooms": "sleep_capacity",
-    "Turnkey?": "turnkey",
-    "Property Pending": "property_pending",
-    "Loom_Vid": "loom_vid",
-    "Notes": "notes",
-    "Link": "link",
+# field -> acceptable sheet header names, in preference order. Main_Sheet and
+# Delete_Properties/ClientShown_Properties have drifted onto different header
+# text for the same concept over time (e.g. 'Deal_Status' vs 'Status',
+# 'Cash Needed' vs 'OOP', 'Notes' vs 'Note') -- every alias is matched, so
+# either tab's current wording resolves to the same field.
+SUMMARY_FIELD_ALIASES: dict[str, list[str]] = {
+    "raw_status": ["Deal_Status", "Status"],
+    "property_address": ["Property Address"],
+    "city": ["City"],
+    "state": ["ST"],
+    "analyst_name": ["Analyst"],
+    "approver_name": ["Approved By"],
+    "deal_approved": ["Approved Time"],
+    "purchase_price": ["PP"],
+    "total_oop": ["Cash Needed", "OOP"],
+    "prr": ["PRR"],
+    "low_gross_revenue": ["Low"],
+    "mid_gross_revenue": ["Mid"],
+    "high_gross_revenue": ["High"],
+    "l_cash_on_cash": ["L"],
+    "m_cash_on_cash": ["M"],
+    "h_cash_on_cash": ["H"],
+    "deal_added": ["Date_Added"],
+    "sleep_capacity": ["Bedrooms"],
+    "turnkey": ["Turnkey?"],
+    "property_pending": ["Property Pending"],
+    "loom_vid": ["Loom_Vid"],
+    "notes": ["Notes", "Note"],
+    "link": ["Link"],
+}
+
+# Fields allowed to be absent from a given tab's header row without failing
+# the run -- structural differences between tabs, not drift. Main_Sheet
+# dropped its single 'Loom_Vid' column in favor of separate
+# Deal_Pitch/video_walkthrough/Survey/Note columns this script doesn't parse
+# yet. ClientShown_Properties is a minimal tab that has never tracked
+# approver/turnkey/bedroom info. Every field not listed here is expected on
+# that tab: if its header goes missing (renamed again, column deleted),
+# that's exactly the kind of silent drift that produced wrong deal statuses
+# for every row parsed after 'Deal_Status' became 'Status', so it's a hard
+# error instead of a quiet None.
+TAB_OPTIONAL_FIELDS: dict[str, set[str]] = {
+    MAIN_SHEET: {"loom_vid"},
+    CLIENT_SHOWN_SHEET: {"approver_name", "deal_approved", "sleep_capacity", "turnkey"},
 }
 
 
 def index_summary_rows(
-    rows: Iterable[tuple], header_row: int
+    rows: Iterable[tuple], header_row: int, tab_name: str
 ) -> dict[int, dict[str, Any]]:
     """Returns {sheet_number: raw summary dict} for one summary tab.
     `rows` starts at `header_row` (the header itself is the first row)."""
@@ -201,16 +220,29 @@ def index_summary_rows(
     headers = next(rows, None)
     if headers is None:
         return {}
-    col_for = {
-        name: idx for idx, name in enumerate(headers) if name in SUMMARY_FIELDS
-    }
-    address_col = col_for.get("Property Address")
+    header_index = {name: idx for idx, name in enumerate(headers) if name}
+    optional_fields = TAB_OPTIONAL_FIELDS.get(tab_name, set())
+    col_for: dict[str, int] = {}
+    missing: list[str] = []
+    for field, aliases in SUMMARY_FIELD_ALIASES.items():
+        idx = next((header_index[a] for a in aliases if a in header_index), None)
+        if idx is not None:
+            col_for[field] = idx
+        elif field not in optional_fields:
+            missing.append(f"{field} (tried {aliases})")
+    if missing:
+        raise ValueError(
+            f"{tab_name!r} header row {header_row}: no matching column for "
+            f"{', '.join(missing)}. The sheet's headers were likely renamed -- "
+            "update SUMMARY_FIELD_ALIASES to match before backfilling."
+        )
+    address_col = col_for.get("property_address")
     result: dict[int, dict[str, Any]] = {}
     for row_number, row in enumerate(rows, start=header_row + 1):
         # read-only mode trims trailing empty cells, so rows vary in length
         raw = {
-            SUMMARY_FIELDS[name]: row[idx] if idx < len(row) else None
-            for name, idx in col_for.items()
+            field: row[idx] if idx < len(row) else None
+            for field, idx in col_for.items()
         }
         link = to_int(raw.get("link"))
         if link is not None and _summary_has_content(raw):
@@ -761,11 +793,15 @@ def read_workbook(path: Path) -> dict[str, Any]:
 
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
     main_rows = index_summary_rows(
-        wb[MAIN_SHEET].iter_rows(min_row=4, values_only=True), header_row=4
+        wb[MAIN_SHEET].iter_rows(min_row=4, values_only=True),
+        header_row=4,
+        tab_name=MAIN_SHEET,
     )
     deleted_rows = (
         index_summary_rows(
-            wb[DELETE_SHEET].iter_rows(min_row=1, values_only=True), header_row=1
+            wb[DELETE_SHEET].iter_rows(min_row=1, values_only=True),
+            header_row=1,
+            tab_name=DELETE_SHEET,
         )
         if DELETE_SHEET in wb.sheetnames
         else {}
@@ -774,6 +810,7 @@ def read_workbook(path: Path) -> dict[str, Any]:
         index_summary_rows(
             wb[CLIENT_SHOWN_SHEET].iter_rows(min_row=1, values_only=True),
             header_row=1,
+            tab_name=CLIENT_SHOWN_SHEET,
         )
         if CLIENT_SHOWN_SHEET in wb.sheetnames
         else {}
@@ -819,8 +856,16 @@ def _sheets_service():
     """Authenticates via a service account passed as inline JSON (not a file
     path) in GOOGLE_SERVICE_ACCOUNT_CREDENTIALS -- the same service account
     already shared on the sheet, reused from another project rather than
-    provisioning a new one."""
+    provisioning a new one.
+
+    httplib2's default socket timeout is short enough that a metadata-only
+    call started timing out once the workbook grew past ~800 tabs; an
+    explicit, longer timeout on the transport (not the retry logic) fixes
+    that without masking a real failure.
+    """
+    import httplib2
     from google.oauth2 import service_account
+    from google_auth_httplib2 import AuthorizedHttp
     from googleapiclient.discovery import build
 
     raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_CREDENTIALS")
@@ -833,7 +878,8 @@ def _sheets_service():
     credentials = service_account.Credentials.from_service_account_info(
         info, scopes=GOOGLE_SHEETS_SCOPES
     )
-    return build("sheets", "v4", credentials=credentials, cache_discovery=False)
+    authorized_http = AuthorizedHttp(credentials, http=httplib2.Http(timeout=180))
+    return build("sheets", "v4", http=authorized_http, cache_discovery=False)
 
 
 def _a1_ref(row_idx: int, col_idx: int) -> str:
@@ -930,7 +976,9 @@ def read_google_sheet(spreadsheet_id: str) -> dict[str, Any]:
         if tab_name not in tracking_grids:
             return {}
         grid, _ = tracking_grids[tab_name]
-        return index_summary_rows(iter(grid[header_row - 1 :]), header_row=header_row)
+        return index_summary_rows(
+            iter(grid[header_row - 1 :]), header_row=header_row, tab_name=tab_name
+        )
 
     main_rows = summary_rows(MAIN_SHEET, header_row=4)
     deleted_rows = summary_rows(DELETE_SHEET, header_row=1)
@@ -970,8 +1018,31 @@ def read_google_sheet(spreadsheet_id: str) -> dict[str, Any]:
 
 
 def build_user_matcher(users: list[Any]):
-    """Matches sheet labels like 'Taylor J' / 'John B' to users.users ids."""
+    """Matches sheet labels like 'Taylor J' / 'John B' to users.users ids.
+
+    A bare first name (no last name/initial in the sheet label -- e.g. just
+    'Carson') matches a *named* user (one with a last_name on file) only
+    when exactly one such user shares that first name; two named users
+    sharing a first name would make a bare label genuinely ambiguous, so
+    neither gets a first-name-only key and the label falls through to a
+    placeholder instead of guessing wrong.
+
+    A user with NO last name is a different case and always gets the bare
+    key regardless of how many named users share that first name: such a
+    user is typically itself a placeholder created earlier for this exact
+    bare-name label, and there's no more specific key it could ever match
+    under -- refusing the bare match here would just recreate it every run
+    and crash on the clerk_id unique constraint (a user with a first-only
+    name and no matching entry has nothing to fall back to).
+    """
     by_key: dict[str, int] = {}
+    first_name_counts: dict[str, int] = {}
+    for user in users:
+        first = (user.first_name or "").strip().lower()
+        last = (user.last_name or "").strip().lower()
+        if first and last:
+            first_name_counts[first] = first_name_counts.get(first, 0) + 1
+
     for user in users:
         first = (user.first_name or "").strip().lower()
         last = (user.last_name or "").strip().lower()
@@ -980,6 +1051,8 @@ def build_user_matcher(users: list[Any]):
         if last:
             by_key.setdefault(f"{first} {last}", user.id)
             by_key.setdefault(f"{first} {last[0]}", user.id)
+            if first_name_counts[first] == 1:
+                by_key.setdefault(first, user.id)
         else:
             by_key.setdefault(first, user.id)
 
@@ -1124,6 +1197,241 @@ async def load_deals(deals: list[dict[str, Any]], update: bool) -> dict[str, Any
     }
 
 
+async def refresh_deals(deals: list[dict[str, Any]], dry_run: bool) -> dict[str, Any]:
+    """In-place UPDATE for sheet_numbers that already exist in the DB, so a
+    later sheet edit (status change, corrected price, parser fix) reaches
+    rows already backfilled -- without --update's delete+reinsert downsides:
+    no id churn, and uw_details.zillow_property (populated by a separate
+    script, never by this one) is never touched.
+
+    Two safety nets, both learned the hard way on this exact sheet:
+    - A sheet_number whose fresh parse finds neither a summary row nor a
+      deal tab (the sheet transiently or permanently lost both) is left
+      alone entirely -- reported under 'no_current_data' -- rather than
+      overwriting good historical data with an empty/no-status record.
+    - optimization_items/operating_expenses are only replaced when the deal
+      tab's parser actually found that section this time; a 'section not
+      found' warning means the template didn't match, not that the sheet
+      now has zero items, so the existing rows are left as-is rather than
+      wiped by a parsing gap. taxes/comp_set have no such warning signal,
+      so they're only replaced when the fresh parse is non-empty.
+
+    Only touches rows that already exist; a sheet_number not yet in the DB
+    is reported under 'not_found' -- run without --refresh to insert those.
+    """
+    from sqlalchemy import delete, select
+
+    from app.core.database import AsyncSessionLocal
+    from app.iron_bank.models import (
+        Underwriting,
+        UnderwritingCompSet,
+        UnderwritingDetail,
+        UnderwritingOperatingExpense,
+        UnderwritingOptimizationItem,
+        UnderwritingTax,
+    )
+    from app.users.models.user import User
+    from app.zillow.repositories.scheduled_listings_repository import (
+        ScheduledListingsRepository,
+    )
+    from app.zillow.services.scheduled_listings_service import (
+        ScheduledListingsService,
+    )
+
+    updated, not_found, no_current_data, detail_only, failed = [], [], [], [], []
+    zpids_matched = 0
+
+    async with AsyncSessionLocal() as session:
+        users = (
+            (await session.execute(select(User).where(User.is_deleted.isnot(True))))
+            .scalars()
+            .all()
+        )
+        match_user = build_user_matcher(users)
+        created_users: dict[str, int | None] = {}
+
+        listings_service = ScheduledListingsService(ScheduledListingsRepository(session))
+        candidate_zpids = list(
+            {d["candidate_zpid"] for d in deals if d.get("candidate_zpid")}
+        )
+        confirmed_listings = await listings_service.get_by_zpids(candidate_zpids)
+
+        async def resolve_user(name: str | None) -> int | None:
+            """Match an existing user, or create a placeholder -- except in
+            dry_run, where nothing is persisted and an unmatched name simply
+            resolves to None for the preview."""
+            if not name:
+                return None
+            user_id = match_user(name)
+            if user_id is not None:
+                return user_id
+            key = name.strip().lower()
+            if key not in created_users:
+                if dry_run:
+                    created_users[key] = None
+                else:
+                    first, last = split_person_name(name)
+                    user = User(
+                        clerk_id=legacy_clerk_id(name), first_name=first, last_name=last
+                    )
+                    session.add(user)
+                    await session.commit()
+                    created_users[key] = user.id
+            return created_users[key]
+
+        for deal in deals:
+            number = deal["sheet_number"]
+
+            warnings = set(deal["warnings"])
+            no_summary = (
+                "no summary row in any tracking tab (deal tab only)" in warnings
+            )
+            no_tab = "no deal tab in workbook (summary row only)" in warnings
+            if no_summary and no_tab:
+                no_current_data.append(number)
+                continue
+
+            try:
+                # deal_status, property_address, city, state, analyst/
+                # approver, revenue figures, turnkey, etc. only ever come
+                # from the summary row (build_deal's underwriting dict is
+                # just {source, sheet_number, is_automated, deal_status,
+                # listing_url?, purchase_price?} when summary is None) --
+                # deal_status specifically defaults to NO_STATUS in that
+                # case. Applying that dict here when the summary is simply
+                # missing from *this* parse (not permanently gone -- the tab
+                # still exists) would silently downgrade a real status to
+                # "no status" and blank out fields that were never actually
+                # cleared on the sheet. So when summary is missing, skip the
+                # underwriting row entirely and only refresh the deal tab's
+                # own detail/tax/line-item data below.
+                underwriting_data: dict[str, Any] | None = None
+                if no_summary:
+                    detail_only.append(number)
+                else:
+                    underwriting_data = dict(deal["underwriting"])
+                    underwriting_data.pop("source", None)
+                    underwriting_data.pop("sheet_number", None)
+                    underwriting_data.pop("is_automated", None)
+                    # Resolved before the fetch below, not after:
+                    # resolve_user() may commit a new placeholder user, and
+                    # an async session expires every loaded object on
+                    # commit/rollback -- touching `existing` again after
+                    # that without an explicit refresh raises
+                    # greenlet_spawn errors. Resolving first guarantees it's
+                    # never stale when the setattrs below run.
+                    underwriting_data["analyst_id"] = await resolve_user(
+                        deal["analyst_name"]
+                    )
+                    underwriting_data["approver_id"] = await resolve_user(
+                        deal["approver_name"]
+                    )
+                    candidate_zpid = deal.get("candidate_zpid")
+                    if candidate_zpid in confirmed_listings:
+                        underwriting_data["zpid"] = candidate_zpid
+                        zpids_matched += 1
+                    if deal["notes"]:
+                        underwriting_data["note"] = "\n".join(deal["notes"])
+
+                existing = (
+                    await session.execute(
+                        select(Underwriting).where(
+                            Underwriting.source == LEGACY_SOURCE,
+                            Underwriting.sheet_number == number,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if existing is None:
+                    not_found.append(number)
+                    continue
+                if underwriting_data is not None:
+                    for key, value in underwriting_data.items():
+                        setattr(existing, key, value)
+
+                detail_data = deal["detail"] or {}
+                if detail_data:
+                    detail = (
+                        await session.execute(
+                            select(UnderwritingDetail).where(
+                                UnderwritingDetail.underwriting_id == existing.id
+                            )
+                        )
+                    ).scalar_one_or_none()
+                    if detail is None:
+                        detail = UnderwritingDetail(underwriting_id=existing.id)
+                        session.add(detail)
+                    for key, value in detail_data.items():
+                        setattr(detail, key, value)
+
+                if deal["taxes"]:
+                    await session.execute(
+                        delete(UnderwritingTax).where(
+                            UnderwritingTax.underwriting_id == existing.id
+                        )
+                    )
+                    session.add(
+                        UnderwritingTax(underwriting_id=existing.id, **deal["taxes"])
+                    )
+
+                if "section not found: Optimization List" not in warnings:
+                    await session.execute(
+                        delete(UnderwritingOptimizationItem).where(
+                            UnderwritingOptimizationItem.underwriting_id == existing.id
+                        )
+                    )
+                    for index, item in enumerate(deal["optimization_items"]):
+                        session.add(
+                            UnderwritingOptimizationItem(
+                                underwriting_id=existing.id, sort_order=index, **item
+                            )
+                        )
+
+                if "section not found: Operating Expenses (OPEX)" not in warnings:
+                    await session.execute(
+                        delete(UnderwritingOperatingExpense).where(
+                            UnderwritingOperatingExpense.underwriting_id == existing.id
+                        )
+                    )
+                    for index, item in enumerate(deal["operating_expenses"]):
+                        session.add(
+                            UnderwritingOperatingExpense(
+                                underwriting_id=existing.id, sort_order=index, **item
+                            )
+                        )
+
+                if deal["comp_set"]:
+                    await session.execute(
+                        delete(UnderwritingCompSet).where(
+                            UnderwritingCompSet.underwriting_id == existing.id
+                        )
+                    )
+                    for index, item in enumerate(deal["comp_set"]):
+                        session.add(
+                            UnderwritingCompSet(
+                                underwriting_id=existing.id, sort_order=index, **item
+                            )
+                        )
+
+                if dry_run:
+                    await session.rollback()
+                else:
+                    await session.commit()
+                updated.append(number)
+            except Exception as exc:  # keep going; report at the end
+                await session.rollback()
+                failed.append({"sheet_number": number, "error": str(exc)})
+
+    return {
+        "updated": updated,
+        "detail_only": detail_only,
+        "not_found": not_found,
+        "no_current_data": no_current_data,
+        "failed": failed,
+        "created_users": created_users,
+        "zpids_matched": zpids_matched,
+    }
+
+
 async def backfill_missing_zpids() -> dict[str, Any]:
     """Fills zpid on already-loaded legacy rows from their stored listing_url.
     In-place UPDATE only (no delete/reinsert): ids and created_at on existing
@@ -1230,6 +1538,18 @@ def parse_args() -> argparse.Namespace:
             "listing_url (targeted UPDATE; no xlsx, no delete/reinsert)."
         ),
     )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help=(
+            "In-place UPDATE for sheet_numbers that already exist (status "
+            "changes, corrected figures, parser fixes reaching the sheet "
+            "since backfill) -- keeps id and uw_details.zillow_property "
+            "untouched, unlike --update's delete+reinsert. Combine with "
+            "--dry-run to preview without writing (still queries the DB, "
+            "unlike a plain --dry-run)."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -1259,6 +1579,42 @@ def main() -> None:
         )
         for n in numbers
     ]
+
+    if args.refresh:
+        result = asyncio.run(refresh_deals(deals, dry_run=args.dry_run))
+        report = {
+            "source": (
+                f"gsheet:{args.gsheet}" if args.gsheet is not None else str(args.xlsx)
+            ),
+            "range": args.range,
+            "dry_run": args.dry_run,
+            "deals_found": len(deals),
+            "updated": len(result["updated"]),
+            "detail_only": result["detail_only"],
+            "not_found": len(result["not_found"]),
+            "no_current_data": len(result["no_current_data"]),
+            "created_placeholder_users": result["created_users"],
+            "failed": result["failed"],
+            "zpids_matched": result["zpids_matched"],
+            "deals_with_warnings": [
+                {"sheet_number": deal["sheet_number"], "warnings": deal["warnings"]}
+                for deal in deals
+                if deal["warnings"]
+            ],
+        }
+        REPORT_PATH.write_text(json.dumps(report, indent=2, default=str))
+        print(
+            json.dumps(
+                {k: v for k, v in report.items() if k != "deals_with_warnings"},
+                indent=2,
+                default=str,
+            )
+        )
+        print(
+            f"{len(report['deals_with_warnings'])} deals with warnings "
+            f"-> {REPORT_PATH}"
+        )
+        return
 
     if args.dry_run:
         result = {
