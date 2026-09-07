@@ -93,6 +93,7 @@ def upgrade() -> None:
         sa.Column("view_quality", sa.String(length=50), nullable=True),
         sa.Column("pool_type", sa.String(length=50), nullable=True),
         sa.Column("primary_guest_avatar", sa.String(length=50), nullable=True),
+        sa.Column("target_demographic", sa.String(length=50), nullable=True),
         sa.Column("listing_url", sa.Text(), nullable=True),
         sa.Column("loom_vid", sa.Text(), nullable=True),
         sa.Column("deal_pitch", sa.Text(), nullable=True),

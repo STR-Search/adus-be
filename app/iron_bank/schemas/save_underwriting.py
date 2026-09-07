@@ -175,6 +175,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                 "view_quality": "premium",
                 "pool_type": "in_ground",
                 "primary_guest_avatar": "family_stays",
+                "target_demographic": "couples_getaway",
                 "loom_vid": "https://loom.com/share/abc123",
                 "deal_pitch": "https://loom.com/share/pitch456",
                 "video_walkthrough": "https://youtube.com/watch?v=xwalk001",

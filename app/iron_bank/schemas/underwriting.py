@@ -34,6 +34,7 @@ SINGLE_SELECT_TAG_FIELDS: tuple[str, ...] = (
     "view_quality",
     "pool_type",
     "primary_guest_avatar",
+    "target_demographic",
 )
 REFERENCE_TAG_FIELDS: tuple[str, ...] = (
     *MULTI_SELECT_TAG_FIELDS,
@@ -153,6 +154,7 @@ class UnderwritingBase(BaseModel):
     view_quality: str | None = None
     pool_type: str | None = None
     primary_guest_avatar: str | None = None
+    target_demographic: str | None = None
     listing_url: str | None = None
     loom_vid: str | None = None
     deal_pitch: str | None = None
@@ -223,5 +225,6 @@ class UnderwritingRead(UnderwritingBase, DealStatusLabelMixin):
     view_quality_label: str | None = None
     pool_type_label: str | None = None
     primary_guest_avatar_label: str | None = None
+    target_demographic_label: str | None = None
 
     model_config = {"from_attributes": True}

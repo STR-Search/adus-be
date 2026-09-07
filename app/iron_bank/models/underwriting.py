@@ -172,6 +172,7 @@ class Underwriting(Base):
     view_quality = Column(String(50), nullable=True)
     pool_type = Column(String(50), nullable=True)
     primary_guest_avatar = Column(String(50), nullable=True)
+    target_demographic = Column(String(50), nullable=True)
 
     listing_url = Column(Text, nullable=True)
     loom_vid = Column(Text, nullable=True)

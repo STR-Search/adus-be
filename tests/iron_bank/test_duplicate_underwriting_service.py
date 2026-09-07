@@ -42,7 +42,8 @@ _EXPECTED_UNDERWRITING_COLUMNS = frozenset(
         "purchase_price", "regulatory_clarity", "remote", "renovation_level",
         "seasonality", "series_id", "sheet_number", "sleep_count_high",
         "sleep_count_low", "source",
-        "state", "street", "survey", "tax_efficient", "total_oop", "turnkey",
+        "state", "street", "survey", "target_demographic", "tax_efficient",
+        "total_oop", "turnkey",
         "updated_at", "version", "video_walkthrough", "view_quality",
         "waterfront", "zpid",
     }

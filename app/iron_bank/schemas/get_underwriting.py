@@ -298,6 +298,7 @@ class GetUnderwritingsQuery(BaseModel):
     view_quality: list[str] | None = None
     pool_type: list[str] | None = None
     primary_guest_avatar: list[str] | None = None
+    target_demographic: list[str] | None = None
     # Graded deal tags on a 1-5 scale. Accepts repeated or comma-separated
     # levels; levels within a tag OR together, different tags AND together. With
     # only five levels a list also expresses any range ("complexity 1-3" is

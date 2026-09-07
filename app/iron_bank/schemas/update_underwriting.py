@@ -72,6 +72,7 @@ class UpdateUnderwritingPayload(BaseModel):
     view_quality: str | None = None
     pool_type: str | None = None
     primary_guest_avatar: str | None = None
+    target_demographic: str | None = None
     listing_url: str | None = None
     loom_vid: str | None = None
     deal_pitch: str | None = None
