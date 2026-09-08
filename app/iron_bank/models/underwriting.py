@@ -18,6 +18,7 @@ from sqlalchemy import (
     func,
     text,
 )
+
 # The multi-select tag columns use the PostgreSQL ARRAY rather than the generic
 # one: identical DDL (``text[]``), but it carries the array operators — notably
 # ``&&`` via ``.overlap()``, which the list endpoint's multi-select filters need.
@@ -77,9 +78,7 @@ class Underwriting(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    version = Column(
-        Integer, nullable=False, default=0, server_default=text("0")
-    )
+    version = Column(Integer, nullable=False, default=0, server_default=text("0"))
     copied_from_id = Column(
         Integer,
         ForeignKey("iron_bank.underwritings.id", ondelete="SET NULL"),
@@ -128,7 +127,8 @@ class Underwriting(Base):
     city = Column(String(100), nullable=True)
     state = Column(String(50), nullable=True)
     days_on_market = Column(Integer, nullable=True)
-    sleep_capacity = Column(Integer, nullable=True)
+    sleep_count_low = Column(Integer, nullable=True)
+    sleep_count_high = Column(Integer, nullable=True)
     bedrooms = Column(Integer, nullable=True)
     bathrooms = Column(Numeric(4, 1), nullable=True)
 
@@ -172,6 +172,7 @@ class Underwriting(Base):
     view_quality = Column(String(50), nullable=True)
     pool_type = Column(String(50), nullable=True)
     primary_guest_avatar = Column(String(50), nullable=True)
+    target_demographic = Column(String(50), nullable=True)
 
     listing_url = Column(Text, nullable=True)
     loom_vid = Column(Text, nullable=True)
