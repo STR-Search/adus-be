@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from app.iron_bank.enums import UnderwritingSortBy
+from app.iron_bank.enums import USState, UnderwritingSortBy
 from app.iron_bank.models.underwriting import Underwriting
 from app.iron_bank.schemas.get_underwriting import GetUnderwritingsQuery
 
@@ -112,3 +112,43 @@ def test_market_ids_dumps_under_the_field_name():
     """The router splats model_dump() into the controller, which takes
     market_ids — the alias only governs the URL."""
     assert GetUnderwritingsQuery(market_id="1,4").model_dump()["market_ids"] == [1, 4]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # repeated params, the shape FastAPI hands us for ?state=FL&state=TN
+        (["FL", "TN"], [USState.FL, USState.TN]),
+        # comma-separated, matching the market_id convention
+        ("FL,TN", [USState.FL, USState.TN]),
+        ("FL, TN", [USState.FL, USState.TN]),
+        # casing is normalized, so a client can send whatever it has
+        ("fl", [USState.FL]),
+        (["fl", "Tn"], [USState.FL, USState.TN]),
+        # "no filter" normalizes to None so the repository never emits IN ()
+        ("", None),
+        ([], None),
+        (["FL", ""], [USState.FL]),
+    ],
+)
+def test_state_accepts_one_or_many_codes(raw, expected):
+    assert GetUnderwritingsQuery(state=raw).states == expected
+
+
+def test_state_defaults_to_none():
+    assert GetUnderwritingsQuery().states is None
+
+
+@pytest.mark.parametrize("raw", ["ZZ", "Florida", "F", "FL,ZZ"])
+def test_state_rejects_codes_that_are_not_us_states(raw):
+    with pytest.raises(ValidationError):
+        GetUnderwritingsQuery(state=raw)
+
+
+def test_states_dumps_under_the_field_name():
+    """The router splats model_dump() into the controller, which takes
+    states — the alias only governs the URL."""
+    assert GetUnderwritingsQuery(state="fl,tn").model_dump()["states"] == [
+        USState.FL,
+        USState.TN,
+    ]

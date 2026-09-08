@@ -18,6 +18,7 @@ from app.iron_bank.enums import (
     DealStatus,
     OpexKeyedOn,
     SortOrder,
+    USState,
     UnderwritingSortBy,
     UnderwritingSource,
 )
@@ -35,9 +36,7 @@ _SQFT_PER_ACRE = Decimal("43560")
 # One level on a graded deal tag's 1-5 scale. Bounding the *item* rather than
 # the list means an out-of-range value is rejected with a 422 naming the
 # offending element, instead of being silently dropped or matching nothing.
-NumericTagLevel = Annotated[
-    int, Field(ge=NUMERIC_TAG_MIN, le=NUMERIC_TAG_MAX)
-]
+NumericTagLevel = Annotated[int, Field(ge=NUMERIC_TAG_MIN, le=NUMERIC_TAG_MAX)]
 
 
 def _flatten_repeated_params(value):
@@ -242,6 +241,7 @@ class GetUnderwritingsQuery(BaseModel):
     zpid: str | None = None
     bedrooms: int | None = Field(None, ge=0)
     market_ids: list[int] | None = Field(None, alias="market_id")
+    states: list[USState] | None = Field(None, alias="state")
     deal_status: DealStatus | None = None
     analyst_id: int | None = None
     approver_id: int | None = None
@@ -325,6 +325,20 @@ class GetUnderwritingsQuery(BaseModel):
     @classmethod
     def split_market_ids(cls, value):
         return _flatten_repeated_params(value)
+
+    @field_validator("states", mode="before")
+    @classmethod
+    def split_states(cls, value):
+        """Flatten repeated/comma-separated state params and upper-case them.
+
+        ``?state=fl&state=tn`` and ``?state=fl,tn`` both arrive here; the
+        upper-casing happens before ``USState`` validation so a client can send
+        whatever casing it has and still get a 422 for a genuinely bad code.
+        """
+        flattened = _flatten_repeated_params(value)
+        if flattened is None:
+            return None
+        return [item.upper() if isinstance(item, str) else item for item in flattened]
 
     @field_validator(
         *SINGLE_SELECT_TAG_FIELDS,

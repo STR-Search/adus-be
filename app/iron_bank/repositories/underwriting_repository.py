@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import String, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -182,6 +182,7 @@ class UnderwritingRepository:
         zpid: str | None = None,
         bedrooms: int | None = None,
         market_ids: list[int] | None = None,
+        states: list[str] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
         approver_id: int | None = None,
@@ -219,6 +220,12 @@ class UnderwritingRepository:
             query = query.where(Underwriting.bedrooms == bedrooms)
         if market_ids:
             query = query.where(Underwriting.market_id.in_(market_ids))
+        if states:
+            query = query.where(
+                func.upper(Underwriting.state, type_=String).in_(
+                    [str(state).upper() for state in states]
+                )
+            )
         if deal_status is not None:
             query = query.where(Underwriting.deal_status == deal_status)
         if source is not None:
@@ -319,6 +326,7 @@ class UnderwritingRepository:
         zpid: str | None = None,
         bedrooms: int | None = None,
         market_ids: list[int] | None = None,
+        states: list[str] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
         approver_id: int | None = None,
@@ -398,6 +406,17 @@ class UnderwritingRepository:
             query = query.where(Underwriting.bedrooms == bedrooms)
         if market_ids:
             query = query.where(Underwriting.market_id.in_(market_ids))
+        if states:
+            # ``state`` is free-text varchar, not a constrained column, so match
+            # case-insensitively rather than assuming stored codes are upper.
+            # upper() has no inferable return type, hence the explicit String —
+            # without it the IN binds go out untyped. Values arrive as USState
+            # members; str() keeps the driver on plain text params.
+            query = query.where(
+                func.upper(Underwriting.state, type_=String).in_(
+                    [str(state).upper() for state in states]
+                )
+            )
         if deal_status is not None:
             query = query.where(Underwriting.deal_status == deal_status)
         if source is not None:
