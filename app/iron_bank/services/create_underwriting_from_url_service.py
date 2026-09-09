@@ -13,7 +13,12 @@ logger = structlog.get_logger(__name__)
 
 
 class UnderwritingAlreadyExistsError(Exception):
-    """Raised when an underwriting already exists for the given listing URL."""
+    """Raised when an underwriting already exists for the requested property.
+
+    Matched on the listing URL before the fetch, or on the zpid after it —
+    either way the id carried back is the oldest row for the property, which is
+    the one the client redirects to.
+    """
 
     def __init__(self, underwriting_id: int):
         self.underwriting_id = underwriting_id
@@ -83,6 +88,8 @@ class ZillowPropertyReader(Protocol):
 class ExistingUnderwritingReader(Protocol):
     async def get_by_listing_url(self, listing_url: str) -> Any | None: ...
 
+    async def get_oldest_by_zpid(self, zpid: str) -> Any | None: ...
+
 
 class ListingReader(Protocol):
     """Satisfied by ``app.zillow.services.scheduled_listings_service``."""
@@ -127,11 +134,18 @@ class CreateUnderwritingFromUrlService:
     generic save service. Saving itself performs no network calls. Returns the
     new underwriting id so the analyst can start filling it in via update.
 
-    The market guard runs twice, on purpose: once before the fetch keyed on the
-    URL (cheap, but only when the pasted URL matches the scraper's stored
-    ``detail_url``) and once after it keyed on the zpid (authoritative, but the
+    The duplicate and market guards both run twice, on purpose: once before the
+    fetch keyed on the URL (cheap, but only when the pasted URL matches what is
+    already on file) and once after it keyed on the zpid (authoritative, but the
     external call is already spent). The first is an optimisation; the second is
     the one that actually holds the invariant.
+
+    The URL pass cannot be the only duplicate guard. It is exact string
+    equality, and the same property reaches us under URLs that differ by a
+    trailing ``?``, a query string, or a shortened link — which is how two
+    version-0 series for one zpid came to exist. The zpid pass closes that.
+    Neither pass replaces the other: legacy rows created before the scrape
+    persisted listings carry a NULL zpid and are only reachable by URL.
     """
 
     def __init__(
@@ -159,14 +173,16 @@ class CreateUnderwritingFromUrlService:
         market_id: int | None = None,
         current_user_id: int | None = None,
     ) -> SaveUnderwritingResult:
-        # Idempotency: the stored listing_url is exactly the request URL, so we
-        # can short-circuit before spending an external API call.
+        # Idempotency, cheap pass: when the stored listing_url is exactly the
+        # request URL we can short-circuit before spending an external API call.
+        # A miss is not "no duplicate" — see the zpid pass below.
         existing = await self.underwriting_reader.get_by_listing_url(url)
         if existing is not None:
             logger.info(
                 "iron_bank.create_underwriting_from_url.already_exists",
                 url=url,
                 underwriting_id=existing.id,
+                matched_on="listing_url",
             )
             raise UnderwritingAlreadyExistsError(existing.id)
 
@@ -189,6 +205,7 @@ class CreateUnderwritingFromUrlService:
             )
 
         zpid, listing = await self._resolve_scraped_listing(url, zillow_property)
+        await self._guard_duplicate_by_zpid(url=url, zpid=zpid)
         await self._guard_listing_market(
             market_id=market_id, listing=listing, zpid=zpid
         )
@@ -248,6 +265,42 @@ class CreateUnderwritingFromUrlService:
             zpid=zpid,
         )
         return zpid, listing
+
+    async def _guard_duplicate_by_zpid(self, *, url: str, zpid: str | None) -> None:
+        """The duplicate guard, re-run on the zpid once the fetch resolved one.
+
+        This is the authoritative pass. The pre-fetch pass compares URLs by
+        exact equality, so a property already underwritten under a URL that
+        differs only cosmetically — a trailing ``?``, a query string, a
+        shortened link — slips past it and opens a second version-0 series for
+        one zpid.
+
+        Runs before the market guard, matching the pre-fetch order: an existing
+        deal makes the market question moot, and a 409 the client can redirect
+        to is more use than one telling it to re-submit with another market.
+
+        Ordered oldest-first by the repository, so the id handed back is the
+        original rather than whichever copy is newest.
+
+        ``zpid`` is None only when no listings service is wired, in which case
+        there is nothing to check and the URL pass stands alone.
+        """
+        if zpid is None:
+            return
+
+        existing = await self.underwriting_reader.get_oldest_by_zpid(zpid)
+        if existing is None:
+            return
+
+        logger.info(
+            "iron_bank.create_underwriting_from_url.already_exists",
+            url=url,
+            zpid=zpid,
+            underwriting_id=existing.id,
+            matched_on="zpid",
+            detail="url pass missed — duplicate caught post-fetch",
+        )
+        raise UnderwritingAlreadyExistsError(existing.id)
 
     async def _guard_listing_market_by_url(
         self, *, url: str, market_id: int | None

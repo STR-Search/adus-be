@@ -566,6 +566,33 @@ class UnderwritingRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_oldest_by_zpid(self, zpid: str) -> Underwriting | None:
+        """The *oldest* underwriting for a zpid.
+
+        Ascending, unlike ``get_by_zpid``, for the same reason
+        ``get_by_listing_url`` is: this backs the duplicate guard in
+        ``CreateUnderwritingFromUrlService``, whose 409 carries an id the client
+        redirects to, and the analyst should land on the original rather than on
+        whichever copy of the series happens to be newest.
+
+        ``get_by_zpid`` stays descending — its caller (the automated create
+        guard) only asks whether a row exists and never surfaces the id.
+        """
+        result = await self.db.execute(
+            select(Underwriting)
+            .where(Underwriting.zpid == zpid)
+            .options(
+                selectinload(Underwriting.detail),
+                selectinload(Underwriting.taxes),
+                selectinload(Underwriting.optimization_items),
+                selectinload(Underwriting.operating_expenses),
+                selectinload(Underwriting.comp_set),
+            )
+            .order_by(Underwriting.id.asc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def create(
         self,
         underwriting_data: dict[str, Any],
