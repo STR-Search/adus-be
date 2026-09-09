@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logger import logger
@@ -30,6 +30,25 @@ class RealtorRepository:
             )
         )
         return list(result.scalars().all())
+
+    async def get_active_by_email(self, email: str | None) -> Realtor | None:
+        """The active realtor holding this email, matched the way the unique
+        index does: ``lower(btrim(email))`` among non-deleted rows.
+
+        Used to name the conflicting row after a duplicate insert, so the
+        comparison has to mirror ``uq_realtors_email_active`` exactly — a plain
+        equality check would miss a collision that differed only in case or
+        surrounding whitespace.
+        """
+        if email is None or not email.strip():
+            return None
+        result = await self.db.execute(
+            select(Realtor).where(
+                func.lower(func.trim(Realtor.email)) == email.strip().lower(),
+                Realtor.deleted_at.is_(None),
+            )
+        )
+        return result.scalars().first()
 
     async def get_all(self, search: str | None = None) -> list[Realtor]:
         query = select(Realtor).where(Realtor.deleted_at.is_(None))
