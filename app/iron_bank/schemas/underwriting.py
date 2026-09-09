@@ -212,6 +212,14 @@ class UnderwritingRead(UnderwritingBase, DealStatusLabelMixin):
     optimization_total: Decimal | None = None
     operating_expense_total: Decimal | None = None
 
+    # Server-managed row timestamps — declared here for the same reason as the
+    # lineage fields above: the DB owns them (server_default/onupdate), so they
+    # must not become settable on the write payloads that inherit
+    # UnderwritingBase. Distinct from deal_added/deal_submitted/deal_approved,
+    # which are analyst-entered dates on the deal itself.
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
     # Resolved reference-data labels for each tag slug. Populated by the read
     # service from ``ReferenceDataService.get_label_map`` — NOT computed, since
     # labels live in the DB (reference.enum_options), not in code.
