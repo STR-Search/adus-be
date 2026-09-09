@@ -109,6 +109,27 @@ class PrepareUwDataJob:
             underwriting_repository=UnderwritingRepository(db),
         )
 
+    def _resolve_market_lookup(self, market_id: int | None) -> tuple[int, bool]:
+        """Which market to read figures from, and whether to zero them after.
+
+        A market-less deal is not "no data": it loads ``TEMPLATE_MARKET_ID`` so
+        the opex and amenity rows for this property's size exist, then has every
+        amount zeroed so the analyst fills them in from scratch.
+
+        Shared by both entry points on purpose. ``run`` (automated, market from
+        the listing's preset) and ``build_market_context`` (non-automated,
+        market from the analyst) used to decide this separately, and only the
+        latter had the fallback — so a market-less listing coming through the
+        automated path was seeded with just the always-seeded opex rows while
+        the same property pasted as a URL got the full zeroed set. One rule, one
+        place, so the two paths cannot disagree again.
+        """
+        is_template = market_id is None
+        lookup_market_id = (
+            self.uw_data_service.TEMPLATE_MARKET_ID if is_template else market_id
+        )
+        return lookup_market_id, is_template
+
     async def build_market_context(
         self,
         *,
@@ -118,20 +139,12 @@ class PrepareUwDataJob:
     ) -> MarketContext:
         """Fetch everything a draft underwriting derives from its market.
 
-        Shared by both entry points: ``run`` (automated, market from the
-        listing's preset) and the non-automated create-from-URL flow, which
-        passes the analyst's ``market_id`` along with the bedrooms/sqft off the
-        live Zillow fetch.
-
-        A ``market_id`` of ``None`` means the analyst created the deal without a
-        market. Rather than return nothing we load ``TEMPLATE_MARKET_ID`` — so
-        the opex and amenity rows for this property's size exist — and hand back
-        a zeroed copy for them to fill in.
+        The non-automated create-from-URL entry point, which passes the
+        analyst's ``market_id`` along with the bedrooms/sqft off the live Zillow
+        fetch. ``run`` is the automated counterpart; both resolve the market to
+        read from via ``_resolve_market_lookup``.
         """
-        is_template = market_id is None
-        lookup_market_id = (
-            self.uw_data_service.TEMPLATE_MARKET_ID if is_template else market_id
-        )
+        lookup_market_id, is_template = self._resolve_market_lookup(market_id)
         sqft = self.uw_data_service.normalize_sqft(area)
 
         market = await self.market_service.get_by_id(lookup_market_id)
@@ -293,14 +306,21 @@ class PrepareUwDataJob:
             raise ValueError("No listing found for the provided zpid")
 
         market_id = listing.preset.market_id if listing.preset else None
+        # A listing whose preset carries no market (the exploratory bucket) is
+        # seeded from the zeroed template, exactly as the create-from-URL path
+        # does — the deal itself still comes out market-less, because
+        # to_template_market_context nulls the identity fields.
+        lookup_market_id, is_template = self._resolve_market_lookup(market_id)
         sqft = self.uw_data_service.normalize_sqft(listing.area)
 
-        market = await self.market_service.get_by_id(market_id) if market_id is not None else None
+        market = await self.market_service.get_by_id(lookup_market_id)
         listing_details = await self.listing_details_service.get_by_zpid(listing.zpid)
         opex_by_bedrooms = await self.opex_by_bedrooms_service.get_by_market_and_bedrooms(
-            bedrooms=listing.beds, market_id=market_id
+            bedrooms=listing.beds, market_id=lookup_market_id
         )
-        opex_by_size = await self.opex_by_size_service.get_by_market_and_sqft(sqft=sqft, market_id=market_id)
+        opex_by_size = await self.opex_by_size_service.get_by_market_and_sqft(
+            sqft=sqft, market_id=lookup_market_id
+        )
         construction_amenities = await self.construction_amenities_service.get_all()
         construction_remodeling = await self.construction_remodeling_service.get_all()
         str_cribs_fee = (
@@ -314,7 +334,8 @@ class PrepareUwDataJob:
             listing=listing,
             listing_details=listing_details,
             market=market,
-            market_id=market_id,
+            market_id=lookup_market_id,
+            is_template=is_template,
             opex_by_bedrooms=opex_by_bedrooms,
             opex_by_size=opex_by_size,
             construction_amenities=construction_amenities,
