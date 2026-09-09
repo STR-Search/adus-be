@@ -117,6 +117,25 @@ class TestPrepare:
         assert result["market_id"] == 3
         assert result["market_slug"] == "smoky-mountains"
 
+    def test_is_template_zeroes_the_figures_but_keeps_the_rows(self):
+        """The template pass keeps every opex key, at zero.
+
+        This is what makes a market-less deal seed the full row set rather than
+        only the always-seeded rows: build_opex_expense_rows drops a row whose
+        amount is None, and zero is not None.
+        """
+        seeded = self._prepare().model_dump()
+        templated = self._prepare(is_template=True).model_dump()
+
+        assert templated["opex"]["absolute"].keys() == seeded["opex"]["absolute"].keys()
+        assert set(templated["opex"]["absolute"].values()) == {Decimal("0")}
+        assert templated["opex"]["property_tax_pct"] == Decimal("0")
+        # Identity is nulled: the deal is market-less, not attached to the
+        # template market it borrowed its shape from.
+        assert templated["market_id"] is None
+        # The zillow half comes off the listing, so it is untouched.
+        assert templated["zillow_property"] == seeded["zillow_property"]
+
     def test_transforms_zillow_property(self):
         result = self._prepare().model_dump()
         assert result["zillow_property"] == {
