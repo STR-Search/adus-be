@@ -6,7 +6,10 @@ from app.markets.schemas.realtor import (
     RealtorSchema,
     RealtorUpdateSchema,
 )
-from app.markets.services.realtor_service import RealtorService
+from app.markets.services.realtor_service import (
+    DuplicateRealtorEmailError,
+    RealtorService,
+)
 
 
 class RealtorController:
@@ -35,6 +38,11 @@ class RealtorController:
     async def create(self, data: RealtorCreateSchema) -> RealtorSchema:
         try:
             return await self.service.create(data)
+        except DuplicateRealtorEmailError as e:
+            raise HTTPException(
+                status_code=409,
+                detail={"message": str(e), "existing_id": e.existing_id},
+            )
         except Exception as e:
             logger.error("realtors.create.error", error=str(e))
             raise HTTPException(status_code=500, detail="Failed to create realtor")
@@ -47,6 +55,11 @@ class RealtorController:
             return record
         except HTTPException:
             raise
+        except DuplicateRealtorEmailError as e:
+            raise HTTPException(
+                status_code=409,
+                detail={"message": str(e), "existing_id": e.existing_id},
+            )
         except Exception as e:
             logger.error("realtors.update.error", record_id=record_id, error=str(e))
             raise HTTPException(status_code=500, detail="Failed to update realtor")

@@ -70,3 +70,40 @@ def test_non_numeric_market_id_is_rejected():
     response = build_client().get("/iron-bank/underwritings?market_id=abc")
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        # repeated params — the format the dashboard already sends
+        ("state=FL&state=TN", ["FL", "TN"]),
+        ("state=FL,TN", ["FL", "TN"]),
+        ("state=fl&state=tn", ["FL", "TN"]),
+        ("state=FL", ["FL"]),
+        ("state=", None),
+        ("", None),
+    ],
+)
+def test_state_reaches_the_controller_as_a_list(query, expected):
+    response = build_client().get(f"/iron-bank/underwritings?{query}")
+
+    assert response.status_code == 200
+    assert captured["states"] == expected
+
+
+def test_multi_state_survives_alongside_the_simulation_overrides():
+    """State filtering is SQL-side on both list paths, so the simulated
+    request must carry the same states."""
+    response = build_client().get(
+        "/iron-bank/underwritings?state=FL&state=TN&interest_rate=0.069"
+    )
+
+    assert response.status_code == 200
+    assert captured["states"] == ["FL", "TN"]
+    assert captured["interest_rate"] is not None
+
+
+def test_unknown_state_code_is_rejected():
+    response = build_client().get("/iron-bank/underwritings?state=ZZ")
+
+    assert response.status_code == 422

@@ -181,7 +181,6 @@ def test_build_deal_from_summary_row():
         "h_cash_on_cash": 0.1877,
         "deal_added": "2025-09-19 13:06:51",
         "deal_approved": "2025-09-21 09:30:00",
-        "sleep_capacity": 12,
         "turnkey": "True",
         "property_pending": "False",
         "loom_vid": None,

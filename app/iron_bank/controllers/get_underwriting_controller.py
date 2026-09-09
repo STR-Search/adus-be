@@ -34,6 +34,7 @@ class GetUnderwritingController:
         zpid: str | None = None,
         bedrooms: int | None = None,
         market_ids: list[int] | None = None,
+        states: list[str] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
         approver_id: int | None = None,
@@ -76,6 +77,7 @@ class GetUnderwritingController:
         view_quality: list[str] | None = None,
         pool_type: list[str] | None = None,
         primary_guest_avatar: list[str] | None = None,
+        target_demographic: list[str] | None = None,
         renovation_level: list[int] | None = None,
         deal_complexity: list[int] | None = None,
         market_type: list[str] | None = None,
@@ -115,6 +117,7 @@ class GetUnderwritingController:
                 ("view_quality", view_quality),
                 ("pool_type", pool_type),
                 ("primary_guest_avatar", primary_guest_avatar),
+                ("target_demographic", target_demographic),
             )
             if value
         }
@@ -141,6 +144,7 @@ class GetUnderwritingController:
             zpid=zpid,
             bedrooms=bedrooms,
             market_ids=market_ids,
+            states=states,
             deal_status=deal_status,
             analyst_id=analyst_id,
             approver_id=approver_id,
