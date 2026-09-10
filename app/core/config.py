@@ -1,3 +1,4 @@
+import logging
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -45,9 +46,22 @@ class Config(BaseSettings):
     # every environment — kept as a flag purely so verbosity is toggleable.
     DB_ERROR_LOGGING: bool = True
 
+    # Root log level. Left empty it follows APP_ENV: DEBUG outside production,
+    # INFO in production (the ~50 logger.debug calls in the repositories are
+    # useful locally and pure noise in a deployed log stream). Set explicitly
+    # to override either default, e.g. LOG_LEVEL=DEBUG to debug prod.
+    LOG_LEVEL: str = ""
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"
+
+    @property
+    def log_level(self) -> int:
+        """The configured level as a stdlib ``logging`` constant."""
+        name = (self.LOG_LEVEL or ("INFO" if self.is_production else "DEBUG")).upper()
+        # An unrecognised name falls back to INFO rather than crashing startup.
+        return logging.getLevelNamesMapping().get(name, logging.INFO)
 
     @staticmethod
     def _to_async_url(url: str) -> str:
