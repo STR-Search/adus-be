@@ -586,6 +586,20 @@ def _parse_property_url(grid) -> str | None:
     return None
 
 
+def _parse_property_details_text(grid) -> str | None:
+    """The deal tab carries the same free-text 'Property Details' blob
+    (with its buried 'Bed / Bath (Projected): X / Y' line) as the
+    tracking-tab's 'Bedrooms' cell -- position varies across template
+    versions, so it's found by content rather than a fixed coordinate.
+    Used as a fallback in build_deal() when the tracking-tab's copy is
+    blank; the two aren't always kept in sync."""
+    for row in grid:
+        for cell in row:
+            if isinstance(cell, str) and cell.lower().startswith("property details"):
+                return cell
+    return None
+
+
 def parse_deal_tab(grid: list[tuple]) -> dict[str, Any]:
     """Parses one deal tab's cell grid into child-record inputs + warnings."""
     warnings: list[str] = []
@@ -605,6 +619,7 @@ def parse_deal_tab(grid: list[tuple]) -> dict[str, Any]:
         "analyst_notes": _parse_analyst_notes(grid),
         "prepared_by": _parse_prepared_by(grid),
         "listing_url": _parse_property_url(grid),
+        "property_details_text": _parse_property_details_text(grid),
         "warnings": warnings,
     }
 
@@ -667,11 +682,6 @@ def build_deal(
             property_pending=to_bool(summary.get("property_pending")),
             loom_vid=clean_text(summary.get("loom_vid")),
         )
-        bedrooms, bathrooms = parse_bed_bath(summary.get("property_details_text"))
-        if bedrooms is not None:
-            underwriting["bedrooms"] = bedrooms
-        if bathrooms is not None:
-            underwriting["bathrooms"] = bathrooms
         pp = underwriting.get("purchase_price")
         oop = underwriting.get("total_oop")
         if pp and oop and pp > 0:
@@ -714,6 +724,20 @@ def build_deal(
         optimization_items = tab["optimization_items"]
         operating_expenses = tab["operating_expenses"]
         comp_set = tab["comp_set"]
+
+    # The tracking-tab summary and the deal tab both carry a copy of the
+    # free-text "Property Details" blob, and the two aren't always kept in
+    # sync -- one is sometimes filled in when the other is blank. Try the
+    # summary first (cheaper, already read), then the deal tab.
+    bedrooms, bathrooms = parse_bed_bath(
+        summary.get("property_details_text") if summary else None
+    )
+    if bedrooms is None and bathrooms is None and tab is not None:
+        bedrooms, bathrooms = parse_bed_bath(tab["property_details_text"])
+    if bedrooms is not None:
+        underwriting["bedrooms"] = bedrooms
+    if bathrooms is not None:
+        underwriting["bathrooms"] = bathrooms
 
     analyst_name = clean_text(summary.get("analyst_name")) if summary else None
     if analyst_name is None and tab is not None:

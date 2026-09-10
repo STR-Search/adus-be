@@ -269,6 +269,54 @@ def test_build_deal_from_summary_row_omits_bed_bath_when_unparseable():
     assert "bathrooms" not in uw
 
 
+def test_parse_property_details_text_finds_cell_by_content():
+    grid = [
+        _pad((None, "Prepared By:", "Taylor J")),
+        _pad((None, None, None, "Property Details:\n-- Bed / Bath (Projected): 4 / 3")),
+    ]
+    assert backfill._parse_property_details_text(grid) == (
+        "Property Details:\n-- Bed / Bath (Projected): 4 / 3"
+    )
+
+
+def test_parse_property_details_text_returns_none_when_absent():
+    assert backfill._parse_property_details_text(NEW_FORMAT_GRID) is None
+
+
+def test_build_deal_falls_back_to_deal_tab_when_summary_blank():
+    # The tracking-tab summary's copy is blank; the deal tab's own copy of
+    # the same free-text blob has the bed/bath info instead.
+    tab_grid = list(NEW_FORMAT_GRID) + [
+        _pad((None, None, None, "Property Details:\n-- Bed / Bath (Projected): 5 / 4"))
+    ]
+    summary = {
+        "raw_status": "Present to Clients",
+        "property_address": "1 Main St, Miami, FL",
+        "link": 2002,
+        "property_details_text": None,
+    }
+    deal = backfill.build_deal(2002, summary, backfill.parse_deal_tab(tab_grid))
+    uw = deal["underwriting"]
+    assert uw["bedrooms"] == 5
+    assert uw["bathrooms"] == Decimal("4")
+
+
+def test_build_deal_prefers_summary_over_deal_tab_when_both_present():
+    tab_grid = list(NEW_FORMAT_GRID) + [
+        _pad((None, None, None, "Property Details:\n-- Bed / Bath (Projected): 5 / 4"))
+    ]
+    summary = {
+        "raw_status": "Present to Clients",
+        "property_address": "1 Main St, Miami, FL",
+        "link": 2003,
+        "property_details_text": "Property Details:\n-- Bed / Bath (Projected): 2 / 1",
+    }
+    deal = backfill.build_deal(2003, summary, backfill.parse_deal_tab(tab_grid))
+    uw = deal["underwriting"]
+    assert uw["bedrooms"] == 2
+    assert uw["bathrooms"] == Decimal("1")
+
+
 def test_build_deal_without_summary_defaults_to_no_status():
     deal = backfill.build_deal(42, None, backfill.parse_deal_tab(OLD_FORMAT_GRID))
     uw = deal["underwriting"]
