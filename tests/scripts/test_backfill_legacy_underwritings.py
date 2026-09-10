@@ -181,7 +181,6 @@ def test_build_deal_from_summary_row():
         "h_cash_on_cash": 0.1877,
         "deal_added": "2025-09-19 13:06:51",
         "deal_approved": "2025-09-21 09:30:00",
-        "sleep_capacity": 12,
         "turnkey": "True",
         "property_pending": "False",
         "loom_vid": None,
@@ -208,6 +207,66 @@ def test_build_deal_from_summary_row():
     assert deal["approver_name"] == "John B"
     assert deal["notes"] == ["RE Agent confirmed"]
     assert "no deal tab in workbook (summary row only)" in deal["warnings"]
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        (None, (None, None)),
+        ("", (None, None)),
+        ("6", (None, None)),  # bare legacy number, no bed/bath text at all
+        (
+            "Property Details:\n-- Bed / Bath (Projected):\n-- Lot Size (sqft): ",
+            (None, None),
+        ),  # label present but blank
+        (
+            "Property Details:\n-- Bed / Bath (projected): 4 / 3\n-- Lot Size (sqft): ",
+            (4, Decimal("3")),
+        ),
+        (
+            "Property Details:\n-- Bed / Bath (Projected): 4/4\n-- Lot Size (sqft): 7,840",
+            (4, Decimal("4")),
+        ),
+        (
+            "Property Details:\n-- Bed / Bath (Projected): 3 Bd / 3 Ba\n-- Lot Size (sqft): 0.32",
+            (3, Decimal("3")),
+        ),
+        (
+            'Property Details:\n–– Bed / Bath: 4 / 2.5\n–– Lot Size: 0.68 acres',
+            (4, Decimal("2.5")),
+        ),
+    ],
+)
+def test_parse_bed_bath(text, expected):
+    assert backfill.parse_bed_bath(text) == expected
+
+
+def test_build_deal_from_summary_row_parses_bed_bath():
+    summary = {
+        "raw_status": "Present to Clients",
+        "property_address": "1 Main St, Miami, FL",
+        "link": 2000,
+        "property_details_text": (
+            "Property Details:\n-- Bed / Bath (Projected): 4 / 3\n-- Lot Size (sqft): "
+        ),
+    }
+    deal = backfill.build_deal(2000, summary, None)
+    uw = deal["underwriting"]
+    assert uw["bedrooms"] == 4
+    assert uw["bathrooms"] == Decimal("3")
+
+
+def test_build_deal_from_summary_row_omits_bed_bath_when_unparseable():
+    summary = {
+        "raw_status": "Present to Clients",
+        "property_address": "1 Main St, Miami, FL",
+        "link": 2001,
+        "property_details_text": "6",
+    }
+    deal = backfill.build_deal(2001, summary, None)
+    uw = deal["underwriting"]
+    assert "bedrooms" not in uw
+    assert "bathrooms" not in uw
 
 
 def test_build_deal_without_summary_defaults_to_no_status():

@@ -102,15 +102,17 @@ class CompSetInput(BaseModel):
     bedrooms: int | None = None
     sleeps: int | None = None
     is_favourite: bool = False
-    has_pool: bool = False
-    has_hot_tub: bool = False
-    has_sauna: bool = False
-    has_mini_golf: bool = False
-    has_game_room: bool = False
-    has_pickleball: bool = False
-    has_movie_theater: bool = False
-    has_playground: bool = False
-    has_waterfront: bool = False
+    # Amenity flags default to None, not False: an omitted flag is unknown, and
+    # the column is nullable so it stays that way (see UnderwritingCompSet).
+    has_pool: bool | None = None
+    has_hot_tub: bool | None = None
+    has_sauna: bool | None = None
+    has_mini_golf: bool | None = None
+    has_game_room: bool | None = None
+    has_pickleball: bool | None = None
+    has_movie_theater: bool | None = None
+    has_playground: bool | None = None
+    has_waterfront: bool | None = None
 
 
 class SaveUnderwritingPayload(UnderwritingBase):
@@ -136,7 +138,8 @@ class SaveUnderwritingPayload(UnderwritingBase):
                 "city": "Gatlinburg",
                 "state": "TN",
                 "days_on_market": 12,
-                "sleep_capacity": 10,
+                "sleep_count_low": 8,
+                "sleep_count_high": 10,
                 "purchase_price": 485000,
                 "total_oop": 145000,
                 "prr": 0.18,
@@ -172,6 +175,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                 "view_quality": "premium",
                 "pool_type": "in_ground",
                 "primary_guest_avatar": "family_stays",
+                "target_demographic": "couples_getaway",
                 "loom_vid": "https://loom.com/share/abc123",
                 "deal_pitch": "https://loom.com/share/pitch456",
                 "video_walkthrough": "https://youtube.com/watch?v=xwalk001",
@@ -212,7 +216,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "metric": "sqft",
                         "base_price": 15,
                         "spec": "@$15/sqft x 1,800 sqft",
-                        "tier": "Mid",
+                        "tier": "Low",
                     },
                     {
                         "category": "Interior Painting",
@@ -220,7 +224,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "metric": "sqft",
                         "base_price": 5,
                         "spec": "@$5/sqft x 2,400 sqft",
-                        "tier": "Mid",
+                        "tier": "Low",
                     },
                     {
                         "category": "Exterior Painting",
@@ -228,7 +232,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "metric": "sqft",
                         "base_price": 6,
                         "spec": "@$6/sqft x 2,200 sqft",
-                        "tier": "Mid",
+                        "tier": "Low",
                     },
                     {
                         "category": "Accent Wall Paint",
@@ -236,7 +240,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "metric": "number of",
                         "base_price": 600,
                         "spec": "@$600 x 3 walls",
-                        "tier": "Mid",
+                        "tier": "Low",
                     },
                     {
                         "category": "Furniture / Decor / Essentials",
@@ -252,7 +256,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "metric": "flat",
                         "base_price": 3500,
                         "spec": "Jets, cover, and chemical system replacement",
-                        "tier": "Mid",
+                        "tier": "Low",
                     },
                     {
                         "category": "Outdoor Lighting & Fire Pit",
@@ -260,7 +264,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                         "metric": "flat",
                         "base_price": 2200,
                         "spec": "String lights + gas fire pit install",
-                        "tier": "Mid",
+                        "tier": "Low",
                     },
                 ],
                 "operating_expenses": [

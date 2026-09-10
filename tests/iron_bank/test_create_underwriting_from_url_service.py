@@ -34,13 +34,27 @@ class FakeSaveService:
 
 
 class FakeUnderwritingReader:
-    def __init__(self, existing=None):
+    """Stands in for UnderwritingRepository.
+
+    ``existing`` is what the pre-fetch URL pass sees, ``existing_by_zpid`` what
+    the post-fetch zpid pass sees. They are separate because the whole point of
+    the second pass is catching what the first one misses: a duplicate reachable
+    by zpid but not under the pasted URL.
+    """
+
+    def __init__(self, existing=None, existing_by_zpid=None):
         self.existing = existing
+        self.existing_by_zpid = existing_by_zpid
         self.requested_url = None
+        self.requested_zpid = None
 
     async def get_by_listing_url(self, listing_url: str):
         self.requested_url = listing_url
         return self.existing
+
+    async def get_oldest_by_zpid(self, zpid: str):
+        self.requested_zpid = zpid
+        return self.existing_by_zpid
 
 
 class FakeMarketContextReader:
@@ -635,3 +649,109 @@ async def test_pre_fetch_guard_allows_an_exploratory_listing():
 
     assert zillow_service.called_url == REQUEST_URL
     assert save_service.saved_payload.zpid == "26110417"
+
+
+# The zpid duplicate pass. The URL pass is exact string equality, so a property
+# already underwritten under a cosmetically different URL — the trailing "?" that
+# produced two version-0 series for zpid 32869573 — only shows up on the zpid.
+
+
+@pytest.mark.asyncio
+async def test_create_is_idempotent_when_the_zpid_exists_under_another_url():
+    """The URL pass misses; the zpid pass is what stops the second series."""
+    zillow_service = FakeZillowPropertyService(result=_zillow_property())
+    save_service = FakeSaveService()
+    reader = FakeUnderwritingReader(
+        existing=None, existing_by_zpid=SimpleNamespace(id=800)
+    )
+    service = CreateUnderwritingFromUrlService(
+        zillow_service,
+        save_service,
+        reader,
+        listings_service=FakeListingsService(listing=_listing(market_id=3)),
+    )
+
+    with pytest.raises(UnderwritingAlreadyExistsError) as exc:
+        await service.create(url=REQUEST_URL + "?", market_id=3)
+
+    assert exc.value.underwriting_id == 800
+    assert reader.requested_zpid == "26110417"
+    # the fetch was already spent by the time the duplicate surfaced, but
+    # nothing was persisted
+    assert zillow_service.called_url == REQUEST_URL + "?"
+    assert save_service.saved_payload is None
+
+
+@pytest.mark.asyncio
+async def test_the_zpid_pass_runs_before_the_market_guard():
+    """An existing deal beats a market mismatch: the 409 carries a usable id."""
+    reader = FakeUnderwritingReader(
+        existing=None, existing_by_zpid=SimpleNamespace(id=800)
+    )
+    service = CreateUnderwritingFromUrlService(
+        FakeZillowPropertyService(result=_zillow_property()),
+        FakeSaveService(),
+        reader,
+        listings_service=FakeListingsService(listing=_listing(market_id=3)),
+    )
+
+    with pytest.raises(UnderwritingAlreadyExistsError):
+        await service.create(url=REQUEST_URL, market_id=5)
+
+
+@pytest.mark.asyncio
+async def test_the_url_pass_still_short_circuits_before_the_zpid_pass():
+    """A URL hit costs no fetch, so the zpid is never resolved or queried."""
+    zillow_service = FakeZillowPropertyService(result=_zillow_property())
+    reader = FakeUnderwritingReader(existing=SimpleNamespace(id=77))
+    service = CreateUnderwritingFromUrlService(
+        zillow_service,
+        FakeSaveService(),
+        reader,
+        listings_service=FakeListingsService(listing=_listing(market_id=3)),
+    )
+
+    with pytest.raises(UnderwritingAlreadyExistsError) as exc:
+        await service.create(url=REQUEST_URL)
+
+    assert exc.value.underwriting_id == 77
+    assert reader.requested_zpid is None
+    assert zillow_service.called_url is None
+
+
+@pytest.mark.asyncio
+async def test_a_new_property_passes_both_duplicate_passes():
+    zillow_service = FakeZillowPropertyService(result=_zillow_property())
+    save_service = FakeSaveService()
+    reader = FakeUnderwritingReader(existing=None, existing_by_zpid=None)
+    service = CreateUnderwritingFromUrlService(
+        zillow_service,
+        save_service,
+        reader,
+        listings_service=FakeListingsService(listing=_listing(market_id=3)),
+    )
+
+    await service.create(url=REQUEST_URL, market_id=3)
+
+    assert reader.requested_url == REQUEST_URL
+    assert reader.requested_zpid == "26110417"
+    assert save_service.saved_payload.zpid == "26110417"
+
+
+@pytest.mark.asyncio
+async def test_the_zpid_pass_is_skipped_without_a_listings_service():
+    """No listings service means no zpid to check; the URL pass stands alone."""
+    save_service = FakeSaveService()
+    reader = FakeUnderwritingReader(
+        existing=None, existing_by_zpid=SimpleNamespace(id=800)
+    )
+    service = CreateUnderwritingFromUrlService(
+        FakeZillowPropertyService(result=_zillow_property()),
+        save_service,
+        reader,
+    )
+
+    await service.create(url=REQUEST_URL)
+
+    assert reader.requested_zpid is None
+    assert save_service.saved_payload is not None

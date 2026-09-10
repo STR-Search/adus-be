@@ -3,11 +3,11 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import String, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.iron_bank.enums import SortOrder, UnderwritingSortBy
+from app.iron_bank.enums import DealStatus, SortOrder, UnderwritingSortBy
 from app.iron_bank.models import (
     Underwriting,
     UnderwritingCompSet,
@@ -21,6 +21,11 @@ from app.iron_bank.schemas.underwriting import (
     MULTI_SELECT_TAG_FIELDS,
     NUMERIC_TAG_FIELDS,
     SINGLE_SELECT_TAG_FIELDS,
+)
+
+_SIMULATION_EXCLUDED_DEAL_STATUSES = (
+    DealStatus.DELETE_ZILLOW,
+    DealStatus.DELETE_DEAL,
 )
 
 
@@ -177,6 +182,7 @@ class UnderwritingRepository:
         zpid: str | None = None,
         bedrooms: int | None = None,
         market_ids: list[int] | None = None,
+        states: list[str] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
         approver_id: int | None = None,
@@ -214,6 +220,12 @@ class UnderwritingRepository:
             query = query.where(Underwriting.bedrooms == bedrooms)
         if market_ids:
             query = query.where(Underwriting.market_id.in_(market_ids))
+        if states:
+            query = query.where(
+                func.upper(Underwriting.state, type_=String).in_(
+                    [str(state).upper() for state in states]
+                )
+            )
         if deal_status is not None:
             query = query.where(Underwriting.deal_status == deal_status)
         if source is not None:
@@ -314,6 +326,7 @@ class UnderwritingRepository:
         zpid: str | None = None,
         bedrooms: int | None = None,
         market_ids: list[int] | None = None,
+        states: list[str] | None = None,
         deal_status: str | None = None,
         analyst_id: int | None = None,
         approver_id: int | None = None,
@@ -340,6 +353,9 @@ class UnderwritingRepository:
         deliberately returns thin rows (no child selectinloads, no pagination):
         stored fallback values for sort/filter, the detail JSON calculation
         inputs, and the child-collection totals the calculator sums over.
+
+        Deals tagged ``delete_zillow``/``delete_deal`` are dropped here
+        unconditionally — recalculating them is wasted work.
 
         Only filters that simulation does NOT change are applied here; the
         total_oop / l_/m_/h_cash_on_cash bounds are applied by the service in Python
@@ -377,6 +393,12 @@ class UnderwritingRepository:
                 UnderwritingTax,
                 UnderwritingTax.underwriting_id == Underwriting.id,
             )
+            .where(
+                or_(
+                    Underwriting.deal_status.is_(None),
+                    Underwriting.deal_status.notin_(_SIMULATION_EXCLUDED_DEAL_STATUSES),
+                )
+            )
         )
         if zpid is not None:
             query = query.where(Underwriting.zpid == zpid)
@@ -384,6 +406,17 @@ class UnderwritingRepository:
             query = query.where(Underwriting.bedrooms == bedrooms)
         if market_ids:
             query = query.where(Underwriting.market_id.in_(market_ids))
+        if states:
+            # ``state`` is free-text varchar, not a constrained column, so match
+            # case-insensitively rather than assuming stored codes are upper.
+            # upper() has no inferable return type, hence the explicit String —
+            # without it the IN binds go out untyped. Values arrive as USState
+            # members; str() keeps the driver on plain text params.
+            query = query.where(
+                func.upper(Underwriting.state, type_=String).in_(
+                    [str(state).upper() for state in states]
+                )
+            )
         if deal_status is not None:
             query = query.where(Underwriting.deal_status == deal_status)
         if source is not None:
@@ -529,6 +562,33 @@ class UnderwritingRepository:
                 selectinload(Underwriting.comp_set),
             )
             .order_by(Underwriting.id.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_oldest_by_zpid(self, zpid: str) -> Underwriting | None:
+        """The *oldest* underwriting for a zpid.
+
+        Ascending, unlike ``get_by_zpid``, for the same reason
+        ``get_by_listing_url`` is: this backs the duplicate guard in
+        ``CreateUnderwritingFromUrlService``, whose 409 carries an id the client
+        redirects to, and the analyst should land on the original rather than on
+        whichever copy of the series happens to be newest.
+
+        ``get_by_zpid`` stays descending — its caller (the automated create
+        guard) only asks whether a row exists and never surfaces the id.
+        """
+        result = await self.db.execute(
+            select(Underwriting)
+            .where(Underwriting.zpid == zpid)
+            .options(
+                selectinload(Underwriting.detail),
+                selectinload(Underwriting.taxes),
+                selectinload(Underwriting.optimization_items),
+                selectinload(Underwriting.operating_expenses),
+                selectinload(Underwriting.comp_set),
+            )
+            .order_by(Underwriting.id.asc())
             .limit(1)
         )
         return result.scalar_one_or_none()

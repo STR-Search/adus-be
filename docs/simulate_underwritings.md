@@ -86,7 +86,10 @@ the set can be sorted or paginated:
    and the `optimization_total`/`operating_expense_total` column-property sums
    (all the calculator ever does with the collections is sum them, so one
    synthetic item per total is equivalent to the full child row sets). No
-   child selectinloads, no pagination.
+   child selectinloads, no pagination. Deals tagged `delete_zillow` or
+   `delete_deal` are excluded here unconditionally — they are never worth
+   recalculating, so they never enter the simulated set even when the request
+   filters for them explicitly.
 2. **Python pass:** recalculate each row, apply the affected filters, compute
    `total`/`pages`, sort, slice the page.
 3. **Page hydration** (`get_by_ids`): only the page's rows are fully loaded

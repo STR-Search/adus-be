@@ -46,7 +46,8 @@ def upgrade() -> None:
         sa.Column("city", sa.String(length=100), nullable=True),
         sa.Column("state", sa.String(length=50), nullable=True),
         sa.Column("days_on_market", sa.Integer(), nullable=True),
-        sa.Column("sleep_capacity", sa.Integer(), nullable=True),
+        sa.Column("sleep_count_low", sa.Integer(), nullable=True),
+        sa.Column("sleep_count_high", sa.Integer(), nullable=True),
         sa.Column("bedrooms", sa.Integer(), nullable=True),
         sa.Column("bathrooms", sa.Numeric(precision=4, scale=1), nullable=True),
         sa.Column("purchase_price", sa.Numeric(precision=12, scale=2), nullable=True),
@@ -92,6 +93,7 @@ def upgrade() -> None:
         sa.Column("view_quality", sa.String(length=50), nullable=True),
         sa.Column("pool_type", sa.String(length=50), nullable=True),
         sa.Column("primary_guest_avatar", sa.String(length=50), nullable=True),
+        sa.Column("target_demographic", sa.String(length=50), nullable=True),
         sa.Column("listing_url", sa.Text(), nullable=True),
         sa.Column("loom_vid", sa.Text(), nullable=True),
         sa.Column("deal_pitch", sa.Text(), nullable=True),
@@ -169,53 +171,19 @@ def upgrade() -> None:
             server_default=sa.text("false"),
             nullable=False,
         ),
-        # Comp amenity flags — NOT NULL DEFAULT false, so existing rows read as
-        # "no amenity" without a backfill.
-        sa.Column(
-            "has_pool", sa.Boolean(), server_default=sa.text("false"), nullable=False
-        ),
-        sa.Column(
-            "has_hot_tub", sa.Boolean(), server_default=sa.text("false"), nullable=False
-        ),
-        sa.Column(
-            "has_sauna", sa.Boolean(), server_default=sa.text("false"), nullable=False
-        ),
-        sa.Column(
-            "has_mini_golf",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
-        sa.Column(
-            "has_game_room",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
-        sa.Column(
-            "has_pickleball",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
-        sa.Column(
-            "has_movie_theater",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
-        sa.Column(
-            "has_playground",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
-        sa.Column(
-            "has_waterfront",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
+        # Comp amenity flags — nullable with no default, so a flag nobody
+        # answered stays NULL ("unknown") rather than reading as a definite
+        # "no amenity". Unlike is_favourite above, which is a deliberate analyst
+        # action and so is always one of true/false.
+        sa.Column("has_pool", sa.Boolean(), nullable=True),
+        sa.Column("has_hot_tub", sa.Boolean(), nullable=True),
+        sa.Column("has_sauna", sa.Boolean(), nullable=True),
+        sa.Column("has_mini_golf", sa.Boolean(), nullable=True),
+        sa.Column("has_game_room", sa.Boolean(), nullable=True),
+        sa.Column("has_pickleball", sa.Boolean(), nullable=True),
+        sa.Column("has_movie_theater", sa.Boolean(), nullable=True),
+        sa.Column("has_playground", sa.Boolean(), nullable=True),
+        sa.Column("has_waterfront", sa.Boolean(), nullable=True),
         sa.Column("sort_order", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["underwriting_id"], ["iron_bank.underwritings.id"], ondelete="CASCADE"

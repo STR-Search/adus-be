@@ -160,6 +160,34 @@ def jsonable(value: Any) -> Any:
     return value
 
 
+# 'Bed / Bath (Projected): 4 / 3' / '4/4' / '3 Bd / 3 Ba' / '4 / 2.5' (half
+# bath) / '-- Bed / Bath: 4 / 2.5' (label without '(Projected)'). Matched
+# case-insensitively and independent of the bullet style ('--', '––') since
+# it's found by substring search, not anchored to the line start.
+BED_BATH_RE = re.compile(
+    r"bed\s*/\s*bath[^:]*:\s*([\d.]+)\s*(?:bd)?\s*/\s*([\d.]+)\s*(?:ba)?",
+    re.IGNORECASE,
+)
+
+
+def parse_bed_bath(text: Any) -> tuple[int | None, Decimal | None]:
+    """Extracts bedrooms/bathrooms from the 'Bedrooms' column's raw cell.
+
+    That cell is a mixed-content blob on most rows rather than a clean
+    number -- e.g. 'Property Details:\\n-- Bed / Bath (Projected): 4 / 3\\n
+    -- Lot Size...'. When the label is present but blank, or the whole cell
+    is just a bare number with no bed/bath text at all (an older, pre-blob
+    format whose real meaning -- bedroom count vs. guest sleep capacity --
+    was never pinned down), this returns (None, None) rather than guessing.
+    """
+    if text is None:
+        return None, None
+    match = BED_BATH_RE.search(str(text))
+    if match is None:
+        return None, None
+    return to_int(match.group(1)), to_decimal(match.group(2))
+
+
 # ---------------------------------------------------------------------------
 # summary rows (Main_Sheet / Delete_Properties)
 # ---------------------------------------------------------------------------
@@ -169,6 +197,13 @@ def jsonable(value: Any) -> Any:
 # text for the same concept over time (e.g. 'Deal_Status' vs 'Status',
 # 'Cash Needed' vs 'OOP', 'Notes' vs 'Note') -- every alias is matched, so
 # either tab's current wording resolves to the same field.
+#
+# 'property_details_text' (header 'Bedrooms') used to feed the since-removed
+# sleep_capacity column verbatim. The cell itself is a mixed-content blob --
+# sometimes a bare number, more often a free-text "Property Details" block
+# with a "Bed / Bath (Projected): X / Y" line buried in it -- so it's kept
+# raw here and parsed by _parse_bed_bath() into bedrooms/bathrooms instead of
+# being mapped to a single field directly.
 SUMMARY_FIELD_ALIASES: dict[str, list[str]] = {
     "raw_status": ["Deal_Status", "Status"],
     "property_address": ["Property Address"],
@@ -187,7 +222,7 @@ SUMMARY_FIELD_ALIASES: dict[str, list[str]] = {
     "m_cash_on_cash": ["M"],
     "h_cash_on_cash": ["H"],
     "deal_added": ["Date_Added"],
-    "sleep_capacity": ["Bedrooms"],
+    "property_details_text": ["Bedrooms"],
     "turnkey": ["Turnkey?"],
     "property_pending": ["Property Pending"],
     "loom_vid": ["Loom_Vid"],
@@ -207,7 +242,12 @@ SUMMARY_FIELD_ALIASES: dict[str, list[str]] = {
 # error instead of a quiet None.
 TAB_OPTIONAL_FIELDS: dict[str, set[str]] = {
     MAIN_SHEET: {"loom_vid"},
-    CLIENT_SHOWN_SHEET: {"approver_name", "deal_approved", "sleep_capacity", "turnkey"},
+    CLIENT_SHOWN_SHEET: {
+        "approver_name",
+        "deal_approved",
+        "property_details_text",
+        "turnkey",
+    },
 }
 
 
@@ -623,11 +663,15 @@ def build_deal(
             h_cash_on_cash=to_decimal(summary.get("h_cash_on_cash")),
             deal_added=to_datetime(summary.get("deal_added")),
             deal_approved=to_datetime(summary.get("deal_approved")),
-            sleep_capacity=to_int(summary.get("sleep_capacity")),
             turnkey=to_bool(summary.get("turnkey")),
             property_pending=to_bool(summary.get("property_pending")),
             loom_vid=clean_text(summary.get("loom_vid")),
         )
+        bedrooms, bathrooms = parse_bed_bath(summary.get("property_details_text"))
+        if bedrooms is not None:
+            underwriting["bedrooms"] = bedrooms
+        if bathrooms is not None:
+            underwriting["bathrooms"] = bathrooms
         pp = underwriting.get("purchase_price")
         oop = underwriting.get("total_oop")
         if pp and oop and pp > 0:
@@ -1344,6 +1388,7 @@ async def refresh_deals(deals: list[dict[str, Any]], dry_run: bool) -> dict[str,
                 if existing is None:
                     not_found.append(number)
                     continue
+
                 if underwriting_data is not None:
                     for key, value in underwriting_data.items():
                         setattr(existing, key, value)

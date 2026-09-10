@@ -18,6 +18,7 @@ from app.iron_bank.enums import (
     DealStatus,
     OpexKeyedOn,
     SortOrder,
+    USState,
     UnderwritingSortBy,
     UnderwritingSource,
 )
@@ -35,9 +36,7 @@ _SQFT_PER_ACRE = Decimal("43560")
 # One level on a graded deal tag's 1-5 scale. Bounding the *item* rather than
 # the list means an out-of-range value is rejected with a 422 naming the
 # offending element, instead of being silently dropped or matching nothing.
-NumericTagLevel = Annotated[
-    int, Field(ge=NUMERIC_TAG_MIN, le=NUMERIC_TAG_MAX)
-]
+NumericTagLevel = Annotated[int, Field(ge=NUMERIC_TAG_MIN, le=NUMERIC_TAG_MAX)]
 
 
 def _flatten_repeated_params(value):
@@ -149,15 +148,17 @@ class GetUnderwritingCompSet(BaseModel):
     bedrooms: int | None = None
     sleeps: int | None = None
     is_favourite: bool = False
-    has_pool: bool = False
-    has_hot_tub: bool = False
-    has_sauna: bool = False
-    has_mini_golf: bool = False
-    has_game_room: bool = False
-    has_pickleball: bool = False
-    has_movie_theater: bool = False
-    has_playground: bool = False
-    has_waterfront: bool = False
+    # Nullable in the column, so nullable here — a stored NULL is served back as
+    # null ("unknown"), not silently flattened to false.
+    has_pool: bool | None = None
+    has_hot_tub: bool | None = None
+    has_sauna: bool | None = None
+    has_mini_golf: bool | None = None
+    has_game_room: bool | None = None
+    has_pickleball: bool | None = None
+    has_movie_theater: bool | None = None
+    has_playground: bool | None = None
+    has_waterfront: bool | None = None
 
 
 class UserRef(BaseModel):
@@ -240,6 +241,7 @@ class GetUnderwritingsQuery(BaseModel):
     zpid: str | None = None
     bedrooms: int | None = Field(None, ge=0)
     market_ids: list[int] | None = Field(None, alias="market_id")
+    states: list[USState] | None = Field(None, alias="state")
     deal_status: DealStatus | None = None
     analyst_id: int | None = None
     approver_id: int | None = None
@@ -296,6 +298,7 @@ class GetUnderwritingsQuery(BaseModel):
     view_quality: list[str] | None = None
     pool_type: list[str] | None = None
     primary_guest_avatar: list[str] | None = None
+    target_demographic: list[str] | None = None
     # Graded deal tags on a 1-5 scale. Accepts repeated or comma-separated
     # levels; levels within a tag OR together, different tags AND together. With
     # only five levels a list also expresses any range ("complexity 1-3" is
@@ -322,6 +325,20 @@ class GetUnderwritingsQuery(BaseModel):
     @classmethod
     def split_market_ids(cls, value):
         return _flatten_repeated_params(value)
+
+    @field_validator("states", mode="before")
+    @classmethod
+    def split_states(cls, value):
+        """Flatten repeated/comma-separated state params and upper-case them.
+
+        ``?state=fl&state=tn`` and ``?state=fl,tn`` both arrive here; the
+        upper-casing happens before ``USState`` validation so a client can send
+        whatever casing it has and still get a 422 for a genuinely bad code.
+        """
+        flattened = _flatten_repeated_params(value)
+        if flattened is None:
+            return None
+        return [item.upper() if isinstance(item, str) else item for item in flattened]
 
     @field_validator(
         *SINGLE_SELECT_TAG_FIELDS,

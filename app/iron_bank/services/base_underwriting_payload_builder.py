@@ -28,10 +28,16 @@ class BaseUnderwritingPayloadBuilder:
     _DEFAULT_SLA_MULTIPLIER_PCT = Decimal("0.36")
     _DEFAULT_BONUS_AMOUNT_PCT = Decimal("1")
 
-    # Seeded optimization items all price at tier 2 for now; the analyst
-    # re-tiers from the amenity catalog in the edit form.
-    _AMENITY_PRICE_TIER_FIELD = "price_tier_2"
-    _AMENITY_TIER_LABEL = "Mid"
+    # Seeded optimization items price at the low tier, except furnishings,
+    # which seeds at mid; the analyst re-tiers from the amenity catalog in the
+    # edit form. Keyed on the option id rather than the display name, which is
+    # reworded independently of the columns behind it (see
+    # PrepareUwDataService.FURNISHINGS_OPTION_NAME). Price field and label are
+    # paired so the amount and the tier it claims to be cannot drift apart.
+    _DEFAULT_AMENITY_PRICE_TIER = ("price_tier_1", "Low")
+    _AMENITY_PRICE_TIER_BY_OPTION_ID = {
+        PrepareUwDataService.FURNISHINGS_OPTION_ID: ("price_tier_2", "Mid"),
+    }
     _AMENITY_METRIC = "flat"
     _POOL_AMENITY_IDS_TO_EXCLUDE = {4, 5, 13, 14}
 
@@ -112,8 +118,10 @@ class BaseUnderwritingPayloadBuilder:
         result is one). The seeded options bracket the market's must-have
         amenities: furnishings first, then the must-haves in the order the market
         lists them, then the STR Cribs management fee and consolidated shipping.
-        Items whose tier-2 price is missing are still seeded with a blank amount —
-        a visible row the analyst fills in beats a silently absent line item.
+        Each is priced at the tier ``_amenity_to_optimization_item`` picks for it.
+        Items whose price at that tier is missing are still seeded with a blank
+        amount — a visible row the analyst fills in beats a silently absent line
+        item.
         """
         options_by_id = {
             option.get("id"): option
@@ -159,13 +167,16 @@ class BaseUnderwritingPayloadBuilder:
         ]
 
     def _amenity_to_optimization_item(self, option: dict[str, Any]) -> dict[str, Any]:
-        price = option.get(self._AMENITY_PRICE_TIER_FIELD)
+        price_field, tier_label = self._AMENITY_PRICE_TIER_BY_OPTION_ID.get(
+            option.get("id"), self._DEFAULT_AMENITY_PRICE_TIER
+        )
+        price = option.get(price_field)
         return {
             "category": option.get("amenity_name"),
             "total_price": price,
             "base_price": price,
             "metric": self._AMENITY_METRIC,
-            "tier": self._AMENITY_TIER_LABEL,
+            "tier": tier_label,
         }
 
     def _build_operating_expenses(

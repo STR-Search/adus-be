@@ -126,15 +126,17 @@ def test_builds_draft_payload_when_optional_prepared_fields_are_missing():
     ]
 
 
-def _amenity_option(amenity_id, name, price_tier_2):
+def _amenity_option(amenity_id, name, *, price_tier_1, price_tier_2):
     return {
         "id": amenity_id,
         "amenity_name": name,
         "location": None,
         "notes": "catalog note",
-        "price_tier_1": 1,
+        "price_tier_1": price_tier_1,
         "price_tier_2": price_tier_2,
-        "price_tier_3": 3,
+        # Nothing seeds at the high tier; a distinctive value makes it obvious
+        # if something starts reading it.
+        "price_tier_3": 999999,
     }
 
 
@@ -152,12 +154,22 @@ def _prepared_with_amenities(*, amenities, must_have_amenity_ids):
 def test_seeds_optimization_items_with_must_haves_bracketed_by_base_options():
     prepared = _prepared_with_amenities(
         amenities=[
-            _amenity_option(0, "Furnishings", 45000),
-            _amenity_option(-1, "Consolidated Shipping", 18225),
-            _amenity_option(-2, "STR Cribs - Project Management", 12000),
-            _amenity_option(1, "Hot Tub", 9500),
-            _amenity_option(2, "Fire Pit", 2200),
-            _amenity_option(3, "Not A Must Have", 1000),
+            # Furnishings seeds at the mid tier; everything else at low. The two
+            # synthetic service options carry one price across every tier, as
+            # PrepareUwDataService.build_amenities_options builds them.
+            _amenity_option(0, "Furnishings", price_tier_1=30000, price_tier_2=45000),
+            _amenity_option(
+                -1, "Consolidated Shipping", price_tier_1=18225, price_tier_2=18225
+            ),
+            _amenity_option(
+                -2,
+                "STR Cribs - Project Management",
+                price_tier_1=12000,
+                price_tier_2=12000,
+            ),
+            _amenity_option(1, "Hot Tub", price_tier_1=9500, price_tier_2=11000),
+            _amenity_option(2, "Fire Pit", price_tier_1=2200, price_tier_2=3000),
+            _amenity_option(3, "Not A Must Have", price_tier_1=1000, price_tier_2=1500),
         ],
         must_have_amenity_ids=[2, 1],
     )
@@ -179,28 +191,28 @@ def test_seeds_optimization_items_with_must_haves_bracketed_by_base_options():
             "total_price": Decimal("2200"),
             "base_price": Decimal("2200"),
             "metric": "flat",
-            "tier": "Mid",
+            "tier": "Low",
         },
         {
             "category": "Hot Tub",
             "total_price": Decimal("9500"),
             "base_price": Decimal("9500"),
             "metric": "flat",
-            "tier": "Mid",
+            "tier": "Low",
         },
         {
             "category": "STR Cribs - Project Management",
             "total_price": Decimal("12000"),
             "base_price": Decimal("12000"),
             "metric": "flat",
-            "tier": "Mid",
+            "tier": "Low",
         },
         {
             "category": "Consolidated Shipping",
             "total_price": Decimal("18225"),
             "base_price": Decimal("18225"),
             "metric": "flat",
-            "tier": "Mid",
+            "tier": "Low",
         },
     ]
     # spec and notes are left for the analyst.
@@ -211,7 +223,9 @@ def test_seeds_optimization_items_with_must_haves_bracketed_by_base_options():
 
 def test_seeds_blank_optimization_item_when_tier_price_is_missing():
     prepared = _prepared_with_amenities(
-        amenities=[_amenity_option(0, "Furnishings", None)],
+        amenities=[
+            _amenity_option(0, "Furnishings", price_tier_1=None, price_tier_2=None)
+        ],
         must_have_amenity_ids=[],
     )
 
@@ -224,7 +238,9 @@ def test_seeds_blank_optimization_item_when_tier_price_is_missing():
 
 def test_skips_must_have_ids_absent_from_the_amenity_catalog():
     prepared = _prepared_with_amenities(
-        amenities=[_amenity_option(0, "Furnishings", 45000)],
+        amenities=[
+            _amenity_option(0, "Furnishings", price_tier_1=30000, price_tier_2=45000)
+        ],
         must_have_amenity_ids=[99],
     )
 
@@ -236,8 +252,8 @@ def test_skips_must_have_ids_absent_from_the_amenity_catalog():
 def test_deduplicates_must_have_ids_overlapping_base_options():
     prepared = _prepared_with_amenities(
         amenities=[
-            _amenity_option(0, "Furnishings", 45000),
-            _amenity_option(1, "Hot Tub", 9500),
+            _amenity_option(0, "Furnishings", price_tier_1=30000, price_tier_2=45000),
+            _amenity_option(1, "Hot Tub", price_tier_1=9500, price_tier_2=11000),
         ],
         must_have_amenity_ids=[0, 1, 1],
     )

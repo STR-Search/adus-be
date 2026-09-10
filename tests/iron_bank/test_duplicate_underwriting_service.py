@@ -40,8 +40,10 @@ _EXPECTED_UNDERWRITING_COLUMNS = frozenset(
         "offer_competitiveness", "owner_id", "pool_type",
         "primary_guest_avatar", "property_address", "property_pending", "prr",
         "purchase_price", "regulatory_clarity", "remote", "renovation_level",
-        "seasonality", "series_id", "sheet_number", "sleep_capacity", "source",
-        "state", "street", "survey", "tax_efficient", "total_oop", "turnkey",
+        "seasonality", "series_id", "sheet_number", "sleep_count_high",
+        "sleep_count_low", "source",
+        "state", "street", "survey", "target_demographic", "tax_efficient",
+        "total_oop", "turnkey",
         "updated_at", "version", "video_walkthrough", "view_quality",
         "waterfront", "zpid",
     }
