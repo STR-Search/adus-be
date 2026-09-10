@@ -13,6 +13,7 @@ from app.markets.controllers.opex_controller import (
 )
 from app.markets.controllers.realtor_controller import RealtorController
 from app.markets.controllers.str_cribs_controller import StrCribsFeeDetailsController
+from app.markets.enums import MarketStatus
 from app.markets.repositories.construction_repository import (
     ConstructionAmenitiesRepository,
     ConstructionRemodelingRepository,
@@ -129,7 +130,7 @@ async def health_check():
 async def get_markets_paginated(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    market_status: str | None = Query(None),
+    market_status: MarketStatus | None = Query(None),
     analyst_owner_id: int | None = Query(None),
     search: str | None = Query(None),
     controller: MarketController = Depends(get_market_controller),
@@ -145,9 +146,10 @@ async def get_markets_paginated(
 
 @router.get("/markets/all", tags=["markets"])
 async def get_all_markets(
+    market_status: MarketStatus | None = Query(None),
     controller: MarketController = Depends(get_market_controller),
 ):
-    return await controller.get_all_summary()
+    return await controller.get_all_summary(market_status=market_status)
 
 
 @router.get("/markets/slug/{market_slug}", tags=["markets"])

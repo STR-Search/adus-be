@@ -1,3 +1,4 @@
+from app.markets.enums import MarketStatus
 from app.markets.models.market import MarketKeysMaster
 from app.markets.models.realtor import Realtor
 from app.markets.repositories.construction_repository import (
@@ -198,8 +199,10 @@ class MarketService:
             return None
         return self._to_schema(market, *await self._get_lookup_maps())
 
-    async def get_all_summary(self) -> list[MarketSummarySchema]:
-        items = await self.repository.get_all_summary()
+    async def get_all_summary(
+        self, market_status: MarketStatus | None = None
+    ) -> list[MarketSummarySchema]:
+        items = await self.repository.get_all_summary(market_status=market_status)
         return [MarketSummarySchema.model_validate(item) for item in items]
 
     async def delete(self, market_id: int) -> bool:
@@ -209,7 +212,7 @@ class MarketService:
         self,
         page: int,
         page_size: int,
-        market_status: str | None = None,
+        market_status: MarketStatus | None = None,
         analyst_owner_id: int | None = None,
         search: str | None = None,
     ) -> tuple[list[MarketKeysMasterSchema], int, int]:

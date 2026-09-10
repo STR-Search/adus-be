@@ -8,9 +8,14 @@ from typing import Any
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from app.core.database import AsyncSessionLocal
-from app.workflows.batch_prepare_and_save_underwritings_job import (
-    BatchPrepareAndSaveUnderwritingsJob,
-)
+
+# Disabled: another team populates underwritings via
+# POST /underwritings/batch-prepare-by-preset, so the time-window creation pass
+# here would create duplicate/unwanted deals. Re-enable (import, the run_batch
+# parameter, the call, and the "creation" summary key) once that is resolved.
+# from app.workflows.batch_prepare_and_save_underwritings_job import (
+#     BatchPrepareAndSaveUnderwritingsJob,
+# )
 from app.workflows.batch_reconcile_underwriting_prices_job import (
     BatchReconcileUnderwritingPricesJob,
 )
@@ -27,22 +32,22 @@ async def run_batch(
     since_hours: int,
     limit: int | None,
     session_factory=AsyncSessionLocal,
-    creation_job_cls=BatchPrepareAndSaveUnderwritingsJob,
+    # creation_job_cls=BatchPrepareAndSaveUnderwritingsJob,
     reconciliation_job_cls=BatchReconcileUnderwritingPricesJob,
     property_pending_job_cls=SyncUnderwritingPropertyPendingJob,
 ) -> dict[str, Any]:
     async with session_factory() as session:
-        creation = await creation_job_cls.from_session(session).run(
-            since_hours=since_hours,
-            limit=limit,
-        )
+        # creation = await creation_job_cls.from_session(session).run(
+        #     since_hours=since_hours,
+        #     limit=limit,
+        # )
         price_reconciliation = await reconciliation_job_cls.from_session(session).run(
             since_hours=since_hours,
             limit=limit,
         )
         property_pending = await property_pending_job_cls.from_session(session).run()
         return {
-            "creation": creation,
+            # "creation": creation,
             "price_reconciliation": price_reconciliation,
             "property_pending": property_pending,
         }
