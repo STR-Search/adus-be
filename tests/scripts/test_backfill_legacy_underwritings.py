@@ -209,6 +209,114 @@ def test_build_deal_from_summary_row():
     assert "no deal tab in workbook (summary row only)" in deal["warnings"]
 
 
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        (None, (None, None)),
+        ("", (None, None)),
+        ("6", (None, None)),  # bare legacy number, no bed/bath text at all
+        (
+            "Property Details:\n-- Bed / Bath (Projected):\n-- Lot Size (sqft): ",
+            (None, None),
+        ),  # label present but blank
+        (
+            "Property Details:\n-- Bed / Bath (projected): 4 / 3\n-- Lot Size (sqft): ",
+            (4, Decimal("3")),
+        ),
+        (
+            "Property Details:\n-- Bed / Bath (Projected): 4/4\n-- Lot Size (sqft): 7,840",
+            (4, Decimal("4")),
+        ),
+        (
+            "Property Details:\n-- Bed / Bath (Projected): 3 Bd / 3 Ba\n-- Lot Size (sqft): 0.32",
+            (3, Decimal("3")),
+        ),
+        (
+            'Property Details:\n–– Bed / Bath: 4 / 2.5\n–– Lot Size: 0.68 acres',
+            (4, Decimal("2.5")),
+        ),
+    ],
+)
+def test_parse_bed_bath(text, expected):
+    assert backfill.parse_bed_bath(text) == expected
+
+
+def test_build_deal_from_summary_row_parses_bed_bath():
+    summary = {
+        "raw_status": "Present to Clients",
+        "property_address": "1 Main St, Miami, FL",
+        "link": 2000,
+        "property_details_text": (
+            "Property Details:\n-- Bed / Bath (Projected): 4 / 3\n-- Lot Size (sqft): "
+        ),
+    }
+    deal = backfill.build_deal(2000, summary, None)
+    uw = deal["underwriting"]
+    assert uw["bedrooms"] == 4
+    assert uw["bathrooms"] == Decimal("3")
+
+
+def test_build_deal_from_summary_row_omits_bed_bath_when_unparseable():
+    summary = {
+        "raw_status": "Present to Clients",
+        "property_address": "1 Main St, Miami, FL",
+        "link": 2001,
+        "property_details_text": "6",
+    }
+    deal = backfill.build_deal(2001, summary, None)
+    uw = deal["underwriting"]
+    assert "bedrooms" not in uw
+    assert "bathrooms" not in uw
+
+
+def test_parse_property_details_text_finds_cell_by_content():
+    grid = [
+        _pad((None, "Prepared By:", "Taylor J")),
+        _pad((None, None, None, "Property Details:\n-- Bed / Bath (Projected): 4 / 3")),
+    ]
+    assert backfill._parse_property_details_text(grid) == (
+        "Property Details:\n-- Bed / Bath (Projected): 4 / 3"
+    )
+
+
+def test_parse_property_details_text_returns_none_when_absent():
+    assert backfill._parse_property_details_text(NEW_FORMAT_GRID) is None
+
+
+def test_build_deal_falls_back_to_deal_tab_when_summary_blank():
+    # The tracking-tab summary's copy is blank; the deal tab's own copy of
+    # the same free-text blob has the bed/bath info instead.
+    tab_grid = list(NEW_FORMAT_GRID) + [
+        _pad((None, None, None, "Property Details:\n-- Bed / Bath (Projected): 5 / 4"))
+    ]
+    summary = {
+        "raw_status": "Present to Clients",
+        "property_address": "1 Main St, Miami, FL",
+        "link": 2002,
+        "property_details_text": None,
+    }
+    deal = backfill.build_deal(2002, summary, backfill.parse_deal_tab(tab_grid))
+    uw = deal["underwriting"]
+    assert uw["bedrooms"] == 5
+    assert uw["bathrooms"] == Decimal("4")
+
+
+def test_build_deal_prefers_summary_over_deal_tab_when_both_present():
+    tab_grid = list(NEW_FORMAT_GRID) + [
+        _pad((None, None, None, "Property Details:\n-- Bed / Bath (Projected): 5 / 4"))
+    ]
+    summary = {
+        "raw_status": "Present to Clients",
+        "property_address": "1 Main St, Miami, FL",
+        "link": 2003,
+        "property_details_text": "Property Details:\n-- Bed / Bath (Projected): 2 / 1",
+    }
+    deal = backfill.build_deal(2003, summary, backfill.parse_deal_tab(tab_grid))
+    uw = deal["underwriting"]
+    assert uw["bedrooms"] == 2
+    assert uw["bathrooms"] == Decimal("1")
+
+
 def test_build_deal_without_summary_defaults_to_no_status():
     deal = backfill.build_deal(42, None, backfill.parse_deal_tab(OLD_FORMAT_GRID))
     uw = deal["underwriting"]
