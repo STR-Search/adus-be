@@ -1,8 +1,9 @@
 name: Daily Underwriting Prepare
 
 on:
-  schedule:
-    - cron: "0 10 * * *"
+  # Daily schedule disabled -- run manually via workflow_dispatch for now.
+  # schedule:
+  #   - cron: "0 10 * * *"
   workflow_dispatch:
 
 jobs:
