@@ -16,18 +16,20 @@ class FakeSessionFactory:
         return False
 
 
-class FakeCreationJob:
-    session = None
-    called_with = None
-
-    @classmethod
-    def from_session(cls, session):
-        cls.session = session
-        return cls()
-
-    async def run(self, *, since_hours, limit):
-        self.__class__.called_with = {"since_hours": since_hours, "limit": limit}
-        return {"saved": 2, "failed": 0}
+# Disabled alongside the creation pass in scripts/run_uw_auto_prepare.py —
+# underwritings are populated via POST /underwritings/batch-prepare-by-preset.
+# class FakeCreationJob:
+#     session = None
+#     called_with = None
+#
+#     @classmethod
+#     def from_session(cls, session):
+#         cls.session = session
+#         return cls()
+#
+#     async def run(self, *, since_hours, limit):
+#         self.__class__.called_with = {"since_hours": since_hours, "limit": limit}
+#         return {"saved": 2, "failed": 0}
 
 
 class FakeReconciliationJob:
@@ -59,26 +61,26 @@ class FakePropertyPendingJob:
 
 
 @pytest.mark.asyncio
-async def test_run_batch_runs_creation_and_price_reconciliation():
+async def test_run_batch_runs_price_reconciliation_and_property_pending():
     summary = await run_uw_auto_prepare.run_batch(
         since_hours=24,
         limit=500,
         session_factory=FakeSessionFactory,
-        creation_job_cls=FakeCreationJob,
+        # creation_job_cls=FakeCreationJob,
         reconciliation_job_cls=FakeReconciliationJob,
         property_pending_job_cls=FakePropertyPendingJob,
     )
 
     assert summary == {
-        "creation": {"saved": 2, "failed": 0},
+        # "creation": {"saved": 2, "failed": 0},
         "price_reconciliation": {"updated": 1, "failed": 0},
         "property_pending": {"updated": 3},
     }
-    assert FakeCreationJob.session.name == "session"
+    # assert FakeCreationJob.session.name == "session"
     assert FakeReconciliationJob.session.name == "session"
     assert FakePropertyPendingJob.session.name == "session"
     assert FakePropertyPendingJob.ran is True
-    assert FakeCreationJob.called_with == {"since_hours": 24, "limit": 500}
+    # assert FakeCreationJob.called_with == {"since_hours": 24, "limit": 500}
     assert FakeReconciliationJob.called_with == {
         "since_hours": 24,
         "limit": 500,
