@@ -78,6 +78,21 @@ def _boolean_tag_conditions(boolean_tags: dict[str, bool] | None) -> list:
     return conditions
 
 
+def _property_pending_condition(property_pending: bool | None) -> list:
+    """WHERE condition for the Zillow-synced ``property_pending`` flag.
+
+    Not a deal tag — it is written by the listing sync, not by an analyst — so
+    it gets its own condition rather than a slot in ``_boolean_tag_conditions``.
+    The NULL handling is the same though, and for the same reason: the column
+    carries only a Python-side ``default=False``, so rows predating the flag
+    hold NULL and a bare ``column == False`` would drop them from "not pending".
+    """
+    if property_pending is None:
+        return []
+    column = Underwriting.property_pending
+    return [column.is_(True) if property_pending else column.isnot(True)]
+
+
 def _value_set_conditions(tags, allowed_fields: tuple[str, ...], kind: str) -> list:
     """WHERE conditions for "one column, any of these values" tag filters.
 
@@ -188,6 +203,7 @@ class UnderwritingRepository:
         approver_id: int | None = None,
         owner_id: int | None = None,
         source: str | None = None,
+        property_pending: bool | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
@@ -278,6 +294,7 @@ class UnderwritingRepository:
             *_date_range_conditions(
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
+            *_property_pending_condition(property_pending),
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
             *_numeric_tag_conditions(numeric_tags),
@@ -332,6 +349,7 @@ class UnderwritingRepository:
         approver_id: int | None = None,
         owner_id: int | None = None,
         source: str | None = None,
+        property_pending: bool | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
@@ -462,6 +480,7 @@ class UnderwritingRepository:
             *_date_range_conditions(
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
+            *_property_pending_condition(property_pending),
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
             *_numeric_tag_conditions(numeric_tags),

@@ -1,5 +1,10 @@
 import logging, sys, structlog
 
+from app.core.config import get_config
+
+# Resolved once at import time - DEBUG in development, INFO in production for default, but overridable via LOG_LEVEL. The root logger is wired to this level.
+LOG_LEVEL = get_config().log_level
+
 # 1️⃣  processors that run for *every* log entry
 shared_processors = [
     structlog.stdlib.add_log_level,
@@ -18,7 +23,11 @@ shared_processors = [
 
 # 2️⃣  structlog: add wrap_for_formatter **as the last processor**
 structlog.configure(
-    processors=shared_processors + [
+    processors=[
+        # Drop below-level events before the rest of the chain runs, so a
+        # filtered-out logger.debug() costs nothing beyond the call itself.
+        structlog.stdlib.filter_by_level,
+        *shared_processors,
         structlog.stdlib.ProcessorFormatter.wrap_for_formatter,  # <-- keeps event_dict
     ],
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -28,20 +37,20 @@ structlog.configure(
 
 # 3️⃣  Console handler that renders with colours
 console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setLevel(logging.DEBUG)
+console_handler.setLevel(LOG_LEVEL)
 console_handler.setFormatter(
     structlog.stdlib.ProcessorFormatter(
-        foreign_pre_chain=shared_processors,               # run same chain
+        foreign_pre_chain=shared_processors,  # run same chain
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.dev.ConsoleRenderer(colors=True)
+            structlog.dev.ConsoleRenderer(colors=True),
         ],
     )
 )
 
 # 4️⃣  Root logger wiring
 root = logging.getLogger()
-root.setLevel(logging.DEBUG)
+root.setLevel(LOG_LEVEL)
 root.handlers.clear()
 root.addHandler(console_handler)
 
@@ -52,7 +61,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("werkzeug").setLevel(logging.WARNING)
 logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 logging.getLogger("geventwebsocket.handler").setLevel(logging.WARNING)
-logging.getLogger("urllib3").setLevel(logging.WARNING) 
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 # for lib in (
 #     "openai", "httpcore", "httpx", "werkzeug",

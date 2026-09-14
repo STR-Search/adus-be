@@ -5,6 +5,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logger import logger
+from app.markets.enums import MarketStatus
 from app.markets.models.market import MarketKeysMaster
 
 
@@ -61,7 +62,7 @@ class MarketRepository:
         self,
         page: int,
         page_size: int,
-        market_status: str | None = None,
+        market_status: MarketStatus | None = None,
         analyst_owner_id: int | None = None,
         search: str | None = None,
     ) -> tuple[list[MarketKeysMaster], int, int]:
@@ -101,12 +102,13 @@ class MarketRepository:
         )
         return items, total, pages
 
-    async def get_all_summary(self) -> list[MarketKeysMaster]:
-        result = await self.db.execute(
-            select(MarketKeysMaster)
-            .where(MarketKeysMaster.deleted_at.is_(None))
-            .order_by(MarketKeysMaster.id)
-        )
+    async def get_all_summary(
+        self, market_status: MarketStatus | None = None
+    ) -> list[MarketKeysMaster]:
+        query = select(MarketKeysMaster).where(MarketKeysMaster.deleted_at.is_(None))
+        if market_status is not None:
+            query = query.where(MarketKeysMaster.market_status == market_status)
+        result = await self.db.execute(query.order_by(MarketKeysMaster.id))
         return list(result.scalars().all())
 
     async def delete(self, market_id: int) -> bool:

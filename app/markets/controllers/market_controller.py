@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 
 from app.core.logger import logger
+from app.markets.enums import MarketStatus
 from app.markets.schemas.market import (
     MarketCreateSchema,
     MarketKeysMasterSchema,
@@ -61,11 +62,17 @@ class MarketController:
             logger.error("market.update.error", market_id=market_id, error=str(e))
             raise HTTPException(status_code=500, detail="Failed to update market")
 
-    async def get_all_summary(self) -> list[MarketSummarySchema]:
+    async def get_all_summary(
+        self, market_status: MarketStatus | None = None
+    ) -> list[MarketSummarySchema]:
         try:
-            return await self.service.get_all_summary()
+            return await self.service.get_all_summary(market_status=market_status)
         except Exception as e:
-            logger.error("market.get_all_summary.error", error=str(e))
+            logger.error(
+                "market.get_all_summary.error",
+                market_status=market_status,
+                error=str(e),
+            )
             raise HTTPException(status_code=500, detail="Failed to fetch markets")
 
     async def delete(self, market_id: int) -> dict:
@@ -84,7 +91,7 @@ class MarketController:
         self,
         page: int,
         page_size: int,
-        market_status: str | None = None,
+        market_status: MarketStatus | None = None,
         analyst_owner_id: int | None = None,
         search: str | None = None,
     ) -> dict:

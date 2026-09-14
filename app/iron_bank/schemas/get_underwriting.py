@@ -247,6 +247,7 @@ class GetUnderwritingsQuery(BaseModel):
     approver_id: int | None = None
     owner_id: int | None = None
     source: UnderwritingSource | None = None
+    property_pending: bool | None = None
     # free-text match on address/city/state; numeric terms also match sheet_number
     search: str | None = Field(None, max_length=100)
     min_purchase_price: Decimal | None = Field(None, ge=0)
