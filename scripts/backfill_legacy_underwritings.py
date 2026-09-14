@@ -149,6 +149,18 @@ def clean_text(value: Any) -> str | None:
     return text
 
 
+def normalize_listing_url(url: str | None) -> str | None:
+    """Strips a bare trailing '?' (no query string after it) inherited
+    straight from the sheet's Zillow share links, e.g.
+    '.../43103039_zpid/?' -> '.../43103039_zpid/'. A real query string
+    (`?utm_campaign=...`) doesn't end in '?', so it's left untouched --
+    domain-agnostic by construction, no separate check needed for the
+    sheet's Redfin/Airbnb URLs."""
+    if url is not None and url.endswith("?"):
+        return url[:-1]
+    return url
+
+
 def jsonable(value: Any) -> Any:
     """Recursively converts Decimals to floats for JSONB columns."""
     if isinstance(value, Decimal):
@@ -686,7 +698,7 @@ def build_deal(
         "is_automated": False,
     }
     if listing_url:
-        underwriting["listing_url"] = listing_url
+        underwriting["listing_url"] = normalize_listing_url(listing_url)
 
     if summary is None:
         warnings.append("no summary row in any tracking tab (deal tab only)")
@@ -751,7 +763,7 @@ def build_deal(
         if tab["analyst_notes"]:
             detail["analyst_notes"] = tab["analyst_notes"]
         if tab["listing_url"] and not underwriting.get("listing_url"):
-            underwriting["listing_url"] = tab["listing_url"]
+            underwriting["listing_url"] = normalize_listing_url(tab["listing_url"])
         taxes = tab["taxes"]
         optimization_items = tab["optimization_items"]
         operating_expenses = tab["operating_expenses"]

@@ -428,6 +428,29 @@ def test_extract_zpid():
     assert backfill.extract_zpid(None) is None
 
 
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        (None, None),
+        (
+            "https://www.zillow.com/homedetails/.../43103039_zpid/?",
+            "https://www.zillow.com/homedetails/.../43103039_zpid/",
+        ),
+        (
+            "https://www.zillow.com/homedetails/.../43103039_zpid/?utm_campaign=abc",
+            "https://www.zillow.com/homedetails/.../43103039_zpid/?utm_campaign=abc",
+        ),  # real query string left alone
+        (
+            "https://www.redfin.com/VA/Luray/2225-Valley-Burg-Rd-22835/home/106228965?",
+            "https://www.redfin.com/VA/Luray/2225-Valley-Burg-Rd-22835/home/106228965",
+        ),  # non-Zillow, still stripped -- domain-agnostic
+        ("https://airbnb.com/rooms/1", "https://airbnb.com/rooms/1"),  # already clean
+    ],
+)
+def test_normalize_listing_url(url, expected):
+    assert backfill.normalize_listing_url(url) == expected
+
+
 def test_build_deal_extracts_candidate_zpid():
     deal = backfill.build_deal(
         1156,
@@ -436,6 +459,9 @@ def test_build_deal_extracts_candidate_zpid():
         listing_url="https://www.zillow.com/homedetails/15017-N-49th-St-Scottsdale-AZ-85254/8028368_zpid/?",
     )
     assert deal["candidate_zpid"] == "8028368"
+    assert deal["underwriting"]["listing_url"] == (
+        "https://www.zillow.com/homedetails/15017-N-49th-St-Scottsdale-AZ-85254/8028368_zpid/"
+    )
 
     deal_no_url = backfill.build_deal(1156, None, None)
     assert deal_no_url["candidate_zpid"] is None
@@ -444,6 +470,17 @@ def test_build_deal_extracts_candidate_zpid():
         1156, None, None, listing_url="https://airbnb.com/rooms/1"
     )
     assert deal_non_zillow["candidate_zpid"] is None
+
+
+def test_build_deal_normalizes_listing_url_from_tab_fallback():
+    # NEW_FORMAT_GRID has every required section already; only the
+    # PROPERTY URL row is swapped for one with a trailing bare '?'.
+    tab_grid = list(NEW_FORMAT_GRID)
+    tab_grid[1] = _pad(
+        (None, None, None, None, "PROPERTY URL:", "https://www.zillow.com/homedetails/1/8028368_zpid/?")
+    )
+    deal = backfill.build_deal(1156, None, backfill.parse_deal_tab(tab_grid, 1156))
+    assert deal["underwriting"]["listing_url"] == "https://www.zillow.com/homedetails/1/8028368_zpid/"
 
 
 def test_value_normalization():
