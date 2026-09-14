@@ -345,11 +345,24 @@ def _find_row(grid: list[tuple], col: int, prefix: str) -> int | None:
     return None
 
 
-def _parse_purchase_details(grid, warnings: list[str]) -> dict[str, Any]:
+def _find_row_by_any_prefix(
+    grid: list[tuple], col: int, prefixes: tuple[str, ...]
+) -> int | None:
+    for prefix in prefixes:
+        row = _find_row(grid, col, prefix)
+        if row is not None:
+            return row
+    return None
+
+
+def _parse_purchase_details(grid, sheet_number: int) -> dict[str, Any]:
     start = _find_row(grid, 1, "purchase details")
     if start is None:
-        warnings.append("section not found: Purchase Details")
-        return {}
+        raise ValueError(
+            f"deal tab {sheet_number}: section not found: Purchase Details. "
+            "The sheet's template was likely changed -- update the header "
+            "search to match before backfilling."
+        )
     labels = {
         "purchase price": ("purchase_price", 3),
         "down payment": ("down_payment", 3),
@@ -397,13 +410,19 @@ def _parse_construction_loan(grid) -> dict[str, Any] | None:
     return None
 
 
-def _parse_optimization_items(grid, warnings: list[str]) -> list[dict[str, Any]]:
+def _parse_optimization_items(grid, sheet_number: int) -> list[dict[str, Any]]:
     # 'optim' catches both 'Optimization List (Estimate)' and the oldest
-    # template's typo 'Optimzation List (Rough Estimate)'
-    start = _find_row(grid, 4, "optim")
+    # template's typo 'Optimzation List (Rough Estimate)'; 'game plan'
+    # catches the newest template's renamed header 'Game Plan / Blue Print
+    # (Estimate)'.
+    start = _find_row_by_any_prefix(grid, 4, ("optim", "game plan"))
     if start is None:
-        warnings.append("section not found: Optimization List")
-        return []
+        raise ValueError(
+            f"deal tab {sheet_number}: section not found: Optimization List. "
+            "The sheet's template was likely renamed again -- add another "
+            "alias to _parse_optimization_items's prefix list before "
+            "backfilling."
+        )
     items: list[dict[str, Any]] = []
     for idx in range(start + 1, len(grid)):
         label = clean_text(_cell(grid, idx, 4))
@@ -416,11 +435,14 @@ def _parse_optimization_items(grid, warnings: list[str]) -> list[dict[str, Any]]
     return items
 
 
-def _parse_operating_expenses(grid, warnings: list[str]) -> list[dict[str, Any]]:
+def _parse_operating_expenses(grid, sheet_number: int) -> list[dict[str, Any]]:
     start = _find_row(grid, 7, "operating expenses (opex)")
     if start is None:
-        warnings.append("section not found: Operating Expenses (OPEX)")
-        return []
+        raise ValueError(
+            f"deal tab {sheet_number}: section not found: Operating Expenses "
+            "(OPEX). The sheet's template was likely changed -- update the "
+            "header search to match before backfilling."
+        )
     expenses: list[dict[str, Any]] = []
     for idx in range(start + 1, len(grid)):
         label = clean_text(_cell(grid, idx, 7))
@@ -600,10 +622,20 @@ def _parse_property_details_text(grid) -> str | None:
     return None
 
 
-def parse_deal_tab(grid: list[tuple]) -> dict[str, Any]:
-    """Parses one deal tab's cell grid into child-record inputs + warnings."""
+def parse_deal_tab(grid: list[tuple], sheet_number: int) -> dict[str, Any]:
+    """Parses one deal tab's cell grid into child-record inputs + warnings.
+
+    Purchase Details, Optimization List, and Operating Expenses are expected
+    on every deal tab regardless of template version -- if the sheet renames
+    or removes one of those headers, the corresponding parser raises rather
+    than silently returning empty data (this is exactly the failure mode
+    that let a "Game Plan / Blue Print" rename backfill an empty
+    optimization list for 122 deals without anyone noticing). Every other
+    section here is genuinely optional by template version, so those stay
+    soft -- their absence is normal, not drift.
+    """
     warnings: list[str] = []
-    purchase_details = _parse_purchase_details(grid, warnings)
+    purchase_details = _parse_purchase_details(grid, sheet_number)
     construction_loan = _parse_construction_loan(grid)
     if construction_loan:
         purchase_details["construction_loan"] = construction_loan
@@ -613,8 +645,8 @@ def parse_deal_tab(grid: list[tuple]) -> dict[str, Any]:
         "forecasted_revenue": _parse_forecasted_revenue(grid),
         "y1_coc_incl_tax_savings": _parse_y1_coc(grid),
         "taxes": _parse_taxes(grid),
-        "optimization_items": _parse_optimization_items(grid, warnings),
-        "operating_expenses": _parse_operating_expenses(grid, warnings),
+        "optimization_items": _parse_optimization_items(grid, sheet_number),
+        "operating_expenses": _parse_operating_expenses(grid, sheet_number),
         "comp_set": _parse_comp_set(grid),
         "analyst_notes": _parse_analyst_notes(grid),
         "prepared_by": _parse_prepared_by(grid),
@@ -1730,7 +1762,7 @@ def main() -> None:
 
 def _parsed_tab(data: dict[str, Any], number: int) -> dict[str, Any] | None:
     grid = data["tabs"].get(number)
-    return parse_deal_tab(grid) if grid is not None else None
+    return parse_deal_tab(grid, number) if grid is not None else None
 
 
 if __name__ == "__main__":

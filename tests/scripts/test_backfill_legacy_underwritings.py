@@ -52,7 +52,7 @@ OLD_FORMAT_GRID = [
 
 
 def test_parse_new_format_tab():
-    tab = backfill.parse_deal_tab(NEW_FORMAT_GRID)
+    tab = backfill.parse_deal_tab(NEW_FORMAT_GRID, 1)
 
     assert tab["purchase_details"]["purchase_price"] == Decimal("1000000")
     assert tab["purchase_details"]["down_payment_pct"] == Decimal("0.1")
@@ -121,8 +121,55 @@ def test_parse_new_format_tab():
     assert tab["warnings"] == []
 
 
+# Mirrors sheet_number 2518's real "Game Plan / Blue Print (Estimate)"
+# section: 5 items including a $0 one and two blank-price ones, terminated
+# by "Total Optimization Range" -- the newest template's renamed header.
+GAME_PLAN_HEADER_GRID = [
+    _pad((None, None, None, None, "Game Plan / Blue Print (Estimate)")),
+    _pad((None, None, None, None, "Furniture/Decor/Essentials", 0)),
+    _pad((None, None, None, None, "Appraisal Gap", 100000)),
+    _pad((None, None, None, None, "Off Market Sourcing Company", 20000)),
+    _pad((None, None, None, None, "Design/Project Management", None)),
+    _pad((None, None, None, None, "Install/Staging/Warehousing", None)),
+    _pad((None, None, None, None, "Total Optimization Range", 120000)),
+]
+
+
+def test_parse_optimization_items_game_plan_header_variant():
+    items = backfill._parse_optimization_items(GAME_PLAN_HEADER_GRID, 2518)
+    assert items == [
+        {"category": "Furniture/Decor/Essentials", "total_price": Decimal("0")},
+        {"category": "Appraisal Gap", "total_price": Decimal("100000")},
+        {"category": "Off Market Sourcing Company", "total_price": Decimal("20000")},
+        {"category": "Design/Project Management", "total_price": None},
+        {"category": "Install/Staging/Warehousing", "total_price": None},
+    ]
+
+
+def test_parse_optimization_items_raises_when_section_not_found():
+    grid = [_pad((None, None, None, None, "Nothing relevant here"))]
+    with pytest.raises(ValueError, match="deal tab 999: section not found: Optimization List"):
+        backfill._parse_optimization_items(grid, 999)
+
+
+def test_parse_operating_expenses_raises_when_section_not_found():
+    grid = [_pad((None, None, None, None, None, None, None, "Nothing relevant here"))]
+    with pytest.raises(
+        ValueError, match="deal tab 999: section not found: Operating Expenses"
+    ):
+        backfill._parse_operating_expenses(grid, 999)
+
+
+def test_parse_purchase_details_raises_when_section_not_found():
+    grid = [_pad((None, "Nothing relevant here"))]
+    with pytest.raises(
+        ValueError, match="deal tab 999: section not found: Purchase Details"
+    ):
+        backfill._parse_purchase_details(grid, 999)
+
+
 def test_parse_old_format_tab():
-    tab = backfill.parse_deal_tab(OLD_FORMAT_GRID)
+    tab = backfill.parse_deal_tab(OLD_FORMAT_GRID, 42)
 
     assert tab["optimization_items"] == [
         {"category": "Pickleball Court", "total_price": Decimal("35000")}
@@ -295,7 +342,7 @@ def test_build_deal_falls_back_to_deal_tab_when_summary_blank():
         "link": 2002,
         "property_details_text": None,
     }
-    deal = backfill.build_deal(2002, summary, backfill.parse_deal_tab(tab_grid))
+    deal = backfill.build_deal(2002, summary, backfill.parse_deal_tab(tab_grid, 2002))
     uw = deal["underwriting"]
     assert uw["bedrooms"] == 5
     assert uw["bathrooms"] == Decimal("4")
@@ -311,14 +358,14 @@ def test_build_deal_prefers_summary_over_deal_tab_when_both_present():
         "link": 2003,
         "property_details_text": "Property Details:\n-- Bed / Bath (Projected): 2 / 1",
     }
-    deal = backfill.build_deal(2003, summary, backfill.parse_deal_tab(tab_grid))
+    deal = backfill.build_deal(2003, summary, backfill.parse_deal_tab(tab_grid, 2003))
     uw = deal["underwriting"]
     assert uw["bedrooms"] == 2
     assert uw["bathrooms"] == Decimal("1")
 
 
 def test_build_deal_without_summary_defaults_to_no_status():
-    deal = backfill.build_deal(42, None, backfill.parse_deal_tab(OLD_FORMAT_GRID))
+    deal = backfill.build_deal(42, None, backfill.parse_deal_tab(OLD_FORMAT_GRID, 42))
     uw = deal["underwriting"]
 
     assert uw["deal_status"] == "previously_underwritten_no_status"
