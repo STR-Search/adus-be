@@ -175,16 +175,46 @@ async def test_fetches_cross_domain_data_and_delegates_to_service():
 
 
 @pytest.mark.asyncio
-async def test_skips_market_lookup_when_listing_has_no_preset():
-    job, deps = _job(listing=_listing(preset=None))
+@pytest.mark.parametrize(
+    "preset",
+    [None, SimpleNamespace(market_id=None)],
+    ids=["no_preset", "preset_without_market"],
+)
+async def test_seeds_from_template_when_listing_has_no_market(preset):
+    """A market-less listing is seeded from the template, not from nothing.
+
+    Both shapes of "no market" — no preset at all, and the exploratory bucket
+    (a preset whose market_id is NULL) — read TEMPLATE_MARKET_ID and come back
+    templated, so the automated path matches what create-from-URL produces for
+    the same property. Before this, the lookup ran with market_id=None, found
+    no opex rows, and the draft was seeded with only the always-seeded ones.
+    """
+    uw_service = RecordingUwDataService()
+    job, deps = _job(listing=_listing(preset=preset), uw_service=uw_service)
 
     await job.run("12345")
 
-    assert deps["market_service"].called is False
+    assert deps["market_service"].requested_id == RecordingUwDataService.TEMPLATE_MARKET_ID
     assert deps["opex_by_bedrooms_service"].called_with == {
         "bedrooms": 4,
-        "market_id": None,
+        "market_id": RecordingUwDataService.TEMPLATE_MARKET_ID,
     }
+    assert deps["opex_by_size_service"].called_with == {
+        "sqft": 2000,
+        "market_id": RecordingUwDataService.TEMPLATE_MARKET_ID,
+    }
+    assert uw_service.received["market_id"] == RecordingUwDataService.TEMPLATE_MARKET_ID
+    assert uw_service.received["is_template"] is True
+
+
+@pytest.mark.asyncio
+async def test_does_not_template_a_listing_with_a_market():
+    uw_service = RecordingUwDataService()
+    job, _ = _job(listing=_listing(), uw_service=uw_service)
+
+    await job.run("12345")
+
+    assert uw_service.received["is_template"] is False
 
 
 class TestBuildMarketContext:
