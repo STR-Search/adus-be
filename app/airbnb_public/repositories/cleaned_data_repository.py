@@ -17,7 +17,7 @@ class CleanedDataRepository:
     async def get_revenue_potential_percentiles(
         self,
         *,
-        key_market: str,
+        market_id: int,
         bedrooms: int,
     ) -> tuple[float | None, float | None, float | None]:
         result = await self.db.execute(
@@ -32,7 +32,7 @@ class CleanedDataRepository:
                 .within_group(CleanedData.revenue_potential)
                 .label("high"),
             )
-            .where(CleanedData.key_market == key_market)
+            .where(CleanedData.market_id == market_id)
             .where(CleanedData.bedrooms == bedrooms)
             .where(CleanedData.revenue_potential.is_not(None))
             # Postgres float columns can hold NaN, and NaN sorts above every
