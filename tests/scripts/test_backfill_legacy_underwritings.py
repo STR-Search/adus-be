@@ -508,3 +508,60 @@ def test_user_matcher():
     assert match("John B") == 2
     assert match("Unknown Person") is None
     assert match(None) is None
+
+
+def test_user_matcher_placeholder_wins_over_named_user_when_included():
+    # Documents the exact bug this fixes: a no-last-name user (what a
+    # `legacy_xxx` placeholder looks like) unconditionally claims the bare
+    # first-name key, so if the candidate pool ever includes one alongside
+    # the real person it stood in for, the placeholder wins -- which is why
+    # load_deals()/refresh_deals() must exclude `legacy_%` clerk_ids from
+    # the query itself, not rely on build_user_matcher() to prefer the real
+    # user.
+    class FakeUser:
+        def __init__(self, id, first_name, last_name):
+            self.id = id
+            self.first_name = first_name
+            self.last_name = last_name
+
+    placeholder = FakeUser(99, "Chris", None)
+    real_user = FakeUser(1, "Chris", "Klingemann")
+
+    match_with_placeholder = backfill.build_user_matcher([placeholder, real_user])
+    assert match_with_placeholder("Chris") == 99
+
+    match_without_placeholder = backfill.build_user_matcher([real_user])
+    assert match_without_placeholder("Chris") == 1
+
+
+def test_user_matcher_override_resolves_once_placeholder_excluded():
+    class FakeUser:
+        def __init__(self, id, first_name, last_name):
+            self.id = id
+            self.first_name = first_name
+            self.last_name = last_name
+
+    real_user = FakeUser(1, "Aldwin Dabuet", "Albite")
+    match = backfill.build_user_matcher([real_user])
+    assert match("Aldwin") == 1
+
+
+def test_resolve_user_id_no_name():
+    assert backfill.resolve_user_id(None, lambda name: 1) is None
+    assert backfill.resolve_user_id("", lambda name: 1) is None
+
+
+def test_resolve_user_id_matched():
+    unresolved = set()
+    assert backfill.resolve_user_id("Taylor J", lambda name: 1, unresolved) == 1
+    assert unresolved == set()
+
+
+def test_resolve_user_id_unmatched_collects_name():
+    unresolved = set()
+    assert backfill.resolve_user_id("Unknown Person", lambda name: None, unresolved) is None
+    assert unresolved == {"Unknown Person"}
+
+
+def test_resolve_user_id_unmatched_without_unresolved_set():
+    assert backfill.resolve_user_id("Unknown Person", lambda name: None) is None

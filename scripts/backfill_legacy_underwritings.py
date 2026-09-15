@@ -40,6 +40,7 @@ from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -88,6 +89,10 @@ STATUS_MAP: dict[str, str] = {
 # unmatched-name warnings surface real cases.
 NICKNAME_OVERRIDES: dict[str, str] = {
     "rizz (ahmed)": "ahmed mohamed rizk elsayed",
+    "aldwin": "aldwin dabuet albite",
+    "van": "van hussen manuel",
+    "kevin": "kevin kyle barce santos",
+    "mark": "mark harold isidro",
 }
 
 
@@ -1178,15 +1183,25 @@ def build_user_matcher(users: list[Any]):
     return match
 
 
-def split_person_name(label: str) -> tuple[str, str | None]:
-    """'Taylor J' -> ('Taylor', 'J'); 'Kevin' -> ('Kevin', None)."""
-    first, _, last = label.strip().partition(" ")
-    return first, (last.strip() or None)
+def resolve_user_id(
+    name: str | None,
+    match_user: Callable[[str | None], int | None],
+    unresolved: set[str] | None = None,
+) -> int | None:
+    """Matches a sheet analyst/approver label to a real user id, or None.
 
-
-def legacy_clerk_id(label: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "_", label.strip().lower()).strip("_")
-    return f"legacy_{slug}"
+    Real accounts now exist for everyone the sheet refers to, so this no
+    longer creates a `legacy_xxx` placeholder for an unmatched label -- an
+    unmatched label means NICKNAME_OVERRIDES is missing an entry for a
+    genuine person, not that a new one needs to be minted. Unmatched names
+    are collected into `unresolved` (when given) for reporting.
+    """
+    if not name:
+        return None
+    user_id = match_user(name)
+    if user_id is None and unresolved is not None:
+        unresolved.add(name)
+    return user_id
 
 
 # ---------------------------------------------------------------------------
@@ -1225,12 +1240,19 @@ async def load_deals(deals: list[dict[str, Any]], update: bool) -> dict[str, Any
             .all()
         )
         users = (
-            (await session.execute(select(User).where(User.is_deleted.isnot(True))))
+            (
+                await session.execute(
+                    select(User).where(
+                        User.is_deleted.isnot(True),
+                        User.clerk_id.notlike("legacy_%"),
+                    )
+                )
+            )
             .scalars()
             .all()
         )
         match_user = build_user_matcher(users)
-        created_users: dict[str, int] = {}
+        unresolved_names: set[str] = set()
         repository = UnderwritingRepository(session)
 
         # zpid is FK'd to zillow.scheduled_listings, which only holds Zillow's
@@ -1242,26 +1264,6 @@ async def load_deals(deals: list[dict[str, Any]], update: bool) -> dict[str, Any
             {d["candidate_zpid"] for d in deals if d.get("candidate_zpid")}
         )
         confirmed_listings = await listings_service.get_by_zpids(candidate_zpids)
-
-        async def resolve_user(name: str | None) -> int | None:
-            """Match an existing user, or create a placeholder to link to."""
-            if not name:
-                return None
-            user_id = match_user(name)
-            if user_id is not None:
-                return user_id
-            key = name.strip().lower()
-            if key not in created_users:
-                first, last = split_person_name(name)
-                user = User(
-                    clerk_id=legacy_clerk_id(name), first_name=first, last_name=last
-                )
-                session.add(user)
-                # commit immediately so a later failed deal insert can't roll
-                # the user back while its id stays cached in created_users
-                await session.commit()
-                created_users[key] = user.id
-            return created_users[key]
 
         for deal in deals:
             number = deal["sheet_number"]
@@ -1278,8 +1280,12 @@ async def load_deals(deals: list[dict[str, Any]], update: bool) -> dict[str, Any
                 await session.commit()
 
             underwriting = dict(deal["underwriting"])
-            underwriting["analyst_id"] = await resolve_user(deal["analyst_name"])
-            underwriting["approver_id"] = await resolve_user(deal["approver_name"])
+            underwriting["analyst_id"] = resolve_user_id(
+                deal["analyst_name"], match_user, unresolved_names
+            )
+            underwriting["approver_id"] = resolve_user_id(
+                deal["approver_name"], match_user, unresolved_names
+            )
             candidate_zpid = deal.get("candidate_zpid")
             if candidate_zpid in confirmed_listings:
                 underwriting["zpid"] = candidate_zpid
@@ -1304,7 +1310,7 @@ async def load_deals(deals: list[dict[str, Any]], update: bool) -> dict[str, Any
         "inserted": inserted,
         "skipped": skipped,
         "failed": failed,
-        "created_users": created_users,
+        "unresolved_user_names": sorted(unresolved_names),
         "zpids_matched": zpids_matched,
     }
 
@@ -1355,41 +1361,25 @@ async def refresh_deals(deals: list[dict[str, Any]], dry_run: bool) -> dict[str,
 
     async with AsyncSessionLocal() as session:
         users = (
-            (await session.execute(select(User).where(User.is_deleted.isnot(True))))
+            (
+                await session.execute(
+                    select(User).where(
+                        User.is_deleted.isnot(True),
+                        User.clerk_id.notlike("legacy_%"),
+                    )
+                )
+            )
             .scalars()
             .all()
         )
         match_user = build_user_matcher(users)
-        created_users: dict[str, int | None] = {}
+        unresolved_names: set[str] = set()
 
         listings_service = ScheduledListingsService(ScheduledListingsRepository(session))
         candidate_zpids = list(
             {d["candidate_zpid"] for d in deals if d.get("candidate_zpid")}
         )
         confirmed_listings = await listings_service.get_by_zpids(candidate_zpids)
-
-        async def resolve_user(name: str | None) -> int | None:
-            """Match an existing user, or create a placeholder -- except in
-            dry_run, where nothing is persisted and an unmatched name simply
-            resolves to None for the preview."""
-            if not name:
-                return None
-            user_id = match_user(name)
-            if user_id is not None:
-                return user_id
-            key = name.strip().lower()
-            if key not in created_users:
-                if dry_run:
-                    created_users[key] = None
-                else:
-                    first, last = split_person_name(name)
-                    user = User(
-                        clerk_id=legacy_clerk_id(name), first_name=first, last_name=last
-                    )
-                    session.add(user)
-                    await session.commit()
-                    created_users[key] = user.id
-            return created_users[key]
 
         for deal in deals:
             number = deal["sheet_number"]
@@ -1425,18 +1415,11 @@ async def refresh_deals(deals: list[dict[str, Any]], dry_run: bool) -> dict[str,
                     underwriting_data.pop("source", None)
                     underwriting_data.pop("sheet_number", None)
                     underwriting_data.pop("is_automated", None)
-                    # Resolved before the fetch below, not after:
-                    # resolve_user() may commit a new placeholder user, and
-                    # an async session expires every loaded object on
-                    # commit/rollback -- touching `existing` again after
-                    # that without an explicit refresh raises
-                    # greenlet_spawn errors. Resolving first guarantees it's
-                    # never stale when the setattrs below run.
-                    underwriting_data["analyst_id"] = await resolve_user(
-                        deal["analyst_name"]
+                    underwriting_data["analyst_id"] = resolve_user_id(
+                        deal["analyst_name"], match_user, unresolved_names
                     )
-                    underwriting_data["approver_id"] = await resolve_user(
-                        deal["approver_name"]
+                    underwriting_data["approver_id"] = resolve_user_id(
+                        deal["approver_name"], match_user, unresolved_names
                     )
                     candidate_zpid = deal.get("candidate_zpid")
                     if candidate_zpid in confirmed_listings:
@@ -1540,7 +1523,7 @@ async def refresh_deals(deals: list[dict[str, Any]], dry_run: bool) -> dict[str,
         "not_found": not_found,
         "no_current_data": no_current_data,
         "failed": failed,
-        "created_users": created_users,
+        "unresolved_user_names": sorted(unresolved_names),
         "zpids_matched": zpids_matched,
     }
 
@@ -1706,7 +1689,7 @@ def main() -> None:
             "detail_only": result["detail_only"],
             "not_found": len(result["not_found"]),
             "no_current_data": len(result["no_current_data"]),
-            "created_placeholder_users": result["created_users"],
+            "unresolved_user_names": result["unresolved_user_names"],
             "failed": result["failed"],
             "zpids_matched": result["zpids_matched"],
             "deals_with_warnings": [
@@ -1734,7 +1717,7 @@ def main() -> None:
             "inserted": [],
             "skipped": [],
             "failed": [],
-            "created_users": {},
+            "unresolved_user_names": [],
             "zpids_matched": 0,
         }
     else:
@@ -1747,7 +1730,7 @@ def main() -> None:
         "deals_found": len(deals),
         "inserted": len(result["inserted"]),
         "skipped_existing": len(result["skipped"]),
-        "created_placeholder_users": result["created_users"],
+        "unresolved_user_names": result["unresolved_user_names"],
         "failed": result["failed"],
         "zpids_extracted": sum(1 for deal in deals if deal.get("candidate_zpid")),
         "zpids_matched": result["zpids_matched"],
