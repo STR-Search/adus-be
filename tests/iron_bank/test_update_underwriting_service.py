@@ -305,8 +305,8 @@ class FakeCleanedDataService:
     def __init__(self):
         self.request = None
 
-    async def get_revenue_potential_percentiles(self, *, key_market, bedrooms):
-        self.request = {"key_market": key_market, "bedrooms": bedrooms}
+    async def get_revenue_potential_percentiles(self, *, market_id, bedrooms):
+        self.request = {"market_id": market_id, "bedrooms": bedrooms}
         return SimpleNamespace(
             low=Decimal("72000"), mid=Decimal("98000"), high=Decimal("127000")
         )

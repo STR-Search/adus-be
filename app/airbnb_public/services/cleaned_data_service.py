@@ -14,7 +14,7 @@ class CleanedDataReader(Protocol):
     async def get_revenue_potential_percentiles(
         self,
         *,
-        key_market: str,
+        market_id: int,
         bedrooms: int,
     ) -> tuple[float | None, float | None, float | None]: ...
 
@@ -32,11 +32,11 @@ class CleanedDataService:
     async def get_revenue_potential_percentiles(
         self,
         *,
-        key_market: str,
+        market_id: int,
         bedrooms: int,
     ) -> RevenuePotentialPercentiles | None:
         low, mid, high = await self.repository.get_revenue_potential_percentiles(
-            key_market=key_market,
+            market_id=market_id,
             bedrooms=bedrooms,
         )
         # NaN/inf can survive the aggregate when the source column holds them,

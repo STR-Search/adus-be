@@ -23,6 +23,9 @@ logger = structlog.get_logger(__name__)
 
 
 class MarketReader(Protocol):
+    """Not used by save itself — held for ``UpdateUnderwritingService``, which
+    reads the market to resolve its realtors."""
+
     async def get_by_id(self, market_id: int) -> MarketKeysMasterSchema | None: ...
 
 
@@ -40,7 +43,7 @@ class CleanedDataRevenueReader(Protocol):
     async def get_revenue_potential_percentiles(
         self,
         *,
-        key_market: str,
+        market_id: int,
         bedrooms: int,
     ) -> RevenuePotentialPercentiles | None: ...
 
@@ -353,12 +356,10 @@ class SaveUnderwritingService:
         ``zillow_property`` for non-automated ones), so this method is agnostic
         to where the property data lives.
         """
-        if self.market_service is None or self.cleaned_data_service is None:
+        if self.cleaned_data_service is None:
             logger.debug(
-                "_build_forecasted_revenue_input: skipping — market or cleaned-data "
-                "service not configured",
-                has_market_service=self.market_service is not None,
-                has_cleaned_data_service=self.cleaned_data_service is not None,
+                "_build_forecasted_revenue_input: skipping — cleaned-data service "
+                "not configured",
             )
             return None
 
@@ -372,27 +373,13 @@ class SaveUnderwritingService:
             )
             return None
 
-        market = await self.market_service.get_by_id(market_id)
-        logger.debug(
-            "_build_forecasted_revenue_input: market lookup",
-            market_id=market_id,
-            market_name_current=market.market_name_current if market else None,
-        )
-        if market is None or market.market_name_current is None:
-            logger.warning(
-                "_build_forecasted_revenue_input: skipping — no market_name_current "
-                "for market_id; forecasted_revenue will not be estimated",
-                market_id=market_id,
-            )
-            return None
-
         percentiles = await self.cleaned_data_service.get_revenue_potential_percentiles(
-            key_market=market.market_name_current,
+            market_id=market_id,
             bedrooms=bedrooms,
         )
         logger.debug(
             "_build_forecasted_revenue_input: percentiles lookup",
-            key_market=market.market_name_current,
+            market_id=market_id,
             bedrooms=bedrooms,
             percentiles_low=percentiles.low if percentiles else None,
             percentiles_mid=percentiles.mid if percentiles else None,
@@ -403,7 +390,7 @@ class SaveUnderwritingService:
                 "_build_forecasted_revenue_input: skipping — no Airbnb revenue "
                 "percentiles for market/bedrooms; forecasted_revenue will not be "
                 "estimated",
-                key_market=market.market_name_current,
+                market_id=market_id,
                 bedrooms=bedrooms,
             )
             return None
