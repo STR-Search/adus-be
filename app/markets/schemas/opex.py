@@ -127,3 +127,21 @@ class OpexBySizeUpdateSchema(BaseModel):
         if self.market_id is not None and self.market_slug is not None:
             raise ValueError("Provide either market_id or market_slug, not both")
         return self
+
+
+class OpexSeedRequestSchema(BaseModel):
+    """Body of ``POST /markets/{market_id}/opex/seed-from-lookalike``.
+
+    The target market is the path parameter; only the source lives here. Both
+    sides are ids rather than slugs because the caller is server-side and
+    already holds ids -- unlike the CRUD schemas above, which take either.
+    """
+
+    source_market_id: int
+
+
+class OpexSeedResultSchema(BaseResponse):
+    target_market_id: int
+    source_market_id: int
+    bedrooms_created: int
+    size_created: int
