@@ -55,10 +55,8 @@ class FakeCleanedDataService:
         self.high = high
         self.request = None
 
-    async def get_revenue_potential_percentiles(
-        self, *, key_market: str, bedrooms: int
-    ):
-        self.request = {"key_market": key_market, "bedrooms": bedrooms}
+    async def get_revenue_potential_percentiles(self, *, market_id: int, bedrooms: int):
+        self.request = {"market_id": market_id, "bedrooms": bedrooms}
         return SimpleNamespace(low=self.low, mid=self.mid, high=self.high)
 
 
@@ -269,9 +267,8 @@ async def test_save_builds_missing_forecasted_revenue_from_airbnb_percentiles():
 
     await service.save(payload)
 
-    assert market_service.market_id == 3
     assert listings_service.zpid == "12345"
-    assert cleaned_data_service.request == {"key_market": "Gatlinburg", "bedrooms": 4}
+    assert cleaned_data_service.request == {"market_id": 3, "bedrooms": 4}
     forecasted_revenue = repository.detail_data["forecasted_revenue"]
     assert forecasted_revenue["co_hosting_fee_pct"] == 0.0
     assert forecasted_revenue["annual_re_appreciation_pct"] == 0.0425

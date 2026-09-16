@@ -8,8 +8,18 @@ from app.markets.schemas.opex import (
     OpexBySizeCreateSchema,
     OpexBySizeSchema,
     OpexBySizeUpdateSchema,
+    OpexSeedRequestSchema,
+    OpexSeedResultSchema,
 )
-from app.markets.services.opex_service import OpexByBedroomsService, OpexBySizeService
+from app.markets.services.opex_service import (
+    OpexByBedroomsService,
+    OpexBySizeService,
+    OpexSeedSameMarketError,
+    OpexSeedService,
+    OpexSeedSourceEmptyError,
+    OpexSeedTargetAlreadySeededError,
+    OpexSeedTargetNotExploratoryError,
+)
 
 
 class OpexByBedroomsController:
@@ -160,3 +170,44 @@ class OpexBySizeController:
         except Exception as e:
             logger.error("opex.size.delete.error", record_id=record_id, error=str(e))
             raise HTTPException(status_code=500, detail="Failed to delete opex size record")
+
+
+class OpexSeedController:
+    def __init__(self, service: OpexSeedService):
+        self.service = service
+
+    async def seed_from_lookalike(
+        self, target_market_id: int, data: OpexSeedRequestSchema
+    ) -> OpexSeedResultSchema:
+        try:
+            return await self.service.seed_from_lookalike(
+                target_market_id=target_market_id,
+                source_market_id=data.source_market_id,
+            )
+        except OpexSeedTargetAlreadySeededError as e:
+            raise HTTPException(
+                status_code=409,
+                detail={"message": str(e), "tables": e.tables},
+            )
+        except OpexSeedTargetNotExploratoryError as e:
+            raise HTTPException(
+                status_code=409,
+                detail={"message": str(e), "market_status": e.market_status},
+            )
+        except OpexSeedSourceEmptyError as e:
+            raise HTTPException(
+                status_code=400,
+                detail={"message": str(e), "empty_tables": e.empty_tables},
+            )
+        except OpexSeedSameMarketError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            logger.error(
+                "opex.seed_from_lookalike.error",
+                target_market_id=target_market_id,
+                source_market_id=data.source_market_id,
+                error=str(e),
+            )
+            raise HTTPException(status_code=500, detail="Failed to seed opex from lookalike market")

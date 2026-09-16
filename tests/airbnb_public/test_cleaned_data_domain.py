@@ -14,6 +14,9 @@ def test_cleaned_data_model_maps_public_cleaned_data_table() -> None:
     assert CleanedData.__table__.c.property_id.type.length == 100
     assert CleanedData.__table__.c.key_market.type.length == 255
     assert CleanedData.__table__.c.zipcode.type.length == 20
+    assert {
+        fk.target_fullname for fk in CleanedData.__table__.c.market_id.foreign_keys
+    } == {"markets.market_keys_master.id"}
     assert CleanedData.__table__.c.property_type.nullable is False
 
 
@@ -86,7 +89,7 @@ class StubPercentilesRepository:
     async def get_by_id(self, cleaned_data_id: int) -> CleanedData | None:
         return None
 
-    async def get_revenue_potential_percentiles(self, *, key_market, bedrooms):
+    async def get_revenue_potential_percentiles(self, *, market_id, bedrooms):
         return self.percentiles
 
 
@@ -95,7 +98,7 @@ async def test_revenue_percentiles_returns_values_when_all_finite() -> None:
     service = CleanedDataService(StubPercentilesRepository((100.0, 200.0, 300.0)))
 
     result = await service.get_revenue_potential_percentiles(
-        key_market="Indianapolis IN - FINAL",
+        market_id=7,
         bedrooms=4,
     )
 
@@ -120,7 +123,7 @@ async def test_revenue_percentiles_returns_none_for_non_finite_values(
     service = CleanedDataService(StubPercentilesRepository(percentiles))
 
     result = await service.get_revenue_potential_percentiles(
-        key_market="Indianapolis IN - FINAL",
+        market_id=7,
         bedrooms=4,
     )
 

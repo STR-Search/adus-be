@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -20,6 +20,10 @@ class CleanedData(Base):
     )
     property_id: Mapped[str | None] = mapped_column(String(100))
     key_market: Mapped[str | None] = mapped_column(String(255))
+    market_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("markets.market_keys_master.id"),
+    )
     listing_title: Mapped[str | None] = mapped_column(Text)
     listing_url: Mapped[str | None] = mapped_column(Text)
     exclude_comp: Mapped[bool | None] = mapped_column(Boolean)
@@ -88,3 +92,6 @@ class CleanedData(Base):
         nullable=False,
         server_default=text("'single-family home'::text"),
     )
+
+    # Resolved by class name so this module does not import the markets domain.
+    market = relationship("MarketKeysMaster")
