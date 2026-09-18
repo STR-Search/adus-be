@@ -186,6 +186,14 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         schema="markets",
     )
+    op.create_index(
+        "uq_opex_by_size_market_sqft_active",
+        "opex_by_size",
+        ["market_id", "sqft"],
+        unique=True,
+        schema="markets",
+        postgresql_where=sa.text("deleted_at IS NULL"),
+    )
     op.create_table(
         "str_cribs_fee_details",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),

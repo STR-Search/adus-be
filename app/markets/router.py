@@ -10,6 +10,7 @@ from app.markets.controllers.market_controller import MarketController
 from app.markets.controllers.opex_controller import (
     OpexByBedroomsController,
     OpexBySizeController,
+    OpexSeedController,
 )
 from app.markets.controllers.realtor_controller import RealtorController
 from app.markets.controllers.str_cribs_controller import StrCribsFeeDetailsController
@@ -37,6 +38,7 @@ from app.markets.schemas.opex import (
     OpexByBedroomsUpdateSchema,
     OpexBySizeCreateSchema,
     OpexBySizeUpdateSchema,
+    OpexSeedRequestSchema,
 )
 from app.markets.schemas.realtor import RealtorCreateSchema, RealtorUpdateSchema
 from app.markets.schemas.str_cribs import (
@@ -48,7 +50,11 @@ from app.markets.services.construction_service import (
     ConstructionRemodelingService,
 )
 from app.markets.services.market_service import MarketService
-from app.markets.services.opex_service import OpexByBedroomsService, OpexBySizeService
+from app.markets.services.opex_service import (
+    OpexByBedroomsService,
+    OpexBySizeService,
+    OpexSeedService,
+)
 from app.markets.services.realtor_service import RealtorService
 from app.markets.services.str_cribs_service import StrCribsFeeDetailsService
 
@@ -104,6 +110,17 @@ def get_size_controller(db: AsyncSession = Depends(get_db)) -> OpexBySizeControl
     market_repo = MarketRepository(db)
     return OpexBySizeController(
         OpexBySizeService(OpexBySizeRepository(db), market_repo)
+    )
+
+
+def get_opex_seed_controller(db: AsyncSession = Depends(get_db)) -> OpexSeedController:
+    return OpexSeedController(
+        OpexSeedService(
+            db,
+            OpexByBedroomsRepository(db),
+            OpexBySizeRepository(db),
+            MarketRepository(db),
+        )
     )
 
 
@@ -433,6 +450,19 @@ async def delete_size(
     controller: OpexBySizeController = Depends(get_size_controller),
 ):
     return await controller.delete(record_id)
+
+
+# --- Opex: Seed from a lookalike market ---
+
+
+@router.post("/markets/{market_id}/opex/seed-from-lookalike", status_code=201, tags=["opex"])
+async def seed_opex_from_lookalike(
+    market_id: int,
+    data: OpexSeedRequestSchema,
+    controller: OpexSeedController = Depends(get_opex_seed_controller),
+):
+    """Copy the lookalike market's opex rows onto this exploratory market."""
+    return await controller.seed_from_lookalike(market_id, data)
 
 
 # --- STR Cribs: Fee Details ---
