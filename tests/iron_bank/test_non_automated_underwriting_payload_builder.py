@@ -58,6 +58,7 @@ def _market_context(market_id=3, **overrides):
             num_of_turns=38,
             pool_hot_tub_low=1200,
             pool_hot_tub_high=2400,
+            pool_and_hot_tub=3000,
             furnishings_low=25000,
             furnishings_mid=40000,
             furnishings_high=60000,

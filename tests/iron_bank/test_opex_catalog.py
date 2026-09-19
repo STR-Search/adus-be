@@ -2,6 +2,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.iron_bank.enums import OpexKeyedOn
+from app.iron_bank.schemas.prepare_uw import PreparedOpex
 from app.iron_bank.services import opex_catalog
 from app.markets.schemas.opex import OpexByBedroomsSchema, OpexBySizeSchema
 
@@ -16,6 +17,7 @@ def _bedrooms_row(**overrides):
         property_taxes=Decimal("0.01"),
         pool_hot_tub_low=Decimal("125"),
         pool_hot_tub_high=Decimal("275"),
+        pool_and_hot_tub=Decimal("350"),
         outdoor_landscaping=Decimal("150"),
         software=Decimal("50"),
         insurance_hoi=Decimal("300"),
@@ -96,6 +98,43 @@ class TestBuildOpexOptions:
 
     def test_misc_carries_its_default_with_no_market_behind_it(self):
         assert _by_key(_options())["misc"].monthly_amount == Decimal("0")
+
+
+class TestPoolColumnsAreNotRowsOfTheirOwn:
+    """The pool/hot tub family feeds one row, not one row each.
+
+    A pool column missing from ``POOL_FIELDS`` lands in ``absolute``, and
+    ``build_opex_expense_rows`` then seeds it as an extra expense row with a
+    humanized label. The classification is a hand-kept set, so this is the
+    guard: nothing in ``POOL_FIELDS`` may reach either place.
+    """
+
+    def _opex(self):
+        return opex_catalog.transform_opex_costs(_bedrooms_row(), _size_row())
+
+    def test_no_pool_column_reaches_the_absolute_bag(self):
+        # Named rather than read off POOL_FIELDS: comparing the set against
+        # itself would pass however the classification drifts.
+        absolute = self._opex()["absolute"]
+
+        assert "pool_and_hot_tub" not in absolute
+        assert "pool_hot_tub_low" not in absolute
+        assert "pool_hot_tub_high" not in absolute
+
+    def test_no_pool_column_is_seeded_as_an_expense_row_of_its_own(self):
+        rows = opex_catalog.build_opex_expense_rows(self._opex())
+        names = {row["expense"] for row in rows}
+
+        assert "Pool And Hot Tub" not in names
+        assert names <= {label for _, label in opex_catalog.OPEX_ROWS}
+
+    def test_the_combined_figure_survives_the_prepared_opex_schema(self):
+        # PreparedOpex drops keys it does not declare, so a figure carried by
+        # transform_opex_costs but absent from the schema would vanish on the
+        # MarketContext path without failing anywhere.
+        prepared = PreparedOpex.model_validate(self._opex())
+
+        assert prepared.ranged.pool_hot_tub.pool_and_hot_tub == Decimal("350")
 
 
 class TestKeyedOn:
@@ -190,6 +229,14 @@ class TestRowInputs:
 
         assert inputs.low == Decimal("125")
         assert inputs.high == Decimal("275")
+
+    def test_pool_hot_tub_exposes_the_combined_figure_without_seeding_from_it(self):
+        # All three candidates for the row reach the client; only the low end
+        # drives the amount until a later change picks between them.
+        option = _by_key(_options())["pool_hot_tub"]
+
+        assert option.inputs.pool_and_hot_tub == Decimal("350")
+        assert option.monthly_amount == Decimal("125")
 
     def test_property_taxes_exposes_the_rate_even_with_no_price(self):
         # The rate is market data and is worth showing; only the amount depends
