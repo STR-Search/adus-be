@@ -307,6 +307,7 @@ def _opex_row(**overrides):
         property_taxes=Decimal("0.0125"),
         pool_hot_tub_low=Decimal("150"),
         pool_hot_tub_high=Decimal("300"),
+        pool_and_hot_tub=Decimal("400"),
         outdoor_landscaping=Decimal("120"),
         software=Decimal("40"),
         insurance_hoi=Decimal("210"),

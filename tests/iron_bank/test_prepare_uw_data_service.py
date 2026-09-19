@@ -38,6 +38,7 @@ def _opex_by_bedrooms():
         num_of_turns=38,
         pool_hot_tub_low=1200,
         pool_hot_tub_high=2400,
+        pool_and_hot_tub=3000,
         furnishings_low=25000,
         furnishings_mid=None,
         furnishings_high=60000,
@@ -165,7 +166,9 @@ class TestPrepare:
     def test_splits_opex_into_cleaning_ranged_absolute(self):
         opex = self._prepare().model_dump()["opex"]
         assert opex["cleaning"] == {"fee": 275, "num_of_turns": 38}
-        assert opex["ranged"] == {"pool_hot_tub": {"low": 1200, "high": 2400}}
+        assert opex["ranged"] == {
+            "pool_hot_tub": {"low": 1200, "high": 2400, "pool_and_hot_tub": 3000}
+        }
         assert opex["absolute"] == {"internet": 100, "utilities": 350}
 
     def test_surfaces_property_taxes_as_pct_not_absolute(self):
@@ -323,6 +326,7 @@ class TestToTemplateMarketContext:
         assert template.opex.cleaning.num_of_turns == Decimal("0")
         assert template.opex.ranged.pool_hot_tub.low == Decimal("0")
         assert template.opex.ranged.pool_hot_tub.high == Decimal("0")
+        assert template.opex.ranged.pool_hot_tub.pool_and_hot_tub == Decimal("0")
         assert template.opex.property_tax_pct == Decimal("0")
 
     def test_zeroes_only_the_three_seeded_amenity_options(self):

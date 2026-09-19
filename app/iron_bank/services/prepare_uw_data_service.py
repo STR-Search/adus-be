@@ -229,6 +229,7 @@ class PrepareUwDataService:
         template.opex.cleaning.num_of_turns = zero
         template.opex.ranged.pool_hot_tub.low = zero
         template.opex.ranged.pool_hot_tub.high = zero
+        template.opex.ranged.pool_hot_tub.pool_and_hot_tub = zero
         template.opex.property_tax_pct = zero
         template.opex.absolute = {key: zero for key in template.opex.absolute}
 

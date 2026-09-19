@@ -14,6 +14,7 @@ class OpexByBedroomsSchema(BaseResponse):
     bedrooms: int | None = None
     pool_hot_tub_low: PlainDecimal | None = None
     pool_hot_tub_high: PlainDecimal | None = None
+    pool_and_hot_tub: PlainDecimal | None = None
     outdoor_landscaping: PlainDecimal | None = None
     software: PlainDecimal | None = None
     insurance_hoi: PlainDecimal | None = None
@@ -37,6 +38,7 @@ class OpexByBedroomsCreateSchema(BaseModel):
     bedrooms: int | None = None
     pool_hot_tub_low: Decimal | None = None
     pool_hot_tub_high: Decimal | None = None
+    pool_and_hot_tub: Decimal | None = None
     outdoor_landscaping: Decimal | None = None
     software: Decimal | None = None
     insurance_hoi: Decimal | None = None
@@ -66,6 +68,7 @@ class OpexByBedroomsUpdateSchema(BaseModel):
     bedrooms: int | None = None
     pool_hot_tub_low: Decimal | None = None
     pool_hot_tub_high: Decimal | None = None
+    pool_and_hot_tub: Decimal | None = None
     outdoor_landscaping: Decimal | None = None
     software: Decimal | None = None
     insurance_hoi: Decimal | None = None

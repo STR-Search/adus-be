@@ -139,6 +139,7 @@ def upgrade() -> None:
         sa.Column("bedrooms", sa.Integer(), nullable=True),
         sa.Column("pool_hot_tub_low", sa.Numeric(), nullable=True),
         sa.Column("pool_hot_tub_high", sa.Numeric(), nullable=True),
+        sa.Column("pool_and_hot_tub", sa.Numeric(), nullable=True),
         sa.Column("outdoor_landscaping", sa.Numeric(), nullable=True),
         sa.Column("software", sa.Numeric(), nullable=True),
         sa.Column("insurance_hoi", sa.Numeric(), nullable=True),
