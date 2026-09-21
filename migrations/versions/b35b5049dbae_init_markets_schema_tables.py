@@ -104,6 +104,8 @@ def upgrade() -> None:
             "nice_to_have_amenities", postgresql.ARRAY(sa.Integer()), nullable=True
         ),
         sa.Column("realtor_ids", postgresql.ARRAY(sa.Integer()), nullable=True),
+        sa.Column("optimization_expense_lift", sa.Numeric(), nullable=True),
+        sa.Column("low_revenue_lift", sa.Numeric(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
