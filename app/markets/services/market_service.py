@@ -133,6 +133,8 @@ class MarketService:
                 market.nice_to_have_amenities, amenity_name_map
             ),
             realtors=self._resolve_realtors(market.realtor_ids, realtor_map),
+            optimization_expense_lift=market.optimization_expense_lift,
+            low_revenue_lift=market.low_revenue_lift,
             created_at=market.created_at,
             updated_at=market.updated_at,
         )

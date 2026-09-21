@@ -37,7 +37,13 @@ _MONEY_QUANT = Decimal("0.01")
 # handles those columns some other way.
 METADATA_FIELDS = {"id", "market_id", "market_slug", "bedrooms", "sqft"}
 CLEANING_FIELDS = {"cleaning_fee", "num_of_turns"}
-POOL_FIELDS = {"pool_hot_tub_low", "pool_hot_tub_high"}
+# The pool/hot tub family: three candidate figures for one opex row. ``low`` and
+# ``high`` are historically named — they hold the pool-only and hot-tub-only
+# figures — and ``pool_and_hot_tub`` holds the combined one. Only ``low`` seeds
+# the row today; a later change picks between the three by condition. All three
+# are excluded from ``absolute`` so none of them surfaces as an opex row of its
+# own.
+POOL_FIELDS = {"pool_hot_tub_low", "pool_hot_tub_high", "pool_and_hot_tub"}
 # Surfaced as amenity price tiers (see PrepareUwDataService.FURNISHINGS_*),
 # not as an opex row.
 FURNISHINGS_FIELDS = {"furnishings_low", "furnishings_mid", "furnishings_high"}
@@ -136,6 +142,7 @@ def transform_opex_costs(opex_by_bedrooms, opex_by_size) -> dict:
             "pool_hot_tub": {
                 "low": bedrooms_data.get("pool_hot_tub_low"),
                 "high": bedrooms_data.get("pool_hot_tub_high"),
+                "pool_and_hot_tub": bedrooms_data.get("pool_and_hot_tub"),
             },
         },
         "absolute": absolute,
@@ -223,7 +230,7 @@ def resolve_opex_amounts(
     Defaults sit under the market data, so a real column would take over from a
     default of the same name. The three derived keys cannot collide with an
     ``absolute`` column: ``transform_opex_costs`` excludes
-    cleaning_fee/num_of_turns, pool_hot_tub_low/high and property_taxes from
+    cleaning_fee/num_of_turns, the pool/hot tub columns and property_taxes from
     ``absolute`` (see the ``*_FIELDS`` sets). They merge last regardless, so a
     future column sharing one of these names would not displace the derived row.
 
@@ -325,7 +332,9 @@ def _row_inputs(key: str, opex: dict[str, Any]) -> OpexOptionInputs | None:
     if key == "pool_hot_tub":
         pool_hot_tub = (opex.get("ranged") or {}).get("pool_hot_tub") or {}
         return OpexOptionInputs(
-            low=pool_hot_tub.get("low"), high=pool_hot_tub.get("high")
+            low=pool_hot_tub.get("low"),
+            high=pool_hot_tub.get("high"),
+            pool_and_hot_tub=pool_hot_tub.get("pool_and_hot_tub"),
         )
     if key == "property_taxes":
         return OpexOptionInputs(pct=opex.get("property_tax_pct"))

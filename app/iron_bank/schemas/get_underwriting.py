@@ -488,6 +488,11 @@ class OpexOptionInputs(BaseModel):
     # pool/hot tub: a range, of which the low end seeds the row
     low: PlainDecimal | None = None
     high: PlainDecimal | None = None
+    # pool/hot tub: the combined pool-and-hot-tub figure, a third candidate for
+    # the same row that nothing seeds from yet. Named for its column, since in
+    # this flat bag a bare "combined" would not say what it combines (see
+    # ``opex_catalog.POOL_FIELDS``).
+    pool_and_hot_tub: PlainDecimal | None = None
     # property taxes: an annual rate applied to purchase price
     pct: PlainDecimal | None = None
 

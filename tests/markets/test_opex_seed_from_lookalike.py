@@ -38,6 +38,7 @@ def _bedrooms_row(record_id: int, bedrooms: int, market_id: int = SOURCE_ID):
         bedrooms=bedrooms,
         cleaning_fee=100 + bedrooms,
         insurance_hoi=200 + bedrooms,
+        pool_and_hot_tub=300 + bedrooms,
         deleted_at=None,
     )
 
@@ -155,6 +156,8 @@ async def test_copied_rows_carry_the_values_but_not_the_source_identity():
     assert row["bedrooms"] == 3
     assert row["cleaning_fee"] == 103
     assert row["insurance_hoi"] == 203
+    # the column-generic clone is what makes a newly added column seed itself
+    assert row["pool_and_hot_tub"] == 303
 
 
 @pytest.mark.asyncio
