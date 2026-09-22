@@ -100,6 +100,60 @@ class TestBuildOpexOptions:
         assert _by_key(_options())["misc"].monthly_amount == Decimal("0")
 
 
+class TestBuildOpexExpenseRows:
+    """The seeding path emits the same row set the catalog does.
+
+    Both read ``OPEX_ROWS`` through ``resolve_opex_amounts``, so a seeded deal
+    and the catalog it is edited against cannot disagree about which rows exist
+    — only about what they are worth.
+    """
+
+    def _rows(self, opex_by_bedrooms=None, opex_by_size=None, **kwargs):
+        opex = opex_catalog.transform_opex_costs(opex_by_bedrooms, opex_by_size)
+        return opex_catalog.build_opex_expense_rows(opex, **kwargs)
+
+    def test_every_canonical_row_is_seeded_in_order(self):
+        rows = self._rows(_bedrooms_row(), _size_row())
+
+        assert [row["expense"] for row in rows] == [
+            label for _, label in opex_catalog.OPEX_ROWS
+        ]
+
+    def test_the_row_set_does_not_depend_on_the_market_data(self):
+        # The point of the change: an underwriting seeded with nothing resolved
+        # still carries every row, so the analyst sees a blank to fill in rather
+        # than an expense that silently does not exist. A market-less, bedroom-
+        # less deal is the worst case and it still gets the full set.
+        assert [row["expense"] for row in self._rows()] == [
+            label for _, label in opex_catalog.OPEX_ROWS
+        ]
+
+    def test_an_unresolved_amount_is_null_not_zero(self):
+        # Null and zero are different claims — "nobody has a figure" versus "the
+        # figure is nothing" — and only misc is entitled to the second.
+        by_name = {row["expense"]: row["monthly"] for row in self._rows()}
+
+        assert by_name["Internet"] is None
+        assert by_name["Cleaning"] is None
+        assert by_name["Property Taxes (Monthly)"] is None
+        assert by_name["MISC"] == Decimal("0")
+
+    def test_an_unplaced_column_is_still_appended_after_the_canonical_rows(self):
+        # Injected into ``absolute`` directly: the opex schemas drop a field they
+        # do not declare, so a column new enough to have no canonical row cannot
+        # be staged through them.
+        opex = opex_catalog.transform_opex_costs(_bedrooms_row(), _size_row())
+        opex["absolute"]["unknown_new_column"] = Decimal("42")
+
+        rows = opex_catalog.build_opex_expense_rows(opex)
+        labels = [row["expense"] for row in rows]
+
+        assert labels[: len(opex_catalog.OPEX_ROWS)] == [
+            label for _, label in opex_catalog.OPEX_ROWS
+        ]
+        assert rows[-1] == {"expense": "Unknown New Column", "monthly": Decimal("42")}
+
+
 class TestPoolColumnsAreNotRowsOfTheirOwn:
     """The pool/hot tub family feeds one row, not one row each.
 

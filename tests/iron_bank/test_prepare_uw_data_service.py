@@ -121,9 +121,11 @@ class TestPrepare:
     def test_is_template_zeroes_the_figures_but_keeps_the_rows(self):
         """The template pass keeps every opex key, at zero.
 
-        This is what makes a market-less deal seed the full row set rather than
-        only the always-seeded rows: build_opex_expense_rows drops a row whose
-        amount is None, and zero is not None.
+        The row set no longer depends on this — build_opex_expense_rows seeds
+        every OPEX_ROWS row whatever resolves. What zeroing still buys is the
+        amount: a market-less deal shows 0 ("start from nothing") rather than a
+        blank ("nobody has a figure yet"), which is the truer claim when the
+        deal deliberately has no market to draw one from.
         """
         seeded = self._prepare().model_dump()
         templated = self._prepare(is_template=True).model_dump()
