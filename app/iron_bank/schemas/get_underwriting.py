@@ -224,6 +224,19 @@ class SimulationParams(BaseModel):
     down_payment_pct: Decimal | None = None
 
 
+_RANGE_PAIRS = (
+    ("min_bedrooms", "max_bedrooms"),
+    ("min_purchase_price", "max_purchase_price"),
+    ("min_total_oop", "max_total_oop"),
+    ("min_l_cash_on_cash", "max_l_cash_on_cash"),
+    ("min_m_cash_on_cash", "max_m_cash_on_cash"),
+    ("min_h_cash_on_cash", "max_h_cash_on_cash"),
+    ("min_prr", "max_prr"),
+    ("min_created_at", "max_created_at"),
+    ("min_deal_approved", "max_deal_approved"),
+)
+
+
 class GetUnderwritingsQuery(BaseModel):
     """Query params for the underwritings list endpoint.
 
@@ -239,7 +252,8 @@ class GetUnderwritingsQuery(BaseModel):
     page: int = Field(1, ge=1)
     page_size: int = Field(20, ge=1, le=20)
     zpid: str | None = None
-    bedrooms: int | None = Field(None, ge=0)
+    min_bedrooms: int | None = Field(None, ge=0)
+    max_bedrooms: int | None = Field(None, ge=0)
     market_ids: list[int] | None = Field(None, alias="market_id")
     states: list[USState] | None = Field(None, alias="state")
     deal_status: DealStatus | None = None
@@ -360,68 +374,10 @@ class GetUnderwritingsQuery(BaseModel):
 
     @model_validator(mode="after")
     def check_ranges(self):
-        if (
-            self.min_purchase_price is not None
-            and self.max_purchase_price is not None
-            and self.min_purchase_price > self.max_purchase_price
-        ):
-            raise ValueError(
-                "min_purchase_price must be less than or equal to max_purchase_price"
-            )
-        if (
-            self.min_total_oop is not None
-            and self.max_total_oop is not None
-            and self.min_total_oop > self.max_total_oop
-        ):
-            raise ValueError(
-                "min_total_oop must be less than or equal to max_total_oop"
-            )
-        if (
-            self.min_l_cash_on_cash is not None
-            and self.max_l_cash_on_cash is not None
-            and self.min_l_cash_on_cash > self.max_l_cash_on_cash
-        ):
-            raise ValueError(
-                "min_l_cash_on_cash must be less than or equal to max_l_cash_on_cash"
-            )
-        if (
-            self.min_m_cash_on_cash is not None
-            and self.max_m_cash_on_cash is not None
-            and self.min_m_cash_on_cash > self.max_m_cash_on_cash
-        ):
-            raise ValueError(
-                "min_m_cash_on_cash must be less than or equal to max_m_cash_on_cash"
-            )
-        if (
-            self.min_h_cash_on_cash is not None
-            and self.max_h_cash_on_cash is not None
-            and self.min_h_cash_on_cash > self.max_h_cash_on_cash
-        ):
-            raise ValueError(
-                "min_h_cash_on_cash must be less than or equal to max_h_cash_on_cash"
-            )
-        if (
-            self.min_prr is not None
-            and self.max_prr is not None
-            and self.min_prr > self.max_prr
-        ):
-            raise ValueError("min_prr must be less than or equal to max_prr")
-        if (
-            self.min_created_at is not None
-            and self.max_created_at is not None
-            and self.min_created_at > self.max_created_at
-        ):
-            raise ValueError(
-                "min_created_at must be less than or equal to max_created_at"
-            )
-        if (
-            self.min_deal_approved is not None
-            and self.max_deal_approved is not None
-            and self.min_deal_approved > self.max_deal_approved
-        ):
-            raise ValueError(
-                "min_deal_approved must be less than or equal to max_deal_approved"
-            )
+        for minimum, maximum in _RANGE_PAIRS:
+            low, high = getattr(self, minimum), getattr(self, maximum)
+            if low is not None and high is not None and low > high:
+                raise ValueError(f"{minimum} must be less than or equal to {maximum}")
         return self
 
 

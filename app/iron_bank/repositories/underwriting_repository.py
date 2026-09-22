@@ -56,6 +56,22 @@ def _date_range_conditions(column, minimum: date | None, maximum: date | None) -
     return conditions
 
 
+def _numeric_range_conditions(column, minimum, maximum) -> list:
+    """Inclusive ``minimum <= column <= maximum`` conditions, either end open.
+
+    The plain-number sibling of ``_date_range_conditions``: no day-boundary
+    adjustment is needed because the column holds the same kind of value the
+    bounds do, so ``min == max`` compares equal directly. NULL never matches a
+    bounded filter, which is the same answer the old ``==`` gave.
+    """
+    conditions = []
+    if minimum is not None:
+        conditions.append(column >= minimum)
+    if maximum is not None:
+        conditions.append(column <= maximum)
+    return conditions
+
+
 def _boolean_tag_conditions(boolean_tags: dict[str, bool] | None) -> list:
     """WHERE conditions for the boolean deal-tag flags.
 
@@ -195,7 +211,8 @@ class UnderwritingRepository:
         page: int,
         page_size: int,
         zpid: str | None = None,
-        bedrooms: int | None = None,
+        min_bedrooms: int | None = None,
+        max_bedrooms: int | None = None,
         market_ids: list[int] | None = None,
         states: list[str] | None = None,
         deal_status: str | None = None,
@@ -232,8 +249,10 @@ class UnderwritingRepository:
         query = select(Underwriting)
         if zpid is not None:
             query = query.where(Underwriting.zpid == zpid)
-        if bedrooms is not None:
-            query = query.where(Underwriting.bedrooms == bedrooms)
+        for condition in _numeric_range_conditions(
+            Underwriting.bedrooms, min_bedrooms, max_bedrooms
+        ):
+            query = query.where(condition)
         if market_ids:
             query = query.where(Underwriting.market_id.in_(market_ids))
         if states:
@@ -341,7 +360,8 @@ class UnderwritingRepository:
         self,
         *,
         zpid: str | None = None,
-        bedrooms: int | None = None,
+        min_bedrooms: int | None = None,
+        max_bedrooms: int | None = None,
         market_ids: list[int] | None = None,
         states: list[str] | None = None,
         deal_status: str | None = None,
@@ -420,8 +440,10 @@ class UnderwritingRepository:
         )
         if zpid is not None:
             query = query.where(Underwriting.zpid == zpid)
-        if bedrooms is not None:
-            query = query.where(Underwriting.bedrooms == bedrooms)
+        for condition in _numeric_range_conditions(
+            Underwriting.bedrooms, min_bedrooms, max_bedrooms
+        ):
+            query = query.where(condition)
         if market_ids:
             query = query.where(Underwriting.market_id.in_(market_ids))
         if states:
