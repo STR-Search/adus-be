@@ -2,6 +2,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.iron_bank.enums import DealStatus
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.non_automated_underwriting_payload_builder import (
     NonAutomatedUnderwritingPayloadBuilder,
 )
@@ -283,8 +284,13 @@ class TestWithMarketContext:
 
 
 class TestWithTemplateMarketContext:
-    """No market picked: every row is present so the analyst has the full
-    template, and every amount is zero."""
+    """No market picked: the analyst still gets the full template.
+
+    Every canonical row is present regardless — that is the seeding path's own
+    guarantee, not something the template pass provides. What the template pass
+    contributes is the *amount*: the figures the template market did supply come
+    through at zero rather than blank, which for a deliberately market-less deal
+    is the truer claim ("start from nothing", not "nobody has a figure yet")."""
 
     def _build(self):
         context = PrepareUwDataService.to_template_market_context(
@@ -299,25 +305,28 @@ class TestWithTemplateMarketContext:
     def test_leaves_the_underwriting_market_less(self):
         assert self._build().market_id is None
 
-    def test_seeds_every_opex_row_at_zero(self):
+    def test_seeds_the_full_row_set_with_the_market_figures_zeroed(self):
         payload = self._build()
         by_expense = {
             item.expense_name: item.monthly_amount
             for item in payload.operating_expenses
         }
 
-        # same row set as a real market...
-        assert set(by_expense) == {
-            "Cleaning",
-            "Property Taxes (Monthly)",
-            "Pool/Hot Tub Maintenance",
-            "Internet",
-            "Utilities",
-            # no market supplies it, so it is seeded here too
-            "MISC",
-        }
-        # ...at zero
-        assert all(monthly == Decimal("0") for monthly in by_expense.values())
+        # the canonical row set, same as any other deal
+        assert [item.expense_name for item in payload.operating_expenses] == [
+            label for _, label in opex_catalog.OPEX_ROWS
+        ]
+        # the figures the template market supplied are zeroed, not blanked
+        assert by_expense["Cleaning"] == Decimal("0")
+        assert by_expense["Property Taxes (Monthly)"] == Decimal("0")
+        assert by_expense["Pool/Hot Tub Maintenance"] == Decimal("0")
+        assert by_expense["Internet"] == Decimal("0")
+        assert by_expense["Utilities"] == Decimal("0")
+        # no market supplies MISC at all, so it comes from OPEX_ROW_DEFAULTS
+        assert by_expense["MISC"] == Decimal("0")
+        # a row the template market had no column for stays blank: zeroing can
+        # only speak for figures that were there to zero
+        assert by_expense["HOA Fees"] is None
 
     def test_seeds_only_the_three_default_items_at_zero(self):
         payload = self._build()
