@@ -26,10 +26,24 @@ class CreateBlankUnderwritingService:
     Thin on purpose. ``CreateUnderwritingFromUrlService`` is heavy because of
     the external fetch and its guards; none of those have a subject here.
 
-    **There is deliberately no duplicate guard.** The from-URL path keys its
-    guard on the listing URL and then on the zpid, and a blank deal has
-    neither. Two analysts starting blank sheets for the same off-market address
-    is legitimate, so its absence is a decision rather than an oversight.
+    **There is deliberately no duplicate guard**, including when a
+    ``listing_url`` is supplied. It would now be possible to key one on that —
+    the from-URL path's cheap pass does exactly that — but the URL here is a
+    reference link to wherever the analyst found the deal, not an identity:
+    two analysts working the same off-market address, or one deal linked from
+    two places, are both legitimate. Its absence is a decision rather than an
+    oversight, and adding one later means adding a 409 to this endpoint's
+    contract, which today has none.
+
+    Writing ``listing_url`` does, however, make a blank deal visible to two
+    existing URL-keyed guards *elsewhere*, whenever the link happens to match a
+    scraped listing's ``detail_url`` verbatim: ``POST
+    /underwritings/from-zillow-url`` will 409 and redirect to it, and
+    ``PrepareAndSaveUnderwritingJob._find_existing`` will skip the automated
+    run for that listing. Both treat the blank deal as already covering the
+    property, which is the intended reading — and it is the same behaviour that
+    fallback was written for, since legacy null-zpid deals are matched by URL
+    the same way.
 
     ``MarketContextReader`` is the Protocol from
     ``create_underwriting_from_url_service`` — structural rather than an import
@@ -51,6 +65,7 @@ class CreateBlankUnderwritingService:
         self,
         *,
         purchase_price: Decimal,
+        listing_url: str | None = None,
         market_id: int | None = None,
         bedrooms: int | None = None,
         bathrooms: Decimal | None = None,
@@ -85,6 +100,7 @@ class CreateBlankUnderwritingService:
         payload = self.builder.build_blank(
             purchase_price=purchase_price,
             market_context=context,
+            listing_url=listing_url,
             bedrooms=bedrooms,
             bathrooms=bathrooms,
             current_user_id=current_user_id,

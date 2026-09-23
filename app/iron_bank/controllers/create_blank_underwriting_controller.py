@@ -24,6 +24,7 @@ class CreateBlankUnderwritingController:
         self,
         *,
         purchase_price: Decimal,
+        listing_url: str | None = None,
         market_id: int | None = None,
         bedrooms: int | None = None,
         bathrooms: Decimal | None = None,
@@ -32,6 +33,7 @@ class CreateBlankUnderwritingController:
         try:
             return await self.service.create(
                 purchase_price=purchase_price,
+                listing_url=listing_url,
                 market_id=market_id,
                 bedrooms=bedrooms,
                 bathrooms=bathrooms,
