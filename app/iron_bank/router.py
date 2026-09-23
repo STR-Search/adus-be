@@ -61,6 +61,10 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingsResult,
 )
 from app.iron_bank.schemas.prepare_uw import BedroomContext, PrepareUwDataResult
+from app.iron_bank.schemas.property_pending import (
+    UpdatePropertyPendingPayload,
+    UpdatePropertyPendingResult,
+)
 from app.iron_bank.schemas.save_underwriting import (
     SaveUnderwritingPayload,
     SaveUnderwritingResult,
@@ -603,6 +607,24 @@ async def update_underwriting_deal_status(
         underwriting_id=underwriting_id,
         deal_status=payload.deal_status,
         actor_user_id=current_user.id,
+    )
+
+
+@router.patch(
+    "/underwritings/{underwriting_id}/property-pending",
+    response_model=UpdatePropertyPendingResult,
+    tags=["iron_bank"],
+)
+async def update_underwriting_property_pending(
+    underwriting_id: int,
+    payload: UpdatePropertyPendingPayload,
+    controller: UpdateUnderwritingController = Depends(
+        get_update_underwriting_controller
+    ),
+):
+    return await controller.update_property_pending(
+        underwriting_id=underwriting_id,
+        property_pending=payload.property_pending,
     )
 
 

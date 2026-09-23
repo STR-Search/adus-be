@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from app.core.logger import logger
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.deal_status import UpdateDealStatusResult
+from app.iron_bank.schemas.property_pending import UpdatePropertyPendingResult
 from app.iron_bank.schemas.update_underwriting import (
     UpdateUnderwritingPayload,
     UpdateUnderwritingResult,
@@ -56,3 +57,27 @@ class UpdateUnderwritingController:
                 error=str(e),
             )
             raise HTTPException(status_code=500, detail="Failed to update deal status")
+
+    async def update_property_pending(
+        self,
+        *,
+        underwriting_id: int,
+        property_pending: bool,
+    ) -> UpdatePropertyPendingResult:
+        try:
+            return await self.service.update_property_pending(
+                underwriting_id=underwriting_id,
+                property_pending=property_pending,
+            )
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            logger.error(
+                "iron_bank.update_property_pending.error",
+                underwriting_id=underwriting_id,
+                property_pending=property_pending,
+                error=str(e),
+            )
+            raise HTTPException(
+                status_code=500, detail="Failed to update property pending"
+            )
