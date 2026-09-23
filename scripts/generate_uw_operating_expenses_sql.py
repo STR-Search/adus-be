@@ -55,7 +55,11 @@ def _sql_literal(value) -> str:
     """
     if value is None:
         return "NULL"
-    if isinstance(value, (int, Decimal)):
+    # format(..., "f") rather than str(): a Decimal carrying an exponent renders
+    # as 6E+4, which Postgres accepts but nobody can proofread.
+    if isinstance(value, Decimal):
+        return format(value, "f")
+    if isinstance(value, int):
         return str(value)
     return "'" + str(value).replace("'", "''") + "'"
 
