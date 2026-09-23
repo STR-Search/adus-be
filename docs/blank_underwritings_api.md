@@ -1,7 +1,10 @@
 # Blank underwritings — `POST /iron-bank/underwritings/blank`
 
-Implementation plan for a second create path: an underwriting started from nothing,
-for off-market and word-of-mouth deals that have no Zillow listing.
+A second create path: an underwriting started from nothing, for off-market and
+word-of-mouth deals that have no Zillow listing.
+
+**Status: implemented.** This doc is the record of what was built and why; the
+[Known gaps](#known-gaps--frontend-contract) are the standing frontend contract.
 
 Backend only. **No Alembic migration** — `underwritings.source` is `String(50)` with a
 server default rather than a DB enum, and `uw_operating_expenses.monthly_amount` is
@@ -63,10 +66,18 @@ class CreateBlankUnderwritingPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     purchase_price: Decimal = Field(..., gt=0)
+    listing_url: str | None = None
     market_id: int | None = None
     bedrooms: int | None = Field(default=None, ge=0)
     bathrooms: Decimal | None = None
 ```
+
+**`listing_url` is where the analyst found the deal, if anywhere** — an agent's
+page, a Facebook post, a Redfin link. Optional, because an off-market deal often
+has no link at all, and deliberately **not validated as a Zillow URL**: a deal
+with a Zillow listing belongs on `from-zillow-url`, which scrapes it. A link to
+anywhere is stored verbatim. See [What writing `listing_url` reaches](#what-writing-listing_url-reaches)
+for what that costs.
 
 Response is the existing `SaveUnderwritingResult` (`{underwriting_id: int}`) — the same
 shape the from-URL endpoint returns.
@@ -103,9 +114,10 @@ the method's own contract a lie for whoever next touches the Zillow path.
 | `source` | `UnderwritingSource.BLANK` — **new behaviour**; the Zillow path sets no `source` at all and falls through to the `"adus"` server default |
 | `purchase_price`, `bedrooms`, `bathrooms` | from the payload, on the top-level columns **and** mirrored into the blob below |
 | `market_id` | `context.get("market_id")` — `None` for a template deal, as today |
-| `details.zillow_property` | the full `ZillowProperty` shape, `price` / `bedrooms` / `bathrooms` from the payload and every other key `None` — see below |
+| `details.zillow_property` | the full `ZillowProperty` shape, `price` / `bedrooms` / `bathrooms` / `url` from the payload and every other key `None` — see below |
 | `is_automated` | `False` |
-| `listing_url`, `zpid`, `property_address`, `street`, `city`, `state` | `None` |
+| `listing_url` | from the payload, on the column **and** mirrored to `details.zillow_property.url` |
+| `zpid`, `property_address`, `street`, `city`, `state` | `None` |
 | `deal_status` | `_DEFAULT_DEAL_STATUS` (`template_generated`) |
 | `owner_id` | `_resolve_owner_id(context, fallback_user_id=current_user_id)` |
 
@@ -115,7 +127,8 @@ paths persist the same shape:
 ```python
 {
     "id": None,            # no zpid — the top-level column keeps its FK to
-    "url": None,           # zillow.scheduled_listings and stays null too
+                           # zillow.scheduled_listings and stays null too
+    "url": listing_url,    # mirrors the listing_url column
     "thumbnail": None,
     "price": purchase_price,
     "address": None,       # the hero fills these three in
@@ -135,6 +148,13 @@ sending the full object back regardless.
 `price` is included because `purchase_price` is mandatory here and the Zillow path keeps it
 in the blob too — `build_from_zillow_property` reads it out with `_money_to_decimal` but
 only pops `street`/`city`/`state`, so `price` stays.
+
+`url` is written to both places because that is already the convention: the **automated**
+builder sets the `listing_url` column *from* `zillow_property["url"]`
+(`underwriting_payload_builder.py:47`), so the two being equal is what every other path
+produces. Unlike bed/bath below, the two copies are meant to **stay** equal — a URL has no
+"as found" versus "as underwritten" reading. Nothing enforces it, so a client changing the
+link should send both.
 
 **Bed/bath are written to both the columns and the blob, and are allowed to diverge
 afterwards.** They mean different things: the blob is the property *as found*, the columns
@@ -175,12 +195,35 @@ Reuse the `MarketContextReader` Protocol already defined in
 iron_bank must not import `app/workflows`; that constraint applies identically, so import
 the Protocol (intra-domain) and let the router wire `PrepareUwDataJob.from_session(db)` in.
 
-**No duplicate guard, deliberately.** There is no zpid or listing URL to key on, and two
-analysts starting blank sheets for the same off-market address is legitimate. Say so in the
+**No duplicate guard, deliberately** — including when a `listing_url` is supplied. Half the
+original reason (nothing to key on) no longer holds now that a URL can be sent; the other
+half still does, and is the one that decides it: the URL here is a reference link to
+wherever the analyst found the deal, not an identity. Two analysts working the same
+off-market address, or one deal linked from two places, are both legitimate. Adding a guard
+later also means adding a 409 to this endpoint's contract, which today has none. Said in the
 class docstring, so its absence does not later read as an oversight.
 
 **Log whether `market_id` and `bedrooms` were supplied** (`logger.info`). Costs nothing and
 produces the evidence for the pending product decision on making `bedrooms` mandatory.
+
+### What writing `listing_url` reaches
+
+Writing the column makes a blank deal visible to two **existing** URL-keyed guards
+elsewhere, whenever the link matches a scraped listing's `detail_url` verbatim:
+
+| guard | effect |
+| --- | --- |
+| `CreateUnderwritingFromUrlService` pre-fetch pass (`get_by_listing_url`) | `POST /underwritings/from-zillow-url` **409s** and redirects to the blank deal |
+| `PrepareAndSaveUnderwritingJob._find_existing` | the automated run **skips** that listing |
+
+Both treat the blank deal as already covering the property, which is the intended reading.
+It is also not a new class of behaviour: legacy null-zpid deals created from a URL are
+matched the same way, and that fallback exists precisely for them.
+
+This only triggers if someone puts a real Zillow listing URL on a blank deal — which is
+using the wrong endpoint. A deal with a Zillow listing belongs on `from-zillow-url`, which
+scrapes it and stamps a zpid. Doing it anyway is a deliberate act with a defensible result,
+so it is accepted rather than guarded against.
 
 ## 5. Controller and route
 
@@ -268,26 +311,47 @@ this work.
 
 - All four input combinations, asserting the table above: 13 opex rows in every case, real
   amounts vs zeros vs blanks, and the `cleaning_cost` / `property_taxes` blob states.
-- `source == "blank"` persists and round-trips on the detail read.
+- `source == "blank"` reaches `underwriting_data`, so it lands on the column.
 - `bedrooms` / `bathrooms` / `price` land on the columns **and** in
   `details.zillow_property`, with every other blob key null.
-- Changing `bedrooms` via `PUT` moves the column and leaves the blob alone — the snapshot
-  is meant to go stale.
+- `listing_url` lands on the column **and** on `details.zillow_property.url`, is stored
+  verbatim whatever it points at, and leaves `zpid` / the blob's `id` null. Omitting it
+  leaves both null.
+- The Zillow path still sends no `source` at all, so it falls through to the `"adus"`
+  server default rather than writing NULL over it (see below).
+- The `bedrooms` column wins over a diverged blob at save — which is what makes the
+  snapshot safe to go stale.
 - `purchase_details` and `taxes` are both populated, and `interest_rate` is FRED-derived
   (`fred + 0.0035`) rather than the `0.0688` default — the reason the price is mandatory.
-- `market_id: 0` folds to `None` rather than 500ing on the FK.
-- `owner_id` falls back to the requesting user when the market has no analyst owner.
-- `purchase_price` omitted → 422.
+- `market_id: 0` folds to `None` rather than 500ing on the FK, both at the schema and
+  through a real request.
+- `owner_id` falls back to the requesting user when the market has no analyst owner, and
+  prefers the market's analyst owner when there is one.
+- `purchase_price` omitted → 422; a stray key → 422; a price alone → 201.
+
+**Two of the planned assertions are not unit-testable here.** This suite has no DB
+fixtures — every repository is faked — so `source` *round-tripping on the detail read* and
+*a `PUT` moving the bedrooms column while leaving the blob alone* are covered instead by
+the mechanisms they rest on (the two bullets above), and end-to-end by the manual steps.
+
+**One finding from implementing it.** `SaveUnderwritingService.save` dumps with
+`exclude_unset`, so passing `source=None` explicitly would persist NULL **over** the
+column's `"adus"` server default. `_build` therefore only sets the key when there is a
+source to stamp, and a regression test pins the Zillow path's fall-through.
 
 **Manual, against a real market:**
 
 1. `POST /iron-bank/underwritings/blank` with `market_id`, `bedrooms`, `bathrooms`,
-   `purchase_price` → note the returned id.
+   `purchase_price` and a non-Zillow `listing_url` → note the returned id.
 2. `GET /iron-bank/underwritings/{id}` → `source: "blank"`, 13 opex rows, populated
-   `purchase_details` and `taxes`, and `zillow_property` carrying price/bedrooms/bathrooms
-   with null address/area/lot.
+   `purchase_details` and `taxes`, and `zillow_property` carrying
+   price/bedrooms/bathrooms/url with null address/area/lot. Confirms the round-trip the
+   unit tests can't reach.
 3. `GET /iron-bank/underwritings/{id}/bedroom-context?bedrooms=4` → returns the patch. No
    backend change was needed here: it reads `market_id` and `purchase_price` off the stored
    row, not from Zillow data.
 4. Repeat step 1 with `market_id` omitted → `market_id: null`, opex rows all at `0`,
    `bedroom-context` 404s until a market is set via `PUT`.
+5. Repeat step 1 with `bedrooms` omitted → `cleaning_cost` and `property_taxes` come back
+   **null** even with a market set. The worst-shaped combination, and the one the pending
+   product decision is about.

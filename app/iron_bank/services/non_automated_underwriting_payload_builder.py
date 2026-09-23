@@ -79,15 +79,21 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         *,
         purchase_price: Decimal,
         market_context: MarketContext,
+        listing_url: str | None = None,
         bedrooms: int | None = None,
         bathrooms: Decimal | None = None,
         current_user_id: int | None = None,
     ) -> SaveUnderwritingPayload:
         """Seed a deal that has no listing behind it.
 
-        Every listing-derived column stays null — there is no URL, no zpid and
+        The remaining listing-derived columns stay null — there is no zpid and
         no address — and ``source`` is stamped ``blank`` so the frontend knows
         to render the hero editable rather than as a listing summary.
+
+        ``listing_url`` is where the analyst found the deal, if anywhere, and
+        is optional: an off-market deal often has no link at all. It is not
+        required to be a Zillow URL — that is the whole point of this path — so
+        a link to anywhere is stored verbatim.
 
         ``market_context`` is non-optional here: the caller always builds one
         (a zeroed template when no market was picked), so the opex and
@@ -96,6 +102,7 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         return self._build(
             zillow_property=self._blank_zillow_property(
                 purchase_price=purchase_price,
+                listing_url=listing_url,
                 bedrooms=bedrooms,
                 bathrooms=bathrooms,
             ),
@@ -105,12 +112,14 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
             market_context=market_context,
             current_user_id=current_user_id,
             source=UnderwritingSource.BLANK,
+            listing_url=listing_url,
         )
 
     @staticmethod
     def _blank_zillow_property(
         *,
         purchase_price: Decimal,
+        listing_url: str | None,
         bedrooms: int | None,
         bathrooms: Decimal | None,
     ) -> dict[str, Any]:
@@ -126,10 +135,20 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
         property as found, the columns are the property as underwritten. Nothing
         reads the blob back as authoritative once the columns are set, so the
         frontend must read bed/bath from the columns.
+
+        ``url`` is the exception to that divergence: unlike bed/bath it has no
+        "as found" versus "as underwritten" reading, so the two copies are
+        meant to stay equal. Nothing enforces it — a PUT can move one without
+        the other — but a caller changing the link should send both.
         """
         return {
-            "id": None,  # no zpid — the top-level column keeps its FK to
-            "url": None,  # zillow.scheduled_listings and stays null too
+            # No zpid: the top-level column's FK to zillow.scheduled_listings
+            # can only be satisfied by a scraped listing, and a blank deal has
+            # none — so it stays null here and on the column.
+            "id": None,
+            # Mirrors the listing_url column, keeping the two in step the way
+            # the automated builder does (it sets the column *from* this key).
+            "url": listing_url,
             "thumbnail": None,
             "price": purchase_price,
             "address": None,  # the hero fills these three in

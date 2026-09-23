@@ -544,6 +544,7 @@ async def create_blank_underwriting(
 ):
     return await controller.create_blank(
         purchase_price=payload.purchase_price,
+        listing_url=payload.listing_url,
         market_id=payload.market_id,
         bedrooms=payload.bedrooms,
         bathrooms=payload.bathrooms,

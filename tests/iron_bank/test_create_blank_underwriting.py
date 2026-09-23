@@ -114,10 +114,18 @@ def _context_for(*, market: bool, bedrooms: bool):
     )
 
 
-def _build(*, market=True, bedrooms=5, bathrooms=Decimal("4.0"), current_user_id=42):
+def _build(
+    *,
+    market=True,
+    bedrooms=5,
+    bathrooms=Decimal("4.0"),
+    listing_url=None,
+    current_user_id=42,
+):
     return NonAutomatedUnderwritingPayloadBuilder().build_blank(
         purchase_price=PURCHASE_PRICE,
         market_context=_context_for(market=market, bedrooms=bedrooms is not None),
+        listing_url=listing_url,
         bedrooms=bedrooms,
         bathrooms=bathrooms,
         current_user_id=current_user_id,
@@ -180,7 +188,11 @@ def test_build_blank_sets_non_automated_core_fields():
 
 
 def test_build_blank_leaves_every_listing_derived_column_null():
-    """There is no listing, so nothing that describes one may be invented."""
+    """There is no listing, so nothing that describes one may be invented.
+
+    ``listing_url`` is included here in its default, unsupplied form — an
+    off-market deal often has no link at all.
+    """
     payload = _build()
 
     assert payload.listing_url is None
@@ -209,6 +221,34 @@ def test_build_blank_seeds_the_full_zillow_property_shape():
     assert stored.lot_size_sqft is None
     assert stored.description is None
     assert stored.lot_size_acres is None
+
+
+def test_listing_url_lands_on_the_column_and_in_the_blob():
+    """Both copies, the way the automated builder keeps the two in step."""
+    payload = _build(listing_url="https://www.redfin.com/TX/Austin/123-Main-St")
+
+    assert payload.listing_url == "https://www.redfin.com/TX/Austin/123-Main-St"
+    assert (
+        payload.details.zillow_property.url
+        == "https://www.redfin.com/TX/Austin/123-Main-St"
+    )
+
+
+def test_listing_url_is_stored_verbatim_whatever_it_points_at():
+    """Not validated as a Zillow URL — an off-market deal has no Zillow listing.
+
+    The blob key is named ``url`` on a shape called ``zillow_property`` only
+    because this path reuses the stored shape; nothing requires the link to be
+    a Zillow one, and nothing reads it back to drive behaviour.
+    """
+    link = "https://www.facebook.com/marketplace/item/1234567890"
+    payload = _build(listing_url=link)
+
+    assert payload.listing_url == link
+    assert payload.details.zillow_property.url == link
+    # still no listing behind it: the zpid FK is unsatisfiable without a scrape
+    assert payload.zpid is None
+    assert payload.details.zillow_property.id is None
 
 
 def test_build_blank_mirrors_missing_bed_and_bath_as_nulls():
@@ -395,6 +435,25 @@ async def test_service_saves_a_blank_payload():
     assert payload.purchase_price == PURCHASE_PRICE
 
 
+@pytest.mark.asyncio
+async def test_service_threads_the_listing_url_through_to_the_payload():
+    save_service = FakeSaveService()
+    service = CreateBlankUnderwritingService(
+        save_service=save_service,
+        market_context_reader=FakeMarketContextReader(_market_context()),
+    )
+
+    await service.create(
+        purchase_price=PURCHASE_PRICE,
+        listing_url="https://example.com/off-market/42",
+        market_id=3,
+    )
+
+    payload = save_service.saved_payload
+    assert payload.listing_url == "https://example.com/off-market/42"
+    assert payload.details.zillow_property.url == "https://example.com/off-market/42"
+
+
 # --------------------------------------------------------------------------
 # Request schema
 # --------------------------------------------------------------------------
@@ -504,6 +563,7 @@ def test_route_passes_every_field_through_and_returns_201():
         "/iron-bank/underwritings/blank",
         json={
             "purchase_price": 389000,
+            "listing_url": "https://example.com/off-market/42",
             "market_id": 3,
             "bedrooms": 5,
             "bathrooms": 4.0,
@@ -514,6 +574,7 @@ def test_route_passes_every_field_through_and_returns_201():
     assert response.json() == {"underwriting_id": 501}
     assert FakeController.received == {
         "purchase_price": Decimal("389000"),
+        "listing_url": "https://example.com/off-market/42",
         "market_id": 3,
         "bedrooms": 5,
         "bathrooms": Decimal("4.0"),
@@ -529,6 +590,8 @@ def test_route_accepts_a_price_alone():
     assert response.status_code == 201
     assert FakeController.received["market_id"] is None
     assert FakeController.received["bedrooms"] is None
+    # an off-market deal need not have a link behind it
+    assert FakeController.received["listing_url"] is None
 
 
 def test_route_folds_an_unselected_market_before_the_controller_sees_it():

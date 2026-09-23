@@ -19,6 +19,16 @@ class CreateBlankUnderwritingPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     purchase_price: Decimal = Field(..., gt=0)
+    listing_url: str | None = Field(
+        None,
+        description=(
+            "Where the deal was found, if anywhere — an agent's page, a "
+            "Facebook post, a Redfin link. Not validated as a Zillow URL: an "
+            "off-market deal is precisely one that has no Zillow listing. "
+            "Lands on the listing_url column and is mirrored into "
+            "details.zillow_property.url."
+        ),
+    )
     market_id: int | None = Field(
         None,
         description=(
