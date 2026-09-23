@@ -270,6 +270,40 @@ async def test_update_deal_status_raises_when_underwriting_does_not_exist():
         )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("property_pending", [True, False])
+async def test_update_property_pending_writes_only_the_flag(property_pending):
+    repository = FakeUnderwritingRepository(
+        underwriting=SimpleNamespace(id=42, property_pending=property_pending)
+    )
+    service = UpdateUnderwritingService(repository)
+
+    result = await service.update_property_pending(
+        underwriting_id=42,
+        property_pending=property_pending,
+    )
+
+    assert repository.update_kwargs == {
+        "underwriting_id": 42,
+        "underwriting_data": {"property_pending": property_pending},
+    }
+    assert result.model_dump() == {
+        "underwriting_id": 42,
+        "property_pending": property_pending,
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_property_pending_raises_when_underwriting_does_not_exist():
+    service = UpdateUnderwritingService(FakeUnderwritingRepository(underwriting=None))
+
+    with pytest.raises(LookupError, match="Underwriting 42 not found"):
+        await service.update_property_pending(
+            underwriting_id=42,
+            property_pending=True,
+        )
+
+
 # --- recalc-on-update: forecasted_revenue estimated when a market is assigned -
 
 
