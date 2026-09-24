@@ -250,7 +250,7 @@ class GetUnderwritingsQuery(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     page: int = Field(1, ge=1)
-    page_size: int = Field(20, ge=1, le=20)
+    page_size: int = Field(20, ge=1, le=100)
     zpid: str | None = None
     min_bedrooms: int | None = Field(None, ge=0)
     max_bedrooms: int | None = Field(None, ge=0)
