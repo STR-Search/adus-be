@@ -20,6 +20,11 @@ class PreparedOpexCleaning(BaseModel):
 class PreparedOpexRange(BaseModel):
     low: Decimal | None = None
     high: Decimal | None = None
+    # The pool/hot tub row has a third candidate figure alongside the range —
+    # see ``opex_catalog.POOL_FIELDS``. Carried so it reaches the read paths;
+    # nothing seeds from it yet. Named for its column to match
+    # ``OpexOptionInputs``, where a bare "combined" would be ambiguous.
+    pool_and_hot_tub: Decimal | None = None
 
 
 class PreparedOpexRanged(BaseModel):

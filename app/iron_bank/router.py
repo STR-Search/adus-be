@@ -9,6 +9,9 @@ from app.core.database import get_db
 from app.core.reference_data.repository import ReferenceDataRepository
 from app.core.reference_data.service import ReferenceDataService
 from app.dependencies import get_current_user
+from app.iron_bank.controllers.create_blank_underwriting_controller import (
+    CreateBlankUnderwritingController,
+)
 from app.iron_bank.controllers.create_underwriting_from_url_controller import (
     CreateUnderwritingFromUrlController,
 )
@@ -35,6 +38,9 @@ from app.iron_bank.schemas.job import (
     JobCreatedResponse,
     JobStatusResponse,
 )
+from app.iron_bank.schemas.create_blank_underwriting import (
+    CreateBlankUnderwritingPayload,
+)
 from app.iron_bank.schemas.create_underwriting_from_url import (
     CreateUnderwritingFromUrlPayload,
 )
@@ -55,6 +61,10 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingsResult,
 )
 from app.iron_bank.schemas.prepare_uw import BedroomContext, PrepareUwDataResult
+from app.iron_bank.schemas.property_pending import (
+    UpdatePropertyPendingPayload,
+    UpdatePropertyPendingResult,
+)
 from app.iron_bank.schemas.save_underwriting import (
     SaveUnderwritingPayload,
     SaveUnderwritingResult,
@@ -62,6 +72,9 @@ from app.iron_bank.schemas.save_underwriting import (
 from app.iron_bank.schemas.update_underwriting import (
     UpdateUnderwritingPayload,
     UpdateUnderwritingResult,
+)
+from app.iron_bank.services.create_blank_underwriting_service import (
+    CreateBlankUnderwritingService,
 )
 from app.iron_bank.services.create_underwriting_from_url_service import (
     CreateUnderwritingFromUrlService,
@@ -188,6 +201,41 @@ def get_create_underwriting_from_url_controller(
             # scheduled_listings, so this both verifies the scrape completed and
             # lets the row carry a real zpid instead of a null one.
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),
+        )
+    )
+
+
+def get_create_blank_underwriting_controller(
+    db: AsyncSession = Depends(get_db),
+) -> CreateBlankUnderwritingController:
+    from app.airbnb_public.repositories.cleaned_data_repository import (
+        CleanedDataRepository,
+    )
+    from app.airbnb_public.services.cleaned_data_service import CleanedDataService
+    from app.markets.repositories.construction_repository import (
+        ConstructionAmenitiesRepository,
+    )
+    from app.markets.repositories.market_repository import MarketRepository
+    from app.markets.repositories.realtor_repository import RealtorRepository
+    from app.markets.services.market_service import MarketService
+
+    return CreateBlankUnderwritingController(
+        CreateBlankUnderwritingService(
+            # Same wiring as the from-URL path: market_service +
+            # cleaned_data_service let the save estimate forecasted revenue from
+            # Airbnb comps, which a blank deal carrying both a market and a
+            # bedroom count gets for free.
+            save_service=SaveUnderwritingService(
+                UnderwritingRepository(db),
+                market_service=MarketService(
+                    MarketRepository(db),
+                    ConstructionAmenitiesRepository(db),
+                    RealtorRepository(db),
+                ),
+                cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
+                opex_service=_opex_by_bedrooms_service(db),
+            ),
+            market_context_reader=PrepareUwDataJob.from_session(db),
         )
     )
 
@@ -486,6 +534,29 @@ async def create_underwriting_from_url(
 
 
 @router.post(
+    "/underwritings/blank",
+    response_model=SaveUnderwritingResult,
+    status_code=201,
+    tags=["iron_bank"],
+)
+async def create_blank_underwriting(
+    payload: CreateBlankUnderwritingPayload,
+    controller: CreateBlankUnderwritingController = Depends(
+        get_create_blank_underwriting_controller
+    ),
+    current_user=Depends(get_current_user),
+):
+    return await controller.create_blank(
+        purchase_price=payload.purchase_price,
+        listing_url=payload.listing_url,
+        market_id=payload.market_id,
+        bedrooms=payload.bedrooms,
+        bathrooms=payload.bathrooms,
+        current_user_id=current_user.id,
+    )
+
+
+@router.post(
     "/underwritings/{underwriting_id}/duplicate",
     response_model=DuplicateUnderwritingResult,
     status_code=201,
@@ -536,6 +607,24 @@ async def update_underwriting_deal_status(
         underwriting_id=underwriting_id,
         deal_status=payload.deal_status,
         actor_user_id=current_user.id,
+    )
+
+
+@router.patch(
+    "/underwritings/{underwriting_id}/property-pending",
+    response_model=UpdatePropertyPendingResult,
+    tags=["iron_bank"],
+)
+async def update_underwriting_property_pending(
+    underwriting_id: int,
+    payload: UpdatePropertyPendingPayload,
+    controller: UpdateUnderwritingController = Depends(
+        get_update_underwriting_controller
+    ),
+):
+    return await controller.update_property_pending(
+        underwriting_id=underwriting_id,
+        property_pending=payload.property_pending,
     )
 
 

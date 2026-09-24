@@ -26,6 +26,7 @@ class OpexByBedrooms(Base):
     bedrooms: Mapped[int | None] = mapped_column(Integer)
     pool_hot_tub_low: Mapped[Decimal | None] = mapped_column(Numeric)
     pool_hot_tub_high: Mapped[Decimal | None] = mapped_column(Numeric)
+    pool_and_hot_tub: Mapped[Decimal | None] = mapped_column(Numeric)
     outdoor_landscaping: Mapped[Decimal | None] = mapped_column(Numeric)
     software: Mapped[Decimal | None] = mapped_column(Numeric)
     insurance_hoi: Mapped[Decimal | None] = mapped_column(Numeric)
@@ -46,7 +47,17 @@ class OpexByBedrooms(Base):
 
 class OpexBySize(Base):
     __tablename__ = "opex_by_size"
-    __table_args__ = {"schema": "markets"}
+    __table_args__ = (
+        # (market_id, sqft) uniqueness only among active (non-soft-deleted) rows.
+        Index(
+            "uq_opex_by_size_market_sqft_active",
+            "market_id",
+            "sqft",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        {"schema": "markets"},
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     market_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("markets.market_keys_master.id"))

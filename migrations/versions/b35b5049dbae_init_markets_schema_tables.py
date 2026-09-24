@@ -104,6 +104,8 @@ def upgrade() -> None:
             "nice_to_have_amenities", postgresql.ARRAY(sa.Integer()), nullable=True
         ),
         sa.Column("realtor_ids", postgresql.ARRAY(sa.Integer()), nullable=True),
+        sa.Column("optimization_expense_lift", sa.Numeric(), nullable=True),
+        sa.Column("low_revenue_lift", sa.Numeric(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -139,6 +141,7 @@ def upgrade() -> None:
         sa.Column("bedrooms", sa.Integer(), nullable=True),
         sa.Column("pool_hot_tub_low", sa.Numeric(), nullable=True),
         sa.Column("pool_hot_tub_high", sa.Numeric(), nullable=True),
+        sa.Column("pool_and_hot_tub", sa.Numeric(), nullable=True),
         sa.Column("outdoor_landscaping", sa.Numeric(), nullable=True),
         sa.Column("software", sa.Numeric(), nullable=True),
         sa.Column("insurance_hoi", sa.Numeric(), nullable=True),
@@ -185,6 +188,14 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         schema="markets",
+    )
+    op.create_index(
+        "uq_opex_by_size_market_sqft_active",
+        "opex_by_size",
+        ["market_id", "sqft"],
+        unique=True,
+        schema="markets",
+        postgresql_where=sa.text("deleted_at IS NULL"),
     )
     op.create_table(
         "str_cribs_fee_details",

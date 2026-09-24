@@ -1,8 +1,10 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel
 
+from app.core.serialization import PlainDecimal
 from app.users.schemas.user import UserSummary
 
 from .common import BaseResponse
@@ -40,6 +42,9 @@ class MarketKeysMasterSchema(BaseResponse):
     must_have_amenities: list[AmenityRefSchema] | None = None
     nice_to_have_amenities: list[AmenityRefSchema] | None = None
     realtors: list[RealtorRefSchema] | None = None
+    # Multipliers, not decimal percentages: 1.25 is a 25% lift, 0.9 a 10% drop.
+    optimization_expense_lift: PlainDecimal | None = None
+    low_revenue_lift: PlainDecimal | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -56,6 +61,8 @@ class MarketCreateSchema(BaseModel):
     must_have_amenities: list[int] | None = None
     nice_to_have_amenities: list[int] | None = None
     realtor_ids: list[int] | None = None
+    optimization_expense_lift: Decimal | None = None
+    low_revenue_lift: Decimal | None = None
 
 
 class MarketUpdateSchema(BaseModel):
@@ -67,6 +74,8 @@ class MarketUpdateSchema(BaseModel):
     must_have_amenities: list[int] | None = None
     nice_to_have_amenities: list[int] | None = None
     realtor_ids: list[int] | None = None
+    optimization_expense_lift: Decimal | None = None
+    low_revenue_lift: Decimal | None = None
 
 
 class MarketSummarySchema(BaseResponse):

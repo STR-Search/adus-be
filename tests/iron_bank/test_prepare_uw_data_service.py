@@ -38,6 +38,7 @@ def _opex_by_bedrooms():
         num_of_turns=38,
         pool_hot_tub_low=1200,
         pool_hot_tub_high=2400,
+        pool_and_hot_tub=3000,
         furnishings_low=25000,
         furnishings_mid=None,
         furnishings_high=60000,
@@ -117,6 +118,27 @@ class TestPrepare:
         assert result["market_id"] == 3
         assert result["market_slug"] == "smoky-mountains"
 
+    def test_is_template_zeroes_the_figures_but_keeps_the_rows(self):
+        """The template pass keeps every opex key, at zero.
+
+        The row set no longer depends on this — build_opex_expense_rows seeds
+        every OPEX_ROWS row whatever resolves. What zeroing still buys is the
+        amount: a market-less deal shows 0 ("start from nothing") rather than a
+        blank ("nobody has a figure yet"), which is the truer claim when the
+        deal deliberately has no market to draw one from.
+        """
+        seeded = self._prepare().model_dump()
+        templated = self._prepare(is_template=True).model_dump()
+
+        assert templated["opex"]["absolute"].keys() == seeded["opex"]["absolute"].keys()
+        assert set(templated["opex"]["absolute"].values()) == {Decimal("0")}
+        assert templated["opex"]["property_tax_pct"] == Decimal("0")
+        # Identity is nulled: the deal is market-less, not attached to the
+        # template market it borrowed its shape from.
+        assert templated["market_id"] is None
+        # The zillow half comes off the listing, so it is untouched.
+        assert templated["zillow_property"] == seeded["zillow_property"]
+
     def test_transforms_zillow_property(self):
         result = self._prepare().model_dump()
         assert result["zillow_property"] == {
@@ -146,7 +168,9 @@ class TestPrepare:
     def test_splits_opex_into_cleaning_ranged_absolute(self):
         opex = self._prepare().model_dump()["opex"]
         assert opex["cleaning"] == {"fee": 275, "num_of_turns": 38}
-        assert opex["ranged"] == {"pool_hot_tub": {"low": 1200, "high": 2400}}
+        assert opex["ranged"] == {
+            "pool_hot_tub": {"low": 1200, "high": 2400, "pool_and_hot_tub": 3000}
+        }
         assert opex["absolute"] == {"internet": 100, "utilities": 350}
 
     def test_surfaces_property_taxes_as_pct_not_absolute(self):
@@ -304,6 +328,7 @@ class TestToTemplateMarketContext:
         assert template.opex.cleaning.num_of_turns == Decimal("0")
         assert template.opex.ranged.pool_hot_tub.low == Decimal("0")
         assert template.opex.ranged.pool_hot_tub.high == Decimal("0")
+        assert template.opex.ranged.pool_hot_tub.pool_and_hot_tub == Decimal("0")
         assert template.opex.property_tax_pct == Decimal("0")
 
     def test_zeroes_only_the_three_seeded_amenity_options(self):

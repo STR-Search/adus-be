@@ -229,6 +229,7 @@ class PrepareUwDataService:
         template.opex.cleaning.num_of_turns = zero
         template.opex.ranged.pool_hot_tub.low = zero
         template.opex.ranged.pool_hot_tub.high = zero
+        template.opex.ranged.pool_hot_tub.pool_and_hot_tub = zero
         template.opex.property_tax_pct = zero
         template.opex.absolute = {key: zero for key in template.opex.absolute}
 
@@ -266,7 +267,16 @@ class PrepareUwDataService:
         construction_remodeling: list,
         fred,
         str_cribs_fee=None,
+        is_template: bool = False,
     ) -> PrepareUwDataResult:
+        """Assemble the prepared payload for one listing.
+
+        ``is_template`` says the caller loaded ``TEMPLATE_MARKET_ID`` to stand in
+        for a market-less deal, so the figures are zeroed and the identity
+        fields nulled on the way out — see ``to_template_market_context``. The
+        zillow half is unaffected either way; it comes off the listing, not the
+        market.
+        """
         context = self.prepare_market_context(
             market=market,
             market_id=market_id,
@@ -277,6 +287,8 @@ class PrepareUwDataService:
             fred=fred,
             str_cribs_fee=str_cribs_fee,
         )
+        if is_template:
+            context = self.to_template_market_context(context)
 
         return PrepareUwDataResult.model_validate(
             {

@@ -65,6 +65,30 @@ class OpexByBedroomsRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_all_by_market(self, market_id: int) -> list[OpexByBedrooms]:
+        result = await self.db.execute(
+            select(OpexByBedrooms)
+            .where(
+                OpexByBedrooms.market_id == market_id,
+                OpexByBedrooms.deleted_at.is_(None),
+            )
+            .order_by(OpexByBedrooms.bedrooms, OpexByBedrooms.id)
+        )
+        return list(result.scalars().all())
+
+    async def insert_all(self, rows: list[dict]) -> list[OpexByBedrooms]:
+        """Stage every row and flush, leaving the commit to the caller.
+
+        Unlike ``create``, this does not commit: the opex seed writes both opex
+        tables and has to land as one transaction, so the boundary belongs to
+        the service. The flush is what surfaces a unique-index violation here
+        rather than at some later commit the caller cannot attribute.
+        """
+        records = [OpexByBedrooms(**row) for row in rows]
+        self.db.add_all(records)
+        await self.db.flush()
+        return records
+
     async def create(self, data: dict) -> OpexByBedrooms:
         record = OpexByBedrooms(**data)
         self.db.add(record)
@@ -147,6 +171,28 @@ class OpexBySizeRepository:
             )
         )
         return result.scalar_one_or_none()
+
+    async def get_all_by_market(self, market_id: int) -> list[OpexBySize]:
+        result = await self.db.execute(
+            select(OpexBySize)
+            .where(
+                OpexBySize.market_id == market_id,
+                OpexBySize.deleted_at.is_(None),
+            )
+            .order_by(OpexBySize.sqft, OpexBySize.id)
+        )
+        return list(result.scalars().all())
+
+    async def insert_all(self, rows: list[dict]) -> list[OpexBySize]:
+        """Stage every row and flush, leaving the commit to the caller.
+
+        See ``OpexByBedroomsRepository.insert_all`` -- same contract, same
+        reason.
+        """
+        records = [OpexBySize(**row) for row in rows]
+        self.db.add_all(records)
+        await self.db.flush()
+        return records
 
     async def create(self, data: dict) -> OpexBySize:
         record = OpexBySize(**data)

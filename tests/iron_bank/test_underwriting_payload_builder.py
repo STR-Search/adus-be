@@ -66,18 +66,27 @@ def test_builds_save_payload_from_prepared_uw_data():
     }
     assert payload.taxes.land_assumptions_pct == Decimal("0.2")
     assert payload.taxes.tax_rate_pct == Decimal("0.37")
+    # Every canonical row is seeded, in order, whatever the market resolved to —
+    # a row the market has no figure for is blank rather than absent, so the
+    # analyst can tell it apart from an expense the property does not have.
     assert [
-        expense.model_dump(by_alias=True, exclude_none=True)
+        expense.model_dump(by_alias=True, exclude={"id"})
         for expense in payload.operating_expenses
     ] == [
         {"expense": "Internet", "monthly": Decimal("100")},
         {"expense": "Utilities", "monthly": Decimal("350")},
         {"expense": "Pest Control", "monthly": Decimal("60")},
         {"expense": "Pool/Hot Tub Maintenance", "monthly": Decimal("125")},
+        {"expense": "Outdoor/Landscaping", "monthly": None},
+        {"expense": "Software", "monthly": None},
+        {"expense": "Household Supplies", "monthly": None},
         {"expense": "Cleaning", "monthly": Decimal("10450")},
         {"expense": "Property Taxes (Monthly)", "monthly": Decimal("485")},
+        {"expense": "Insurance HOI", "monthly": None},
+        {"expense": "CapEx Reserve", "monthly": None},
         # no opex column behind it — seeded at zero for the analyst to adjust
         {"expense": "MISC", "monthly": Decimal("0")},
+        {"expense": "HOA Fees", "monthly": None},
     ]
 
 
@@ -117,12 +126,14 @@ def test_builds_draft_payload_when_optional_prepared_fields_are_missing():
     assert payload.purchase_price is None
     assert payload.details is None
     assert payload.taxes is None
+    # Nothing resolved, yet the analyst still gets the whole sheet to fill in:
+    # the row set is a property of the catalog, not of the prepared data.
     assert [
         expense.model_dump(by_alias=True, exclude={"id"})
         for expense in payload.operating_expenses
     ] == [
-        {"expense": "Property Taxes (Monthly)", "monthly": None},
-        {"expense": "MISC", "monthly": Decimal("0")},
+        {"expense": label, "monthly": None if key != "misc" else Decimal("0")}
+        for key, label in opex_catalog.OPEX_ROWS
     ]
 
 

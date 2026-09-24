@@ -1,6 +1,16 @@
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -40,6 +50,10 @@ class MarketKeysMaster(Base):
     nice_to_have_amenities: Mapped[list[int] | None] = mapped_column(ARRAY(Integer))
     # IDs referencing markets.realtors; validated at the service layer.
     realtor_ids: Mapped[list[int] | None] = mapped_column(ARRAY(Integer))
+    # Multipliers, not decimal percentages: 1.25 is a 25% lift and 0.9 a 10%
+    # down-lift.
+    optimization_expense_lift: Mapped[Decimal | None] = mapped_column(Numeric)
+    low_revenue_lift: Mapped[Decimal | None] = mapped_column(Numeric)
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP")
     )

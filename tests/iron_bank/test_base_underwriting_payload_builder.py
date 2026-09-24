@@ -1,9 +1,16 @@
 from decimal import Decimal
 
+from app.iron_bank.services import opex_catalog
 from app.iron_bank.services.base_underwriting_payload_builder import (
     BaseUnderwritingPayloadBuilder,
 )
 from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
+
+# Every seeded payload carries these, in this order, whatever the market
+# resolved to — read off the catalog rather than restated, so the two cannot
+# drift. ``test_rows_are_emitted_in_the_canonical_order`` spells the list out
+# in full; it is the one place the expected order is written by hand.
+_CANONICAL_LABELS = [label for _, label in opex_catalog.OPEX_ROWS]
 
 
 def _builder():
@@ -89,19 +96,24 @@ class TestOperatingExpenseOrder:
         assert by_expense["Cleaning"] == Decimal("1100")  # 275 x 4 turns
         assert by_expense["Property Taxes (Monthly)"] == Decimal("485")
 
-    def test_unresolved_rows_are_dropped_but_the_order_holds(self):
+    def test_unresolved_rows_are_seeded_blank_and_the_order_holds(self):
+        # The row set is a property of the catalog, not of how much the market
+        # had on file: an unresolved row is seeded blank in its canonical slot
+        # rather than dropped, so the analyst cannot mistake "no figure" for
+        # "this expense does not apply".
         opex = self._opex(
             cleaning={},
             ranged={},
             absolute={"utilities": Decimal("350"), "hoa_fees": Decimal("125")},
         )
+        expenses = self._expenses(opex=opex)
+        by_expense = {e["expense"]: e["monthly"] for e in expenses}
 
-        assert [e["expense"] for e in self._expenses(opex=opex)] == [
-            "Utilities",
-            "Property Taxes (Monthly)",
-            "MISC",
-            "HOA Fees",
-        ]
+        assert [e["expense"] for e in expenses] == _CANONICAL_LABELS
+        assert by_expense["Utilities"] == Decimal("350")
+        assert by_expense["HOA Fees"] == Decimal("125")
+        assert by_expense["Internet"] is None
+        assert by_expense["Cleaning"] is None
 
     def test_misc_is_seeded_at_zero_with_no_market_source(self):
         # No opex column supplies MISC, so it is seeded from
@@ -109,14 +121,15 @@ class TestOperatingExpenseOrder:
         # market data is entirely absent.
         opex = self._opex(cleaning={}, ranged={}, absolute={})
         expenses = self._expenses(opex=opex, property_taxes=None)
+        by_expense = {e["expense"]: e["monthly"] for e in expenses}
 
-        assert [e["expense"] for e in expenses] == [
-            "Property Taxes (Monthly)",
-            "MISC",
-        ]
-        # zero, not blank: MISC starts at an amount, Property Taxes at nothing
-        assert expenses[0]["monthly"] is None
-        assert expenses[1]["monthly"] == Decimal("0")
+        assert [e["expense"] for e in expenses] == _CANONICAL_LABELS
+        # zero, not blank: MISC starts at an amount, every other row at nothing
+        assert by_expense["MISC"] == Decimal("0")
+        assert by_expense["Property Taxes (Monthly)"] is None
+        assert {
+            amount for label, amount in by_expense.items() if label != "MISC"
+        } == {None}
 
     def test_a_market_column_would_override_a_default(self):
         # Migration path: if misc ever becomes a real opex column, the market
@@ -135,13 +148,14 @@ class TestOperatingExpenseOrder:
         assert expenses.index(blank) == 8
 
     def test_cleaning_needs_both_a_fee_and_turns(self):
+        # A fee with no turn count resolves to no amount — the row is still
+        # seeded, blank, rather than the fee standing in for a monthly cost.
         opex = self._opex(cleaning={"fee": Decimal("275")}, absolute={})
+        expenses = self._expenses(opex=opex)
+        by_expense = {e["expense"]: e["monthly"] for e in expenses}
 
-        assert [e["expense"] for e in self._expenses(opex=opex)] == [
-            "Pool/Hot Tub Maintenance",
-            "Property Taxes (Monthly)",
-            "MISC",
-        ]
+        assert [e["expense"] for e in expenses] == _CANONICAL_LABELS
+        assert by_expense["Cleaning"] is None
 
     def test_an_unplaced_opex_column_is_appended_last(self):
         # A column added to the opex table but not to OPEX_ROWS still reaches
@@ -151,21 +165,21 @@ class TestOperatingExpenseOrder:
             ranged={},
             absolute={"snow_removal": Decimal("80"), "utilities": Decimal("350")},
         )
+        expenses = self._expenses(opex=opex)
 
-        assert [e["expense"] for e in self._expenses(opex=opex)] == [
-            "Utilities",
-            "Property Taxes (Monthly)",
-            "MISC",
+        assert [e["expense"] for e in expenses] == [
+            *_CANONICAL_LABELS,
             "Snow Removal",
         ]
+        assert expenses[-1]["monthly"] == Decimal("80")
 
     def test_an_unplaced_column_with_no_amount_is_not_seeded(self):
+        # Unlike a canonical row, an unplaced one earns its place by having an
+        # amount: without one there is no evidence the column means anything to
+        # an analyst, and no canonical slot to render it in.
         opex = self._opex(cleaning={}, ranged={}, absolute={"snow_removal": None})
 
-        assert [e["expense"] for e in self._expenses(opex=opex)] == [
-            "Property Taxes (Monthly)",
-            "MISC",
-        ]
+        assert [e["expense"] for e in self._expenses(opex=opex)] == _CANONICAL_LABELS
 
 
 class TestOptimizationListOrder:

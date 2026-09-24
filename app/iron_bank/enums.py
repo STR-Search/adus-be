@@ -19,6 +19,10 @@ class DealStatus(StrEnum):
 class UnderwritingSource(StrEnum):
     ADUS = "adus"
     LEGACY_SHEET = "legacy_sheet"
+    # Started from nothing rather than from a listing: no Zillow data, so the
+    # address/size fields are typed in by hand. The frontend keys its editable,
+    # no-listing hero UI off this value.
+    BLANK = "blank"
 
 
 class USState(StrEnum):

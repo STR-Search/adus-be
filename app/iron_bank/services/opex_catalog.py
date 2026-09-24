@@ -37,7 +37,13 @@ _MONEY_QUANT = Decimal("0.01")
 # handles those columns some other way.
 METADATA_FIELDS = {"id", "market_id", "market_slug", "bedrooms", "sqft"}
 CLEANING_FIELDS = {"cleaning_fee", "num_of_turns"}
-POOL_FIELDS = {"pool_hot_tub_low", "pool_hot_tub_high"}
+# The pool/hot tub family: three candidate figures for one opex row. ``low`` and
+# ``high`` are historically named — they hold the pool-only and hot-tub-only
+# figures — and ``pool_and_hot_tub`` holds the combined one. Only ``low`` seeds
+# the row today; a later change picks between the three by condition. All three
+# are excluded from ``absolute`` so none of them surfaces as an opex row of its
+# own.
+POOL_FIELDS = {"pool_hot_tub_low", "pool_hot_tub_high", "pool_and_hot_tub"}
 # Surfaced as amenity price tiers (see PrepareUwDataService.FURNISHINGS_*),
 # not as an opex row.
 FURNISHINGS_FIELDS = {"furnishings_low", "furnishings_mid", "furnishings_high"}
@@ -83,13 +89,10 @@ OPEX_ROWS = (
 # Rows with no opex column behind them: no market supplies them, so every
 # underwriting starts from this amount and the analyst adjusts it. Merged under
 # the market data in ``resolve_opex_amounts``, so adding a real column of the
-# same name later would take over with no other change. Note these seed at a
-# starting *value*, unlike ``ALWAYS_SEEDED_OPEX_KEYS``, which seed blank — a zero
-# here renders because 0 is not None.
+# same name later would take over with no other change. These seed at a starting
+# *value*, which is a different claim from the blank amount every unresolved row
+# now carries: "the analyst begins at 0" rather than "nobody has a figure yet".
 OPEX_ROW_DEFAULTS = {"misc": Decimal("0")}
-# Seeded even when no source resolves an amount: a blank row the team fills in
-# manually beats a silently absent one.
-ALWAYS_SEEDED_OPEX_KEYS = frozenset({"property_taxes"})
 
 # Which table supplies each row's figure. A property of the row table, so it
 # lives next to it — and deliberately *not* derived from a fetched opex row: a
@@ -136,6 +139,7 @@ def transform_opex_costs(opex_by_bedrooms, opex_by_size) -> dict:
             "pool_hot_tub": {
                 "low": bedrooms_data.get("pool_hot_tub_low"),
                 "high": bedrooms_data.get("pool_hot_tub_high"),
+                "pool_and_hot_tub": bedrooms_data.get("pool_and_hot_tub"),
             },
         },
         "absolute": absolute,
@@ -223,13 +227,13 @@ def resolve_opex_amounts(
     Defaults sit under the market data, so a real column would take over from a
     default of the same name. The three derived keys cannot collide with an
     ``absolute`` column: ``transform_opex_costs`` excludes
-    cleaning_fee/num_of_turns, pool_hot_tub_low/high and property_taxes from
+    cleaning_fee/num_of_turns, the pool/hot tub columns and property_taxes from
     ``absolute`` (see the ``*_FIELDS`` sets). They merge last regardless, so a
     future column sharing one of these names would not displace the derived row.
 
-    A key absent from the result — or present with ``None`` — has no amount; it
-    is the caller's business whether that means "drop the row" (the seeding path)
-    or "return it blank" (the reference-data path).
+    A key absent from the result — or present with ``None`` — has no amount. Both
+    callers render it as a blank row rather than dropping it, so an unresolved
+    amount never reads as "this expense does not apply".
     """
     absolute = opex.get("absolute") or {}
     cleaning = opex.get("cleaning") or {}
@@ -258,21 +262,24 @@ def build_opex_expense_rows(
     order is a property of this catalog rather than of the opex table's column
     order (which is what iterating ``absolute`` gave us before).
 
-    A row whose amount resolves to None is dropped, so the set of rows still
-    follows the market data — except Property Taxes, which is always seeded so
-    an unresolved amount is a blank row the team fills in rather than a missing
-    one, and the ``OPEX_ROW_DEFAULTS`` rows, which no market supplies and so
-    always carry their default. An opex column with no place in ``OPEX_ROWS`` is
-    appended after them and logged; a newly added column should surface to the
-    analyst, not disappear or land at an arbitrary position.
+    Every ``OPEX_ROWS`` row is seeded, including the ones no source resolves an
+    amount for — matching ``build_opex_options``, which the read paths use. A
+    null amount is information ("this row exists, nobody has a figure for it"),
+    and dropping the row would leave the analyst unable to tell that from an
+    expense the property does not have. It also makes the seeded row set a
+    property of this catalog alone, rather than of how much the market happened
+    to have on file: every underwriting starts with the same rows in the same
+    order, whatever its market, bedrooms or sqft resolved to.
+
+    An opex column with no place in ``OPEX_ROWS`` is appended after them and
+    logged; a newly added column should surface to the analyst, not disappear or
+    land at an arbitrary position.
     """
     absolute = opex.get("absolute") or {}
     amounts = resolve_opex_amounts(opex, property_taxes)
 
     expenses = [
-        {"expense": label, "monthly": amounts.get(key)}
-        for key, label in OPEX_ROWS
-        if amounts.get(key) is not None or key in ALWAYS_SEEDED_OPEX_KEYS
+        {"expense": label, "monthly": amounts.get(key)} for key, label in OPEX_ROWS
     ]
 
     placed = {key for key, _ in OPEX_ROWS}
@@ -325,7 +332,9 @@ def _row_inputs(key: str, opex: dict[str, Any]) -> OpexOptionInputs | None:
     if key == "pool_hot_tub":
         pool_hot_tub = (opex.get("ranged") or {}).get("pool_hot_tub") or {}
         return OpexOptionInputs(
-            low=pool_hot_tub.get("low"), high=pool_hot_tub.get("high")
+            low=pool_hot_tub.get("low"),
+            high=pool_hot_tub.get("high"),
+            pool_and_hot_tub=pool_hot_tub.get("pool_and_hot_tub"),
         )
     if key == "property_taxes":
         return OpexOptionInputs(pct=opex.get("property_tax_pct"))

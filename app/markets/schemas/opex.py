@@ -14,6 +14,7 @@ class OpexByBedroomsSchema(BaseResponse):
     bedrooms: int | None = None
     pool_hot_tub_low: PlainDecimal | None = None
     pool_hot_tub_high: PlainDecimal | None = None
+    pool_and_hot_tub: PlainDecimal | None = None
     outdoor_landscaping: PlainDecimal | None = None
     software: PlainDecimal | None = None
     insurance_hoi: PlainDecimal | None = None
@@ -37,6 +38,7 @@ class OpexByBedroomsCreateSchema(BaseModel):
     bedrooms: int | None = None
     pool_hot_tub_low: Decimal | None = None
     pool_hot_tub_high: Decimal | None = None
+    pool_and_hot_tub: Decimal | None = None
     outdoor_landscaping: Decimal | None = None
     software: Decimal | None = None
     insurance_hoi: Decimal | None = None
@@ -66,6 +68,7 @@ class OpexByBedroomsUpdateSchema(BaseModel):
     bedrooms: int | None = None
     pool_hot_tub_low: Decimal | None = None
     pool_hot_tub_high: Decimal | None = None
+    pool_and_hot_tub: Decimal | None = None
     outdoor_landscaping: Decimal | None = None
     software: Decimal | None = None
     insurance_hoi: Decimal | None = None
@@ -127,3 +130,21 @@ class OpexBySizeUpdateSchema(BaseModel):
         if self.market_id is not None and self.market_slug is not None:
             raise ValueError("Provide either market_id or market_slug, not both")
         return self
+
+
+class OpexSeedRequestSchema(BaseModel):
+    """Body of ``POST /markets/{market_id}/opex/seed-from-lookalike``.
+
+    The target market is the path parameter; only the source lives here. Both
+    sides are ids rather than slugs because the caller is server-side and
+    already holds ids -- unlike the CRUD schemas above, which take either.
+    """
+
+    source_market_id: int
+
+
+class OpexSeedResultSchema(BaseResponse):
+    target_market_id: int
+    source_market_id: int
+    bedrooms_created: int
+    size_created: int
