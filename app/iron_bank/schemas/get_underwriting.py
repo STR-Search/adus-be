@@ -17,6 +17,7 @@ from app.core.serialization import PlainDecimal
 from app.iron_bank.enums import (
     DealStatus,
     OpexKeyedOn,
+    PageSize,
     SortOrder,
     USState,
     UnderwritingSortBy,
@@ -250,7 +251,7 @@ class GetUnderwritingsQuery(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     page: int = Field(1, ge=1)
-    page_size: int = Field(20, ge=1, le=100)
+    page_size: PageSize = PageSize.SMALL
     zpid: str | None = None
     min_bedrooms: int | None = Field(None, ge=0)
     max_bedrooms: int | None = Field(None, ge=0)
