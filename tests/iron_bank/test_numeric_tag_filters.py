@@ -116,9 +116,9 @@ def test_levels_reach_the_controller_as_a_list_of_ints(query, expected):
 
 def test_bounds_are_enforced_on_the_schema_itself():
     with pytest.raises(ValidationError):
-        GetUnderwritingsQuery(page=1, page_size=20, renovation_level=[6])
+        GetUnderwritingsQuery(page=1, page_size=25, renovation_level=[6])
 
-    query = GetUnderwritingsQuery(page=1, page_size=20, renovation_level=[1, 5])
+    query = GetUnderwritingsQuery(page=1, page_size=25, renovation_level=[1, 5])
     assert query.renovation_level == [1, 5]
 
 
