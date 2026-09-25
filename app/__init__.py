@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_config
 from app.core.database import engine
+from app.core.profiling import ProfilingMiddleware, install_db_hooks
 from app.core.reference_data.router import router as reference_data_router
 from app.dependencies import get_current_user
 from app.external_api.router import router as external_api_router
@@ -74,6 +75,13 @@ def create_app() -> FastAPI:
     )
 
     application.add_middleware(AuthMiddleware)
+
+    # Added last so it is outermost: its contextvar is set before any other
+    # middleware or dependency runs, and its clock covers the whole stack.
+    if config.PROFILING_ENABLED:
+        install_db_hooks(engine)
+        application.add_middleware(ProfilingMiddleware)
+        logger.info("profiling.enabled")
 
     application.include_router(markets_router)
     application.include_router(iron_bank_router)
