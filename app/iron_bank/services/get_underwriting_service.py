@@ -389,8 +389,8 @@ class GetUnderwritingService:
     ) -> None:
         """Resolve ``realtor_details`` from the market's realtor_ids.
 
-        Each distinct market on the page is fetched once, then all referenced
-        realtors in one batched query. No-op when the market/realtor
+        All distinct markets on the page in one batched query, then all
+        referenced realtors in another. No-op when the market/realtor
         repositories aren't configured. Soft-deleted or unknown realtor ids
         drop out of the list; each market's realtor_ids order is preserved.
         """
@@ -403,12 +403,10 @@ class GetUnderwritingService:
         market_ids = {r.market_id for r in results if r.market_id is not None}
         if not market_ids:
             return
-        realtor_ids_by_market: dict[int, list[int]] = {}
-        for market_id in market_ids:
-            market = await self.market_repository.get_by_id(market_id)
-            realtor_ids_by_market[market_id] = (
-                market.realtor_ids or [] if market is not None else []
-            )
+        markets = await self.market_repository.get_by_ids(market_ids)
+        realtor_ids_by_market: dict[int, list[int]] = {
+            market.id: market.realtor_ids or [] for market in markets
+        }
         realtor_ids = {
             realtor_id for ids in realtor_ids_by_market.values() for realtor_id in ids
         }

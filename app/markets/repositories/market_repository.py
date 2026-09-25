@@ -22,6 +22,17 @@ class MarketRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_ids(self, market_ids: set[int]) -> list[MarketKeysMaster]:
+        if not market_ids:
+            return []
+        result = await self.db.execute(
+            select(MarketKeysMaster).where(
+                MarketKeysMaster.id.in_(market_ids),
+                MarketKeysMaster.deleted_at.is_(None),
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_by_market_slug(self, market_slug: str) -> MarketKeysMaster | None:
         result = await self.db.execute(
             select(MarketKeysMaster).where(

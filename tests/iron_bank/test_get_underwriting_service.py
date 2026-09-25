@@ -721,3 +721,152 @@ async def test_edit_context_catalog_is_empty_when_the_market_has_no_bedroom_row(
     result = await service.get_edit_context(1)
 
     assert result.data.contextual.opex_options == []
+
+
+# --- realtor_details: batched market + realtor lookup ------------------------
+
+
+class FakeMarketRepository:
+    """Serves markets in one batched call; ``get_by_id`` would be an N+1."""
+
+    def __init__(self, markets):
+        self.markets = {market.id: market for market in markets}
+        self.get_by_ids_calls = []
+
+    async def get_by_ids(self, market_ids):
+        self.get_by_ids_calls.append(set(market_ids))
+        # Unordered like WHERE id IN (...); missing ids simply drop out.
+        return [self.markets[i] for i in market_ids if i in self.markets]
+
+    async def get_by_id(self, market_id):
+        raise AssertionError("markets must be fetched in one get_by_ids call")
+
+
+class FakeRealtorRepository:
+    def __init__(self, realtors):
+        self.realtors = {realtor.id: realtor for realtor in realtors}
+        self.get_by_ids_calls = []
+
+    async def get_by_ids(self, record_ids):
+        self.get_by_ids_calls.append(set(record_ids))
+        return [self.realtors[i] for i in record_ids if i in self.realtors]
+
+
+def _realtor(id):
+    return SimpleNamespace(
+        id=id,
+        name=f"Realtor {id}",
+        email=f"r{id}@example.com",
+        phone=None,
+        brokerage=None,
+    )
+
+
+def _underwriting_in_market(id, market_id):
+    underwriting = _underwriting()
+    underwriting.id = id
+    underwriting.market_id = market_id
+    return underwriting
+
+
+def _realtor_repositories():
+    market_repository = FakeMarketRepository(
+        [
+            # Deliberately unsorted: the market's own order must survive.
+            SimpleNamespace(id=1, realtor_ids=[30, 10, 20]),
+            SimpleNamespace(id=2, realtor_ids=None),
+            # Market 3 is missing / soft-deleted, so get_by_ids omits it.
+            # Realtor 99 is unknown / soft-deleted, so it drops out.
+            SimpleNamespace(id=4, realtor_ids=[20, 99]),
+        ]
+    )
+    realtor_repository = FakeRealtorRepository([_realtor(i) for i in (10, 20, 30)])
+    return market_repository, realtor_repository
+
+
+def _realtor_detail_ids(result):
+    return [detail.id for detail in result.realtor_details]
+
+
+@pytest.mark.asyncio
+async def test_get_all_resolves_realtor_details_in_one_market_query():
+    market_repository, realtor_repository = _realtor_repositories()
+    service = GetUnderwritingService(
+        FakeListRepository(
+            [
+                _underwriting_in_market(1, market_id=1),
+                _underwriting_in_market(2, market_id=2),
+                _underwriting_in_market(3, market_id=3),
+                _underwriting_in_market(4, market_id=1),
+                _underwriting_in_market(5, market_id=4),
+                _underwriting_in_market(6, market_id=None),
+            ]
+        ),
+        market_repository=market_repository,
+        realtor_repository=realtor_repository,
+    )
+
+    result = await service.get_all(page=1, page_size=25)
+
+    assert market_repository.get_by_ids_calls == [{1, 2, 3, 4}]
+    assert realtor_repository.get_by_ids_calls == [{10, 20, 30, 99}]
+    assert [_realtor_detail_ids(r) for r in result.data] == [
+        [30, 10, 20],  # market order preserved
+        [],  # realtor_ids=None
+        [],  # missing market
+        [30, 10, 20],  # second row in the same market
+        [20],  # unknown realtor dropped
+        [],  # no market
+    ]
+    assert result.data[0].realtor_details[0].email == "r30@example.com"
+
+
+@pytest.mark.asyncio
+async def test_get_resolves_realtor_details_for_a_single_underwriting():
+    market_repository, realtor_repository = _realtor_repositories()
+    service = GetUnderwritingService(
+        FakeUnderwritingRepository(_underwriting_in_market(42, market_id=1)),
+        market_repository=market_repository,
+        realtor_repository=realtor_repository,
+    )
+
+    result = await service.get(42)
+
+    assert market_repository.get_by_ids_calls == [{1}]
+    assert _realtor_detail_ids(result) == [30, 10, 20]
+
+
+@pytest.mark.asyncio
+async def test_realtor_lookup_skipped_when_no_market_has_realtors():
+    market_repository, realtor_repository = _realtor_repositories()
+    service = GetUnderwritingService(
+        FakeListRepository(
+            [
+                _underwriting_in_market(1, market_id=2),
+                _underwriting_in_market(2, market_id=3),
+            ]
+        ),
+        market_repository=market_repository,
+        realtor_repository=realtor_repository,
+    )
+
+    result = await service.get_all(page=1, page_size=25)
+
+    assert market_repository.get_by_ids_calls == [{2, 3}]
+    assert realtor_repository.get_by_ids_calls == []
+    assert [r.realtor_details for r in result.data] == [[], []]
+
+
+@pytest.mark.asyncio
+async def test_market_lookup_skipped_when_no_row_has_a_market():
+    market_repository, realtor_repository = _realtor_repositories()
+    service = GetUnderwritingService(
+        FakeListRepository([_underwriting_in_market(1, market_id=None)]),
+        market_repository=market_repository,
+        realtor_repository=realtor_repository,
+    )
+
+    result = await service.get_all(page=1, page_size=25)
+
+    assert market_repository.get_by_ids_calls == []
+    assert result.data[0].realtor_details == []
