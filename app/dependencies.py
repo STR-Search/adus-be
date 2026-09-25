@@ -5,6 +5,7 @@ from starlette.requests import Request
 
 from app.core.clerk import verify_clerk_token
 from app.core.database import get_db
+from app.core.profiling import timed
 from app.users.models.user import User
 from app.users.repositories.api_key_repository import ApiKeyRepository
 from app.users.repositories.user_repository import UserRepository
@@ -43,11 +44,12 @@ async def get_current_user(
     if request.url.path in PUBLIC_PATHS:
         return None
 
-    api_key = request.headers.get(API_KEY_HEADER)
-    if api_key:
-        return await _user_from_api_key(api_key, db)
+    with timed("auth"):
+        api_key = request.headers.get(API_KEY_HEADER)
+        if api_key:
+            return await _user_from_api_key(api_key, db)
 
-    return await _user_from_clerk_token(request, db)
+        return await _user_from_clerk_token(request, db)
 
 
 async def _user_from_api_key(api_key: str, db: AsyncSession) -> User:

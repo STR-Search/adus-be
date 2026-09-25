@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Any
 
 from app.core.logger import logger
+from app.core.profiling import timed
 from app.core.reference_data.schemas import ReferenceDataOption
 from app.iron_bank.enums import SortOrder, UnderwritingSortBy
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
@@ -298,8 +299,10 @@ class GetUnderwritingService:
             sort_by=sort_by,
             sort_order=sort_order,
         )
-        results = [self._to_result(underwriting) for underwriting in items]
-        await self._hydrate_automated_zillow(items, results)
+        with timed("service.to_result"):
+            results = [self._to_result(underwriting) for underwriting in items]
+        with timed("service.hydrate_zillow"):
+            await self._hydrate_automated_zillow(items, results)
         await self._enrich(results)
         return GetUnderwritingsResult(
             data=results,
@@ -353,9 +356,12 @@ class GetUnderwritingService:
         """Post-read enrichment shared by the single-get, list, and simulation
         paths: reference-data labels, resolved analyst/approver users, and the
         market's realtor details."""
-        await self._populate_reference_labels(results)
-        await self._populate_user_refs(results)
-        await self._populate_realtor_details(results)
+        with timed("enrich.reference_labels"):
+            await self._populate_reference_labels(results)
+        with timed("enrich.user_refs"):
+            await self._populate_user_refs(results)
+        with timed("enrich.realtor_details"):
+            await self._populate_realtor_details(results)
 
     async def _populate_user_refs(self, results: list[GetUnderwritingResult]) -> None:
         """Resolve ``analyst`` / ``approver`` / ``owner`` from their ``*_id``s.

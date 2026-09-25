@@ -56,6 +56,11 @@ class Config(BaseSettings):
     # process-level cache. 0 disables the shared cache entirely.
     REFERENCE_DATA_CACHE_TTL_SECONDS: int = 300
 
+    # Per-request latency profiling (app/core/profiling.py): one
+    # `request.profile` log line per request plus a Server-Timing header with
+    # span and DB round-trip timings. Off by default; enable per environment.
+    PROFILING_ENABLED: bool = False
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"

@@ -7,6 +7,7 @@ from sqlalchemy import String, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.profiling import timed
 from app.iron_bank.enums import DealStatus, SortOrder, UnderwritingSortBy
 from app.iron_bank.models import (
     Underwriting,
@@ -321,9 +322,12 @@ class UnderwritingRepository:
         ):
             query = query.where(condition)
 
-        total: int = (
-            await self.db.execute(select(func.count()).select_from(query.subquery()))
-        ).scalar_one()
+        with timed("repo.count"):
+            total: int = (
+                await self.db.execute(
+                    select(func.count()).select_from(query.subquery())
+                )
+            ).scalar_one()
         pages = math.ceil(total / page_size) if page_size > 0 else 0
 
         # Sort in-DB before pagination so ordering spans the whole result set,
@@ -341,19 +345,21 @@ class UnderwritingRepository:
             else sort_column.asc().nullslast()
         )
 
-        result = await self.db.execute(
-            query.options(
-                selectinload(Underwriting.detail),
-                selectinload(Underwriting.taxes),
-                selectinload(Underwriting.optimization_items),
-                selectinload(Underwriting.operating_expenses),
-                selectinload(Underwriting.comp_set),
+        # Includes the five selectinload round trips, not just the page query.
+        with timed("repo.page_with_children"):
+            result = await self.db.execute(
+                query.options(
+                    selectinload(Underwriting.detail),
+                    selectinload(Underwriting.taxes),
+                    selectinload(Underwriting.optimization_items),
+                    selectinload(Underwriting.operating_expenses),
+                    selectinload(Underwriting.comp_set),
+                )
+                .order_by(primary, Underwriting.id.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
             )
-            .order_by(primary, Underwriting.id.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        )
-        items = list(result.scalars().all())
+            items = list(result.scalars().all())
         return items, total, pages
 
     async def get_simulation_inputs(
