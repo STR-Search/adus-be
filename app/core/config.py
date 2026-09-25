@@ -52,6 +52,10 @@ class Config(BaseSettings):
     # to override either default, e.g. LOG_LEVEL=DEBUG to debug prod.
     LOG_LEVEL: str = ""
 
+    # How long reference-data option reads (reference.enum_options) stay in the
+    # process-level cache. 0 disables the shared cache entirely.
+    REFERENCE_DATA_CACHE_TTL_SECONDS: int = 300
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"
