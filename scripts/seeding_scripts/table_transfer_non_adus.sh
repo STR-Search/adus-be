@@ -4,28 +4,27 @@
 #   export SOURCE_DATABASE_URL=postgresql://postgres.<source-ref>:<password>@<pooler-host>:5432/postgres
 #   export DEV_DATABASE_URL=postgresql://postgres.<dev-ref>:<password>@<pooler-host>:5432/postgres
 #   PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH" \
-#     ./scripts/seeding_scripts/table_transfer.sh --schema iron_bank \
-#       --tables underwritings,uw_comp_sets,uw_details,uw_operating_expenses,uw_optimization_items,uw_taxes
+#     ./scripts/seeding_scripts/table_transfer_non_adus.sh --schema public \
+#       --tables --all
 
 set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: table_transfer.sh --schema SCHEMA --tables TABLE[,TABLE...]
-       table_transfer.sh --schema SCHEMA --tables --all
+Usage: table_transfer_non_adus.sh --schema SCHEMA --tables TABLE[,TABLE...]
+       table_transfer_non_adus.sh --schema SCHEMA --tables --all
 
 Copy data from SOURCE_DATABASE_URL to DEV_DATABASE_URL.
-Supported schemas: users, markets, reference, iron_bank.
+Configure schemas and tables in schema_tables() before transferring data.
+Configured schemas: comps, zillow, public.
 --all uses the maintained table catalog in this script (not DB discovery).
 Both options are required. Explicit tables are copied in the supplied order;
-list referenced/parent tables first. The public schema is not allowed.
+list referenced/parent tables first.
 Existing destination data is truncated with CASCADE, which can also
 empty dependent tables outside this list. Destination tables must exist.
 
-Examples:
-  ./scripts/seeding_scripts/table_transfer.sh --schema users --tables --all
-  ./scripts/seeding_scripts/table_transfer.sh --schema iron_bank \
-    --tables underwritings,uw_comp_sets,uw_details,uw_operating_expenses,uw_optimization_items,uw_taxes
+Example:
+  ./scripts/seeding_scripts/table_transfer_non_adus.sh --schema public --tables --all
 USAGE
 }
 
@@ -34,42 +33,55 @@ fail() {
   exit 1
 }
 
-# Maintained application-table catalog, in parent-before-child order.
-# Add new tables here when migrations introduce them. Never copy alembic_version.
-# Cross-schema prerequisites must already be loaded: users before markets,
-# and markets/users plus externally provisioned Zillow data before iron_bank.
+# Other teams' table catalog, populated before each transfer as needed.
+# List referenced/parent tables before child tables. Add a case for each schema.
+# Cross-schema prerequisites must already exist in the destination.
+# Keep migration bookkeeping tables (such as alembic_version) out of this list.
 schema_tables() {
   case "$1" in
-    users)
-      SCHEMA_TABLES=(users api_keys saved_searches)
-      ;;
-    markets)
+    comps)
       SCHEMA_TABLES=(
-        construction_costs_amenities
-        construction_costs_remodeling
-        realtors
-        market_keys_master
-        opex_by_bedrooms
-        opex_by_size
-        str_cribs_fee_details
+        comps_tags
+        comps_properties
       )
       ;;
-    reference)
-      SCHEMA_TABLES=(enum_options)
-      ;;
-    iron_bank)
+    zillow)
       SCHEMA_TABLES=(
-        underwritings
-        uw_comp_sets
-        uw_details
-        uw_operating_expenses
-        uw_optimization_items
-        uw_taxes
-        jobs
+        filter_templates
+        scheduled_presets
+        preset_filters
+        template_filters
+        scheduled_listings
+        scheduled_listing_details
+        scheduled_runs
+        sold_listings
+        sold_listing_details
       )
       ;;
-    *) fail "Unknown schema: $1. Supported: users, markets, reference, iron_bank" ;;
+    public)
+      SCHEMA_TABLES=(
+        processing_executions
+        base_table_data
+        cleaned_data
+        market_run_exceptions
+        market_run_output
+        run_tracking
+        market_scrape_state
+        run_url_results
+        scrape_cycle_state
+        sp_profiles
+        sp_announcements
+        sp_comments
+        sp_flags
+        sp_notes
+        sp_promos
+        sp_quiz_scores
+      )
+      ;;
+    # Add other schema cases here, each assigning SCHEMA_TABLES.
+    *) fail "Unknown schema: $1. Configure it in schema_tables() first" ;;
   esac
+  [[ ${#SCHEMA_TABLES[@]} -gt 0 ]] || fail "No tables configured for schema: $1. Populate schema_tables() first"
 }
 
 SCHEMA=""
@@ -104,7 +116,6 @@ done
 
 [[ -n "$SCHEMA" && -n "$TABLE_LIST" ]] || fail "--schema and --tables are required (see --help)"
 [[ "$SCHEMA" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || fail "Invalid schema name: $SCHEMA"
-[[ "$SCHEMA" != public ]] || fail "The public schema is owned by another organization"
 schema_tables "$SCHEMA"
 if [[ "$TABLE_LIST" == --all ]]; then
   TABLES=("${SCHEMA_TABLES[@]}")
