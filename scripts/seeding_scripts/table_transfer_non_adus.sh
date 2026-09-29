@@ -61,21 +61,21 @@ schema_tables() {
     public)
       SCHEMA_TABLES=(
         processing_executions
-        base_table_data
-        cleaned_data
-        market_run_exceptions
-        market_run_output
-        run_tracking
-        market_scrape_state
-        run_url_results
-        scrape_cycle_state
-        sp_profiles
-        sp_announcements
-        sp_comments
-        sp_flags
-        sp_notes
-        sp_promos
-        sp_quiz_scores
+        # base_table_data
+        # cleaned_data
+        # market_run_exceptions
+        # market_run_output
+        # run_tracking
+        # market_scrape_state
+        # run_url_results
+        # scrape_cycle_state
+        # sp_profiles
+        # sp_announcements
+        # sp_comments
+        # sp_flags
+        # sp_notes
+        # sp_promos
+        # sp_quiz_scores
       )
       ;;
     # Add other schema cases here, each assigning SCHEMA_TABLES.
