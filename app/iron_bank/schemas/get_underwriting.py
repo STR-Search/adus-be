@@ -12,12 +12,12 @@ from pydantic import (
     model_validator,
 )
 
+from app.core.enums import PageSize
 from app.core.reference_data.schemas import ReferenceDataOption
 from app.core.serialization import PlainDecimal
 from app.iron_bank.enums import (
     DealStatus,
     OpexKeyedOn,
-    PageSize,
     SortOrder,
     USState,
     UnderwritingSortBy,
