@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.enums import PageSize
 from app.markets.controllers.construction_controller import (
     ConstructionAmenitiesController,
     ConstructionRemodelingController,
@@ -146,7 +147,7 @@ async def health_check():
 @router.get("/markets/", tags=["markets"])
 async def get_markets_paginated(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: PageSize = Query(PageSize.SMALL),
     market_status: MarketStatus | None = Query(None),
     analyst_owner_id: int | None = Query(None),
     search: str | None = Query(None),
@@ -350,7 +351,7 @@ async def delete_remodeling(
 @router.get("/opex/bedrooms/", tags=["opex"])
 async def get_bedrooms_paginated(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: PageSize = Query(PageSize.SMALL),
     market_id: int | None = Query(None),
     market_slug: str | None = Query(None),
     bedrooms: int | None = Query(None),
@@ -404,7 +405,7 @@ async def delete_bedrooms(
 @router.get("/opex/size/", tags=["opex"])
 async def get_size_paginated(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: PageSize = Query(PageSize.SMALL),
     market_id: int | None = Query(None),
     market_slug: str | None = Query(None),
     sqft: int | None = Query(None),

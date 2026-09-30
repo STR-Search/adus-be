@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logger import logger
+from app.markets.models.market import MarketKeysMaster
 from app.markets.models.opex import OpexByBedrooms, OpexBySize
 
 
@@ -28,7 +29,12 @@ class OpexByBedroomsRepository:
         market_id: int | None = None,
         bedrooms: int | None = None,
     ) -> tuple[list[OpexByBedrooms], int, int]:
-        query = select(OpexByBedrooms).where(OpexByBedrooms.deleted_at.is_(None))
+        # Joined only to sort by market slug, which is what the dashboard displays.
+        query = (
+            select(OpexByBedrooms)
+            .outerjoin(MarketKeysMaster, OpexByBedrooms.market_id == MarketKeysMaster.id)
+            .where(OpexByBedrooms.deleted_at.is_(None))
+        )
         if market_id is not None:
             query = query.where(OpexByBedrooms.market_id == market_id)
         if bedrooms is not None:
@@ -40,7 +46,11 @@ class OpexByBedroomsRepository:
         pages = math.ceil(total / page_size) if page_size > 0 else 0
 
         result = await self.db.execute(
-            query.order_by(OpexByBedrooms.id)
+            query.order_by(
+                MarketKeysMaster.market_slug.asc().nulls_last(),
+                OpexByBedrooms.bedrooms.asc().nulls_last(),
+                OpexByBedrooms.id,
+            )
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -135,7 +145,12 @@ class OpexBySizeRepository:
         market_id: int | None = None,
         sqft: int | None = None,
     ) -> tuple[list[OpexBySize], int, int]:
-        query = select(OpexBySize).where(OpexBySize.deleted_at.is_(None))
+        # Joined only to sort by market slug, which is what the dashboard displays.
+        query = (
+            select(OpexBySize)
+            .outerjoin(MarketKeysMaster, OpexBySize.market_id == MarketKeysMaster.id)
+            .where(OpexBySize.deleted_at.is_(None))
+        )
         if market_id is not None:
             query = query.where(OpexBySize.market_id == market_id)
         if sqft is not None:
@@ -147,7 +162,11 @@ class OpexBySizeRepository:
         pages = math.ceil(total / page_size) if page_size > 0 else 0
 
         result = await self.db.execute(
-            query.order_by(OpexBySize.id)
+            query.order_by(
+                MarketKeysMaster.market_slug.asc().nulls_last(),
+                OpexBySize.sqft.asc().nulls_last(),
+                OpexBySize.id,
+            )
             .offset((page - 1) * page_size)
             .limit(page_size)
         )

@@ -9,6 +9,13 @@ from app.markets.enums import MarketStatus
 from app.markets.models.market import MarketKeysMaster
 
 
+# Alphabetical by name, case-insensitive; id breaks ties so pagination is stable.
+_NAME_ORDER = (
+    func.lower(MarketKeysMaster.market_name).asc().nulls_last(),
+    MarketKeysMaster.id,
+)
+
+
 class MarketRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -99,7 +106,7 @@ class MarketRepository:
         pages = math.ceil(total / page_size) if page_size > 0 else 0
 
         result = await self.db.execute(
-            query.order_by(MarketKeysMaster.id)
+            query.order_by(*_NAME_ORDER)
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -119,7 +126,7 @@ class MarketRepository:
         query = select(MarketKeysMaster).where(MarketKeysMaster.deleted_at.is_(None))
         if market_status is not None:
             query = query.where(MarketKeysMaster.market_status == market_status)
-        result = await self.db.execute(query.order_by(MarketKeysMaster.id))
+        result = await self.db.execute(query.order_by(*_NAME_ORDER))
         return list(result.scalars().all())
 
     async def delete(self, market_id: int) -> bool:
