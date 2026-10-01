@@ -109,6 +109,20 @@ def _property_pending_condition(property_pending: bool | None) -> list:
     return [column.is_(True) if property_pending else column.isnot(True)]
 
 
+def _deal_pitch_condition(has_deal_pitch: bool | None) -> list:
+    """WHERE condition for whether ``deal_pitch`` (the AI Overview) is filled in.
+
+    The column is free text with no server-side normalization, so a blank or
+    whitespace-only value counts as missing alongside NULL.
+    """
+    if has_deal_pitch is None:
+        return []
+    column = Underwriting.deal_pitch
+    if has_deal_pitch:
+        return [func.trim(column) != ""]
+    return [or_(column.is_(None), func.trim(column) == "")]
+
+
 def _value_set_conditions(tags, allowed_fields: tuple[str, ...], kind: str) -> list:
     """WHERE conditions for "one column, any of these values" tag filters.
 
@@ -221,6 +235,7 @@ class UnderwritingRepository:
         owner_id: int | None = None,
         source: str | None = None,
         property_pending: bool | None = None,
+        has_deal_pitch: bool | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
@@ -320,6 +335,7 @@ class UnderwritingRepository:
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
             *_property_pending_condition(property_pending),
+            *_deal_pitch_condition(has_deal_pitch),
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
             *_numeric_tag_conditions(numeric_tags),
@@ -377,6 +393,7 @@ class UnderwritingRepository:
         owner_id: int | None = None,
         source: str | None = None,
         property_pending: bool | None = None,
+        has_deal_pitch: bool | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
@@ -511,6 +528,7 @@ class UnderwritingRepository:
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
             *_property_pending_condition(property_pending),
+            *_deal_pitch_condition(has_deal_pitch),
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
             *_numeric_tag_conditions(numeric_tags),
