@@ -4,7 +4,6 @@ from decimal import Decimal
 from fastapi import HTTPException
 
 from app.core.logger import logger
-from app.core.profiling import timed
 from app.iron_bank.enums import SortOrder, UnderwritingSortBy
 from app.iron_bank.schemas.get_underwriting import (
     BooleanTagOptionsResult,
@@ -183,14 +182,13 @@ class GetUnderwritingController:
             interest_rate is not None or down_payment_pct is not None
         ) and self.simulation_service is not None
         try:
-            with timed("controller.get_underwritings"):
-                if simulating:
-                    return await self.simulation_service.get_all_simulated(
-                        **filters,
-                        interest_rate=interest_rate,
-                        down_payment_pct=down_payment_pct,
-                    )
-                return await self.service.get_all(**filters)
+            if simulating:
+                return await self.simulation_service.get_all_simulated(
+                    **filters,
+                    interest_rate=interest_rate,
+                    down_payment_pct=down_payment_pct,
+                )
+            return await self.service.get_all(**filters)
         except Exception as e:
             logger.error(
                 "iron_bank.get_underwritings.error",
