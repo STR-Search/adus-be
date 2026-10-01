@@ -341,6 +341,7 @@ class UnderwritingRepository:
             else sort_column.asc().nullslast()
         )
 
+        # Includes the five selectinload round trips, not just the page query.
         result = await self.db.execute(
             query.options(
                 selectinload(Underwriting.detail),

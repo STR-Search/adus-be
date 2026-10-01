@@ -1,4 +1,4 @@
-from enum import IntEnum, StrEnum
+from enum import StrEnum
 
 
 class DealStatus(StrEnum):
@@ -103,12 +103,6 @@ class UnderwritingSortBy(StrEnum):
 class SortOrder(StrEnum):
     ASC = "asc"
     DESC = "desc"
-
-
-class PageSize(IntEnum):
-    SMALL = 25
-    MEDIUM = 50
-    LARGE = 100
 
 
 class OpexKeyedOn(StrEnum):

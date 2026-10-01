@@ -624,3 +624,45 @@ def test_datetime_ties_break_by_id_desc_in_both_directions():
         assert _sorted_ids(
             rows, sort_by=UnderwritingSortBy.CREATED_AT, sort_order=order
         ) == [5, 3, 1]
+
+
+# --- Enrichment ------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_simulated_page_resolves_realtor_details_in_one_market_query():
+    """The simulated page shares _enrich, so realtors batch the same way."""
+
+    class FakeMarketRepository:
+        def __init__(self):
+            self.calls = []
+
+        async def get_by_ids(self, market_ids):
+            self.calls.append(set(market_ids))
+            return [SimpleNamespace(id=5, realtor_ids=[2, 1])]
+
+        async def get_by_id(self, market_id):
+            raise AssertionError("markets must be fetched in one get_by_ids call")
+
+    class FakeRealtorRepository:
+        async def get_by_ids(self, record_ids):
+            return [
+                SimpleNamespace(id=i, name=None, email=None, phone=None, brokerage=None)
+                for i in record_ids
+            ]
+
+    market_repository = FakeMarketRepository()
+    service = SimulateUnderwritingsService(
+        FakeSimulationRepository(
+            [_row(id=1), _row(id=2)],
+            {1: _item(id=1, market_id=5), 2: _item(id=2, market_id=6)},
+        ),
+        market_repository=market_repository,
+        realtor_repository=FakeRealtorRepository(),
+    )
+
+    result = await _get_all_simulated(service, interest_rate=Decimal("0"))
+
+    assert market_repository.calls == [{5, 6}]
+    by_id = {row.id: [d.id for d in row.realtor_details] for row in result.data}
+    assert by_id == {1: [2, 1], 2: []}
