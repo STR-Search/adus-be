@@ -229,6 +229,7 @@ _RANGE_PAIRS = (
     ("min_bedrooms", "max_bedrooms"),
     ("min_purchase_price", "max_purchase_price"),
     ("min_total_oop", "max_total_oop"),
+    ("min_budget_to_pp", "max_budget_to_pp"),
     ("min_l_cash_on_cash", "max_l_cash_on_cash"),
     ("min_m_cash_on_cash", "max_m_cash_on_cash"),
     ("min_h_cash_on_cash", "max_h_cash_on_cash"),
@@ -269,6 +270,9 @@ class GetUnderwritingsQuery(BaseModel):
     max_purchase_price: Decimal | None = Field(None, ge=0)
     min_total_oop: Decimal | None = Field(None, ge=0)
     max_total_oop: Decimal | None = Field(None, ge=0)
+    # Fractions like prr (0.30 = 30%): total OOP over purchase price.
+    min_budget_to_pp: Decimal | None = Field(None, ge=0)
+    max_budget_to_pp: Decimal | None = Field(None, ge=0)
     min_l_cash_on_cash: Decimal | None = None
     max_l_cash_on_cash: Decimal | None = None
     min_m_cash_on_cash: Decimal | None = None

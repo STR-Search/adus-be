@@ -67,6 +67,7 @@ def _row(
     l_cash_on_cash=Decimal("0.5"),
     m_cash_on_cash=Decimal("0.7"),
     h_cash_on_cash=Decimal("0.9"),
+    budget_to_pp=Decimal("0.3"),
     optimization_total=Decimal("7000"),
     operating_expense_total=Decimal("1000"),
     purchase_details="default",
@@ -89,6 +90,7 @@ def _row(
         l_cash_on_cash=l_cash_on_cash,
         m_cash_on_cash=m_cash_on_cash,
         h_cash_on_cash=h_cash_on_cash,
+        budget_to_pp=budget_to_pp,
         optimization_total=optimization_total,
         operating_expense_total=operating_expense_total,
         purchase_details=(
@@ -402,6 +404,47 @@ async def test_flagged_rows_below_the_stored_bound_are_excluded(scenario):
 
     assert result.total == 1
     assert [row.id for row in result.data] == [1]
+
+
+@pytest.mark.asyncio
+async def test_filters_on_simulated_budget_to_pp():
+    # Stored budget_to_pp is 0.3 on both; the 10% down override drops id=1 to
+    # 0.2 (header math), while id=2's larger optimization total keeps it 0.3.
+    rows = [_row(id=1), _row(id=2, optimization_total=Decimal("17000"))]
+    service, repository = _service(rows, {1: _item(id=1), 2: _item(id=2)})
+
+    result = await _get_all_simulated(
+        service,
+        interest_rate=Decimal("0"),
+        down_payment_pct=Decimal("0.1"),
+        max_budget_to_pp=Decimal("0.25"),
+    )
+
+    assert [row.id for row in result.data] == [1]
+    assert result.data[0].budget_to_pp == Decimal("0.2000")
+    assert "max_budget_to_pp" not in repository.sim_filters
+
+
+@pytest.mark.asyncio
+async def test_flagged_rows_are_bounded_on_their_stored_budget_to_pp():
+    rows = [
+        _row(id=1),  # simulated: 0.2
+        _row(id=2, purchase_details=None, budget_to_pp=Decimal("0.5")),
+        _row(id=3, purchase_details=None, budget_to_pp=Decimal("0.1")),
+    ]
+    service, _ = _service(rows, {i: _item(id=i) for i in (1, 2, 3)})
+
+    result = await _get_all_simulated(
+        service,
+        interest_rate=Decimal("0"),
+        down_payment_pct=Decimal("0.1"),
+        min_budget_to_pp=Decimal("0.15"),
+        sort_by=UnderwritingSortBy.BUDGET_TO_PP,
+        sort_order=SortOrder.DESC,
+    )
+
+    assert [row.id for row in result.data] == [2, 1]
+    assert result.data[0].simulated is False
 
 
 @pytest.mark.asyncio
