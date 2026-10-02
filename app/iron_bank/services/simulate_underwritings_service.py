@@ -45,8 +45,10 @@ class _SimulatedRow:
     # row instead of including-and-flagging it.
     m_cash_on_cash: Decimal | None = None
     h_cash_on_cash: Decimal | None = None
-    # Simulated-only outputs, overlaid onto the hydrated page results.
+    # Displayed, filtered and sorted like the CoC figures; a flagged row keeps
+    # its stored value for the same include-and-flag reason.
     budget_to_pp: Decimal | None = None
+    # Simulated-only outputs, overlaid onto the hydrated page results.
     purchase_details: dict[str, Any] | None = None
     forecasted_revenue: dict[str, Any] | None = None
     y1_coc_incl_tax_savings: dict[str, Any] | None = None
@@ -93,11 +95,14 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         owner_id: int | None = None,
         source: str | None = None,
         property_pending: bool | None = None,
+        has_deal_pitch: bool | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
         min_total_oop: Decimal | None = None,
         max_total_oop: Decimal | None = None,
+        min_budget_to_pp: Decimal | None = None,
+        max_budget_to_pp: Decimal | None = None,
         min_l_cash_on_cash: Decimal | None = None,
         max_l_cash_on_cash: Decimal | None = None,
         min_m_cash_on_cash: Decimal | None = None,
@@ -131,6 +136,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             owner_id=owner_id,
             source=source,
             property_pending=property_pending,
+            has_deal_pitch=has_deal_pitch,
             search=search,
             min_purchase_price=min_purchase_price,
             max_purchase_price=max_purchase_price,
@@ -154,6 +160,9 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             row
             for row in simulated_rows
             if self._passes_bounds(row.total_oop, min_total_oop, max_total_oop)
+            and self._passes_bounds(
+                row.budget_to_pp, min_budget_to_pp, max_budget_to_pp
+            )
             and self._passes_bounds(
                 row.l_cash_on_cash, min_l_cash_on_cash, max_l_cash_on_cash
             )
@@ -217,6 +226,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             l_cash_on_cash=row.l_cash_on_cash,
             m_cash_on_cash=row.m_cash_on_cash,
             h_cash_on_cash=row.h_cash_on_cash,
+            budget_to_pp=row.budget_to_pp,
             **self._sort_passthroughs(row),
         )
 

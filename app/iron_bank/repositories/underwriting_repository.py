@@ -109,6 +109,20 @@ def _property_pending_condition(property_pending: bool | None) -> list:
     return [column.is_(True) if property_pending else column.isnot(True)]
 
 
+def _deal_pitch_condition(has_deal_pitch: bool | None) -> list:
+    """WHERE condition for whether ``deal_pitch`` (the AI Overview) is filled in.
+
+    The column is free text with no server-side normalization, so a blank or
+    whitespace-only value counts as missing alongside NULL.
+    """
+    if has_deal_pitch is None:
+        return []
+    column = Underwriting.deal_pitch
+    if has_deal_pitch:
+        return [func.trim(column) != ""]
+    return [or_(column.is_(None), func.trim(column) == "")]
+
+
 def _value_set_conditions(tags, allowed_fields: tuple[str, ...], kind: str) -> list:
     """WHERE conditions for "one column, any of these values" tag filters.
 
@@ -221,11 +235,14 @@ class UnderwritingRepository:
         owner_id: int | None = None,
         source: str | None = None,
         property_pending: bool | None = None,
+        has_deal_pitch: bool | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
         min_total_oop: Decimal | None = None,
         max_total_oop: Decimal | None = None,
+        min_budget_to_pp: Decimal | None = None,
+        max_budget_to_pp: Decimal | None = None,
         min_l_cash_on_cash: Decimal | None = None,
         max_l_cash_on_cash: Decimal | None = None,
         min_m_cash_on_cash: Decimal | None = None,
@@ -290,6 +307,10 @@ class UnderwritingRepository:
             query = query.where(Underwriting.total_oop >= min_total_oop)
         if max_total_oop is not None:
             query = query.where(Underwriting.total_oop <= max_total_oop)
+        if min_budget_to_pp is not None:
+            query = query.where(Underwriting.budget_to_pp >= min_budget_to_pp)
+        if max_budget_to_pp is not None:
+            query = query.where(Underwriting.budget_to_pp <= max_budget_to_pp)
         if min_l_cash_on_cash is not None:
             query = query.where(Underwriting.l_cash_on_cash >= min_l_cash_on_cash)
         if max_l_cash_on_cash is not None:
@@ -314,6 +335,7 @@ class UnderwritingRepository:
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
             *_property_pending_condition(property_pending),
+            *_deal_pitch_condition(has_deal_pitch),
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
             *_numeric_tag_conditions(numeric_tags),
@@ -371,6 +393,7 @@ class UnderwritingRepository:
         owner_id: int | None = None,
         source: str | None = None,
         property_pending: bool | None = None,
+        has_deal_pitch: bool | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
@@ -397,9 +420,9 @@ class UnderwritingRepository:
         unconditionally — recalculating them is wasted work.
 
         Only filters that simulation does NOT change are applied here; the
-        total_oop / l_/m_/h_cash_on_cash bounds are applied by the service in Python
-        against the simulated values (filtering them in SQL would compare
-        stored values and wrongly include/exclude rows).
+        total_oop / budget_to_pp / l_/m_/h_cash_on_cash bounds are applied by the
+        service in Python against the simulated values (filtering them in SQL
+        would compare stored values and wrongly include/exclude rows).
         """
         query = (
             select(
@@ -409,6 +432,7 @@ class UnderwritingRepository:
                 Underwriting.l_cash_on_cash,
                 Underwriting.m_cash_on_cash,
                 Underwriting.h_cash_on_cash,
+                Underwriting.budget_to_pp,
                 Underwriting.optimization_total,
                 Underwriting.operating_expense_total,
                 # Read by the service to skip legacy sheet deals.
@@ -504,6 +528,7 @@ class UnderwritingRepository:
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
             *_property_pending_condition(property_pending),
+            *_deal_pitch_condition(has_deal_pitch),
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
             *_numeric_tag_conditions(numeric_tags),

@@ -61,11 +61,28 @@ def test_cash_on_cash_bounds_are_independent_of_each_other(scenario):
     assert getattr(query, f"max_{scenario}_cash_on_cash") is None
 
 
+def test_budget_to_pp_bounds_reject_inverted_range():
+    with pytest.raises(ValidationError) as excinfo:
+        GetUnderwritingsQuery(
+            min_budget_to_pp=Decimal("0.5"), max_budget_to_pp=Decimal("0.2")
+        )
+
+    assert "min_budget_to_pp must be less than or equal to max_budget_to_pp" in str(
+        excinfo.value
+    )
+
+
+def test_budget_to_pp_bounds_reject_negative_values():
+    with pytest.raises(ValidationError):
+        GetUnderwritingsQuery(min_budget_to_pp=Decimal("-0.1"))
+
+
 @pytest.mark.parametrize(
     "value, expected",
     [
         ("m_cash_on_cash", UnderwritingSortBy.M_CASH_ON_CASH),
         ("h_cash_on_cash", UnderwritingSortBy.H_CASH_ON_CASH),
+        ("budget_to_pp", UnderwritingSortBy.BUDGET_TO_PP),
     ],
 )
 def test_sort_by_accepts_mid_and_high_cash_on_cash(value, expected):

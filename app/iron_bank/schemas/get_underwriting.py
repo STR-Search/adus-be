@@ -229,6 +229,7 @@ _RANGE_PAIRS = (
     ("min_bedrooms", "max_bedrooms"),
     ("min_purchase_price", "max_purchase_price"),
     ("min_total_oop", "max_total_oop"),
+    ("min_budget_to_pp", "max_budget_to_pp"),
     ("min_l_cash_on_cash", "max_l_cash_on_cash"),
     ("min_m_cash_on_cash", "max_m_cash_on_cash"),
     ("min_h_cash_on_cash", "max_h_cash_on_cash"),
@@ -263,12 +264,17 @@ class GetUnderwritingsQuery(BaseModel):
     owner_id: int | None = None
     source: UnderwritingSource | None = None
     property_pending: bool | None = None
+    # Whether deal_pitch (the AI Overview) holds non-blank text; omit to ignore.
+    has_deal_pitch: bool | None = None
     # free-text match on address/city/state; numeric terms also match sheet_number
     search: str | None = Field(None, max_length=100)
     min_purchase_price: Decimal | None = Field(None, ge=0)
     max_purchase_price: Decimal | None = Field(None, ge=0)
     min_total_oop: Decimal | None = Field(None, ge=0)
     max_total_oop: Decimal | None = Field(None, ge=0)
+    # Fractions like prr (0.30 = 30%): total OOP over purchase price.
+    min_budget_to_pp: Decimal | None = Field(None, ge=0)
+    max_budget_to_pp: Decimal | None = Field(None, ge=0)
     min_l_cash_on_cash: Decimal | None = None
     max_l_cash_on_cash: Decimal | None = None
     min_m_cash_on_cash: Decimal | None = None
