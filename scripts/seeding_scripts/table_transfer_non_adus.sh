@@ -65,17 +65,10 @@ schema_tables() {
         # cleaned_data
         # market_run_exceptions
         # market_run_output
-        # run_tracking
-        # market_scrape_state
+        run_tracking
+        market_scrape_state
         # run_url_results
-        # scrape_cycle_state
-        # sp_profiles
-        # sp_announcements
-        # sp_comments
-        # sp_flags
-        # sp_notes
-        # sp_promos
-        # sp_quiz_scores
+        scrape_cycle_state
       )
       ;;
     # Add other schema cases here, each assigning SCHEMA_TABLES.

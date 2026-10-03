@@ -9,8 +9,8 @@
 set -euo pipefail
 
 SCHEMA="public"
-TABLE="cleaned_data"
-BATCH_SIZE=50000
+TABLE="market_run_output"
+BATCH_SIZE=20000
 RESUME=false
 
 usage() {
