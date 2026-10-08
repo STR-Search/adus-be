@@ -107,3 +107,32 @@ def test_unknown_state_code_is_rejected():
     response = build_client().get("/iron-bank/underwritings?state=ZZ")
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        (
+            "deal_status=analyst_started&deal_status=analyst_completed",
+            ["analyst_started", "analyst_completed"],
+        ),
+        (
+            "deal_status=analyst_started,analyst_completed",
+            ["analyst_started", "analyst_completed"],
+        ),
+        ("deal_status=analyst_started", ["analyst_started"]),
+        ("deal_status=", None),
+        ("", None),
+    ],
+)
+def test_deal_status_reaches_the_controller_as_a_list(query, expected):
+    response = build_client().get(f"/iron-bank/underwritings?{query}")
+
+    assert response.status_code == 200
+    assert captured["deal_statuses"] == expected
+
+
+def test_unknown_deal_status_is_rejected():
+    response = build_client().get("/iron-bank/underwritings?deal_status=bogus")
+
+    assert response.status_code == 422

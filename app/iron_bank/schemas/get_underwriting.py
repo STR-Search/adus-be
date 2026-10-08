@@ -258,7 +258,8 @@ class GetUnderwritingsQuery(BaseModel):
     max_bedrooms: int | None = Field(None, ge=0)
     market_ids: list[int] | None = Field(None, alias="market_id")
     states: list[USState] | None = Field(None, alias="state")
-    deal_status: DealStatus | None = None
+    # Accepts repeated or comma-separated statuses; they OR together.
+    deal_statuses: list[DealStatus] | None = Field(None, alias="deal_status")
     analyst_id: int | None = None
     approver_id: int | None = None
     owner_id: int | None = None
@@ -343,9 +344,9 @@ class GetUnderwritingsQuery(BaseModel):
     interest_rate: Decimal | None = Field(None, ge=0, lt=1)
     down_payment_pct: Decimal | None = Field(None, ge=0, le=1)
 
-    @field_validator("market_ids", mode="before")
+    @field_validator("market_ids", "deal_statuses", mode="before")
     @classmethod
-    def split_market_ids(cls, value):
+    def split_list_params(cls, value):
         return _flatten_repeated_params(value)
 
     @field_validator("states", mode="before")
