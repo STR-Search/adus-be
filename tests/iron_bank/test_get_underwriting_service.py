@@ -278,7 +278,7 @@ async def test_get_all_passes_filters_to_repository():
         page_size=20,
         zpid="12345",
         market_ids=[3, 5],
-        deal_status="template_generated",
+        deal_statuses=["template_generated"],
         analyst_id=7,
         source="legacy_sheet",
         search="fort lauderdale",
@@ -289,7 +289,7 @@ async def test_get_all_passes_filters_to_repository():
     assert requested["page_size"] == 20
     assert requested["zpid"] == "12345"
     assert requested["market_ids"] == [3, 5]
-    assert requested["deal_status"] == "template_generated"
+    assert requested["deal_statuses"] == ["template_generated"]
     assert requested["analyst_id"] == 7
     expected = {
         "page": 1,
