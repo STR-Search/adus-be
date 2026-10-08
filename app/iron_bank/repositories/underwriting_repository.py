@@ -229,7 +229,7 @@ class UnderwritingRepository:
         max_bedrooms: int | None = None,
         market_ids: list[int] | None = None,
         states: list[str] | None = None,
-        deal_status: str | None = None,
+        deal_statuses: list[str] | None = None,
         analyst_id: int | None = None,
         approver_id: int | None = None,
         owner_id: int | None = None,
@@ -278,8 +278,10 @@ class UnderwritingRepository:
                     [str(state).upper() for state in states]
                 )
             )
-        if deal_status is not None:
-            query = query.where(Underwriting.deal_status == deal_status)
+        if deal_statuses:
+            query = query.where(
+                Underwriting.deal_status.in_([str(s) for s in deal_statuses])
+            )
         if source is not None:
             query = query.where(Underwriting.source == source)
         if search is not None and search.strip():
@@ -387,7 +389,7 @@ class UnderwritingRepository:
         max_bedrooms: int | None = None,
         market_ids: list[int] | None = None,
         states: list[str] | None = None,
-        deal_status: str | None = None,
+        deal_statuses: list[str] | None = None,
         analyst_id: int | None = None,
         approver_id: int | None = None,
         owner_id: int | None = None,
@@ -482,8 +484,10 @@ class UnderwritingRepository:
                     [str(state).upper() for state in states]
                 )
             )
-        if deal_status is not None:
-            query = query.where(Underwriting.deal_status == deal_status)
+        if deal_statuses:
+            query = query.where(
+                Underwriting.deal_status.in_([str(s) for s in deal_statuses])
+            )
         if source is not None:
             query = query.where(Underwriting.source == source)
         if search is not None and search.strip():

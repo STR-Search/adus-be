@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from app.iron_bank.enums import USState, UnderwritingSortBy
+from app.iron_bank.enums import DealStatus, USState, UnderwritingSortBy
 from app.iron_bank.models.underwriting import Underwriting
 from app.iron_bank.schemas.get_underwriting import GetUnderwritingsQuery
 
@@ -169,3 +169,45 @@ def test_states_dumps_under_the_field_name():
         USState.FL,
         USState.TN,
     ]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # repeated params, the shape FastAPI hands us for ?deal_status=a&deal_status=b
+        (
+            ["analyst_started", "analyst_completed"],
+            [DealStatus.ANALYST_STARTED, DealStatus.ANALYST_COMPLETED],
+        ),
+        # comma-separated, matching the market_id convention
+        (
+            "analyst_started, analyst_completed",
+            [DealStatus.ANALYST_STARTED, DealStatus.ANALYST_COMPLETED],
+        ),
+        # a single value still works, unchanged from the pre-multi contract
+        ("analyst_started", [DealStatus.ANALYST_STARTED]),
+        # "no filter" normalizes to None so the repository never emits IN ()
+        ("", None),
+        ([], None),
+    ],
+)
+def test_deal_status_accepts_one_or_many_values(raw, expected):
+    assert GetUnderwritingsQuery(deal_status=raw).deal_statuses == expected
+
+
+def test_deal_status_defaults_to_none():
+    assert GetUnderwritingsQuery().deal_statuses is None
+
+
+@pytest.mark.parametrize("raw", ["not_a_status", "analyst_started,not_a_status"])
+def test_deal_status_rejects_unknown_values(raw):
+    with pytest.raises(ValidationError):
+        GetUnderwritingsQuery(deal_status=raw)
+
+
+def test_deal_statuses_dumps_under_the_field_name():
+    """The router splats model_dump() into the controller, which takes
+    deal_statuses — the alias only governs the URL."""
+    assert GetUnderwritingsQuery(deal_status="analyst_started").model_dump()[
+        "deal_statuses"
+    ] == [DealStatus.ANALYST_STARTED]
