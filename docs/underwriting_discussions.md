@@ -24,7 +24,7 @@ reshaping the v1 tables.
 | Subject linking | Each domain owns a link table (`iron_bank.underwriting_threads`). `discussions.threads` never references a domain table. |
 | Threads per underwriting | One `general` thread per underwriting in v1. Other `kind` values later need no table change. |
 | Thread ownership | Per underwriting **row/version**. A duplicated underwriting starts with an empty discussion. |
-| Ordering | `(created_at, id)` with keyset pagination. No linked list. |
+| Ordering | `(created_at, id)`, newest first, with the codebase's page-based pagination (`page`, `PageSize`). No linked list. |
 | Replies | `parent_comment_id` column ships in v1; the API rejects non-null values until replies launch. |
 | Body format | Tiptap / ProseMirror JSON (strict subset), stored in `body jsonb`, with a separate `body_version` column. |
 | Mentions | Derived server-side from the body; stored in `comment_mentions`. Clients never send a mention list. |
@@ -344,6 +344,12 @@ write.
 
 ## 5. Behaviour
 
+**Transactions.** `DiscussionService` and `DiscussionRepository` never commit
+(unlike most repositories in this codebase). The caller commits: the iron_bank
+service for `/underwritings/{id}/comments`, the discussions controller for
+`/comments/{id}`. This is what lets §5.1 create the thread, the link row and
+the first comment atomically on one session.
+
 ### 5.1 Thread creation (lazy)
 
 Reading an underwriting with no thread returns an empty page and creates
@@ -385,9 +391,13 @@ In one transaction:
 
 ### 5.5 List comments
 
-- Newest first, keyset pagination on `(created_at, id)`:
-  `WHERE thread_id = :t AND (created_at, id) < (:c, :i) ORDER BY created_at DESC, id DESC LIMIT :n`.
-- `limit` default 20, max 100. The cursor is an opaque encoding of `(created_at, id)`.
+- Page-based, like every other list endpoint: `page` (1-based) and
+  `page_size: PageSize` (25 / 50 / 100, default 25, from `app/core/enums.py`).
+  `ORDER BY created_at DESC, id DESC OFFSET (page - 1) * page_size LIMIT page_size`.
+- `total` comes from `COUNT(*)` on the thread's comments, **including** deleted
+  placeholders, so `threads.comment_count` (non-deleted only) cannot be used.
+- A comment posted between page loads shifts later pages by one, so page 2 can
+  repeat the last item of page 1. The FE de-duplicates by `id`. See §11.
 - Deleted comments are returned as placeholders (`is_deleted: true`, `body: null`).
 - Users for the page are resolved in **one** lookup: authors from the comment
   rows plus mentioned users from `comment_mentions` for the page's comment ids.
@@ -416,7 +426,7 @@ the authenticated user and is never accepted from the client.
 
 | Method | Path | Owner | Purpose |
 |---|---|---|---|
-| `GET` | `/underwritings/{id}/comments?cursor=&limit=` | iron_bank router | List comments |
+| `GET` | `/underwritings/{id}/comments?page=&page_size=` | iron_bank router | List comments |
 | `POST` | `/underwritings/{id}/comments` | iron_bank router | Create comment (creates thread lazily) |
 | `PATCH` | `/comments/{comment_id}` | discussions router | Edit (author only) |
 | `DELETE` | `/comments/{comment_id}` | discussions router | Soft delete (author only) |
@@ -452,7 +462,10 @@ the authenticated user and is never accepted from the client.
     "7":  { "id": 7,  "first_name": "Sam",  "last_name": "Lee", "email": "sam@…", "is_deleted": false },
     "42": { "id": 42, "first_name": "Jane", "last_name": "Doe", "email": "jane@…", "is_deleted": false }
   },
-  "next_cursor": "…"
+  "total": 2,
+  "page": 1,
+  "page_size": 25,
+  "pages": 1
 }
 ```
 
@@ -519,8 +532,9 @@ app/core/discussions/
 │   ├── errors.py      # InvalidBodyError, InvalidMentionError (→ 422)
 │   └── pipeline.py    # process_body(): steps 1–7 of §4.3
 ├── schemas.py         # request/response models, DiscussionSummary
-├── repository.py
-├── service.py         # DiscussionService: the only entry point for domains
+├── exceptions.py      # CommentNotFound (404), NotCommentAuthor (403), RepliesNotSupported (422)
+├── repository.py      # never commits; caller owns the transaction
+├── service.py         # DiscussionService: the only entry point for domains; never commits
 ├── controller.py
 └── router.py          # PATCH/DELETE /comments/{id}
 
@@ -541,6 +555,10 @@ app/__init__.py        # include the discussions router
 - Service: create/edit/delete counters, last-comment recompute on delete,
   mention row replacement on edit, author-only checks.
 - Lazy creation: concurrent first comments end with one thread and one link.
+- Real-DB tests (`tests/core/discussions/test_discussion_db.py`) are opt-in:
+  `RUN_DB_TESTS=1 uv run pytest tests/core/discussions/test_discussion_db.py`.
+  They use `DATABASE_URL`, refuse the production project ref, and delete the
+  threads they create. Point them at the dev Supabase project only.
 
 ---
 
@@ -726,7 +744,8 @@ Kept cheap by the layering rule (§1). If it ever happens:
 
 | Alternative | Why rejected |
 |---|---|
-| Linked list of comments (`reference_id` → previous comment) | Concurrent posts fork the chain; reads need a recursive CTE; keyset pagination breaks; deletes break the chain. Order is intrinsic in `(created_at, id)`. Replies are a separate concept (`parent_comment_id`). |
+| Linked list of comments (`reference_id` → previous comment) | Concurrent posts fork the chain; reads need a recursive CTE; pagination breaks; deletes break the chain. Order is intrinsic in `(created_at, id)`. Replies are a separate concept (`parent_comment_id`). |
+| Cursor (keyset) pagination on `(created_at, id)` | Stable under concurrent inserts, but every other list endpoint uses `page` + `PageSize` with `total`/`pages`, and the FE already handles that shape. Threads are small, so a page shifting by one when someone posts is rare and handled by de-duplicating on `id`. Revisit if threads grow long or the FE moves to infinite scroll. |
 | Polymorphic `subject_type` + `subject_id` on threads | No FK, no cascade, and `subject_id` must be `text` to hold int, uuid, and text ids. |
 | Exclusive arc (one nullable FK column per subject on `threads` + `CHECK num_nonnulls(...) = 1`) | Real FKs, but `discussions.threads` would reference every domain's tables, so core would depend on domains. Each new subject alters the shared threads table. The CHECK also forces delete cascade or restrict, so history cannot outlive the subject. Link tables invert the dependency. Trade-off accepted: no DB guarantee of exactly one link per thread (enforced by creating both in one service call) and reverse lookup needs a resolver. |
 | All tables in `iron_bank` (`underwriting_threads`, `underwriting_comments`, …) | Simplest today, but discussions on markets or listings would live in `iron_bank` or need moving. |

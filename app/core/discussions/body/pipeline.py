@@ -1,5 +1,6 @@
 """The full write-path pipeline for a comment body (create and edit)."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -7,7 +8,7 @@ from app.core.discussions.body.errors import InvalidMentionError
 from app.core.discussions.body.nodes import parse_body
 from app.core.discussions.body.text import derive_body_text
 from app.core.discussions.body.walker import analyze, enforce_limits, reject_empty
-from app.core.discussions.interfaces import UserLookup
+from app.core.discussions.interfaces import UserLookup, UserRef
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +16,8 @@ class ProcessedBody:
     body: dict[str, Any]  # normalized; this is what gets stored, not the request
     body_text: str
     mention_user_ids: tuple[int, ...]
+    # The mentioned users, already resolved; saves the caller a second lookup.
+    users: Mapping[int, UserRef]
 
 
 async def process_body(
@@ -45,4 +48,5 @@ async def process_body(
         body=doc.model_dump(exclude_none=True),
         body_text=derive_body_text(doc, users),
         mention_user_ids=facts.mention_ids,
+        users=users,
     )
