@@ -426,7 +426,22 @@ queries, no cross-domain join:
 "discussion": { "thread_id": 88, "comment_count": 4, "last_comment_at": "2026-10-08T14:02:00Z" }
 ```
 
-`thread_id: null, comment_count: 0` when no thread exists.
+`thread_id: null, comment_count: 0, last_comment_at: null` when no thread
+exists. A thread whose comments were all deleted keeps its `thread_id` with
+`comment_count: 0`.
+
+Implementation (`GetUnderwritingService._populate_discussions`):
+
+- Runs on both list paths, the normal list and simulation mode
+  (`SimulateUnderwritingsService` subclasses the read service), after
+  `_enrich`. It is deliberately **not** part of `_enrich`, so the single
+  `GET /iron-bank/underwritings/{id}` and the edit context are unchanged: the
+  schema drops a `None` `discussion`, the same way it drops `simulated`.
+  Adding the summary to the single GET is step 7.
+- Both queries are skipped for an empty page, and the second when no row on
+  the page has a thread.
+- Cost measured against the dev project from outside AWS: about 1 s on a
+  ~17 s list call (two round trips). In-region it is two indexed lookups.
 
 ---
 

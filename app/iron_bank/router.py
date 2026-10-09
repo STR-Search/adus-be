@@ -323,6 +323,7 @@ def get_update_underwriting_controller(
 
 def get_get_underwriting_controller(
     db: AsyncSession = Depends(get_db),
+    user_lookup: UserLookup = Depends(get_user_lookup),
 ) -> GetUnderwritingController:
     from app.markets.repositories.construction_repository import (
         ConstructionAmenitiesRepository,
@@ -383,6 +384,8 @@ def get_get_underwriting_controller(
         user_repository=UserRepository(db),
         market_repository=market_repo,
         realtor_repository=RealtorRepository(db),
+        thread_repository=UnderwritingThreadRepository(db),
+        discussion_service=DiscussionService(DiscussionRepository(db), user_lookup),
     )
     return GetUnderwritingController(
         GetUnderwritingService(UnderwritingRepository(db), **service_deps),
