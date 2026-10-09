@@ -39,6 +39,13 @@ class UserRepository:
         )
         return list(result.scalars().all())
 
+    async def get_by_ids_including_deleted(self, user_ids: set[int]) -> list[User]:
+        """Like ``get_by_ids`` but keeps soft-deleted users (for display/validation)."""
+        if not user_ids:
+            return []
+        result = await self.db.execute(select(User).where(User.id.in_(user_ids)))
+        return list(result.scalars().all())
+
     async def get_by_ids(self, user_ids: set[int]) -> list[User]:
         if not user_ids:
             return []

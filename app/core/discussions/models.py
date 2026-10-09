@@ -36,9 +36,7 @@ class Thread(Base):
         {"schema": "discussions"},
     )
 
-    id: Mapped[int] = mapped_column(
-        BigInteger, Identity(always=True), primary_key=True
-    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     subject_type: Mapped[str] = mapped_column(Text, nullable=False)
     created_by_user_id: Mapped[int | None] = mapped_column(
         Integer,
@@ -97,9 +95,7 @@ class Comment(Base):
         {"schema": "discussions"},
     )
 
-    id: Mapped[int] = mapped_column(
-        BigInteger, Identity(always=True), primary_key=True
-    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     thread_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("discussions.threads.id", ondelete="CASCADE"),
