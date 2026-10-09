@@ -1,14 +1,23 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_config
 from app.core.database import get_db
+from app.core.discussions.interfaces import UserLookup
+from app.core.discussions.repository import DiscussionRepository
+from app.core.discussions.schemas import (
+    CommentDetail,
+    CommentPage,
+    CreateCommentRequest,
+)
+from app.core.discussions.service import DiscussionService
+from app.core.enums import PageSize
 from app.core.reference_data.repository import ReferenceDataRepository
 from app.core.reference_data.service import ReferenceDataService
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_user_lookup
 from app.iron_bank.controllers.create_blank_underwriting_controller import (
     CreateBlankUnderwritingController,
 )
@@ -16,6 +25,9 @@ from app.iron_bank.controllers.create_underwriting_from_url_controller import (
     CreateUnderwritingFromUrlController,
 )
 from app.iron_bank.controllers.deal_status_controller import DealStatusController
+from app.iron_bank.controllers.underwriting_comment_controller import (
+    UnderwritingCommentController,
+)
 from app.iron_bank.controllers.duplicate_underwriting_controller import (
     DuplicateUnderwritingController,
 )
@@ -90,6 +102,12 @@ from app.iron_bank.services.deal_status_service import DealStatusService
 from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
 from app.iron_bank.services.update_underwriting_service import UpdateUnderwritingService
 from app.iron_bank.repositories.job_repository import JobRepository
+from app.iron_bank.repositories.underwriting_thread_repository import (
+    UnderwritingThreadRepository,
+)
+from app.iron_bank.services.underwriting_discussion_service import (
+    UnderwritingDiscussionService,
+)
 from app.workflows.prepare_uw_data_job import PrepareUwDataJob
 import app.iron_bank.models  # noqa: F401 — ensures all models are registered with SQLAlchemy
 
@@ -668,3 +686,57 @@ async def get_underwriting(
     controller: GetUnderwritingController = Depends(get_get_underwriting_controller),
 ):
     return await controller.get_underwriting(underwriting_id)
+
+
+# --- Underwriting comments (docs/underwriting_discussions.md) ---
+
+
+def get_underwriting_comment_controller(
+    db: AsyncSession = Depends(get_db),
+    user_lookup: UserLookup = Depends(get_user_lookup),
+) -> UnderwritingCommentController:
+    return UnderwritingCommentController(
+        UnderwritingDiscussionService(
+            UnderwritingRepository(db),
+            UnderwritingThreadRepository(db),
+            DiscussionService(DiscussionRepository(db), user_lookup),
+        ),
+        db,
+    )
+
+
+@router.get(
+    "/underwritings/{underwriting_id}/comments",
+    response_model=CommentPage,
+    tags=["iron_bank", "discussions"],
+)
+async def list_underwriting_comments(
+    underwriting_id: int,
+    page: int = Query(1, ge=1),
+    page_size: PageSize = Query(PageSize.SMALL),
+    controller: UnderwritingCommentController = Depends(
+        get_underwriting_comment_controller
+    ),
+):
+    return await controller.list_comments(
+        underwriting_id, page=page, page_size=page_size
+    )
+
+
+@router.post(
+    "/underwritings/{underwriting_id}/comments",
+    response_model=CommentDetail,
+    status_code=status.HTTP_201_CREATED,
+    tags=["iron_bank", "discussions"],
+)
+async def create_underwriting_comment(
+    underwriting_id: int,
+    payload: CreateCommentRequest,
+    controller: UnderwritingCommentController = Depends(
+        get_underwriting_comment_controller
+    ),
+    current_user=Depends(get_current_user),
+):
+    return await controller.create_comment(
+        underwriting_id, author_user_id=current_user.id, payload=payload
+    )

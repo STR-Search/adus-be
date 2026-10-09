@@ -345,9 +345,10 @@ write.
 ## 5. Behaviour
 
 **Transactions.** `DiscussionService` and `DiscussionRepository` never commit
-(unlike most repositories in this codebase). The caller commits: the iron_bank
-service for `/underwritings/{id}/comments`, the discussions controller for
-`/comments/{id}`. This is what lets §5.1 create the thread, the link row and
+(unlike most repositories in this codebase), and neither do the iron_bank
+discussion service or link repository. The controllers commit: the iron_bank
+`UnderwritingCommentController` for `POST /iron-bank/underwritings/{id}/comments`,
+the discussions controller for `/comments/{id}`. This is what lets §5.1 create the thread, the link row and
 the first comment atomically on one session.
 
 ### 5.1 Thread creation (lazy)
@@ -360,10 +361,20 @@ the iron_bank service:
 2. Otherwise `DiscussionService.create_thread(subject_type="underwriting", created_by=user)`.
 3. `INSERT INTO iron_bank.underwriting_threads ... ON CONFLICT (underwriting_id, kind) DO NOTHING RETURNING thread_id`.
 4. If no row returned (a concurrent request won), delete the thread created in
-   step 2 and re-read the link.
+   step 2 and re-read the link. If the link is gone too (the underwriting was
+   deleted meanwhile), return `404`.
 5. Create the comment on the resulting thread.
 
-Do not lock the `underwritings` row for this. It is a wide, hot row.
+Do not lock the `underwritings` row for this. It is a wide, hot row. The
+existence check uses `UnderwritingRepository.exists()`, not `get_by_id()`
+(which loads five child tables).
+
+If the insert in step 3 meets another transaction's uncommitted link,
+Postgres waits for that transaction and then reports the conflict, so the
+loser always re-reads a committed link. If the comment fails validation after
+steps 2–3, nothing is committed and the new thread and link roll back with it.
+Both behaviours are covered by `tests/iron_bank/test_underwriting_discussion_db.py`
+(five concurrent first comments; the test asserts at least one lost the race).
 
 ### 5.2 Create comment
 
@@ -426,8 +437,8 @@ the authenticated user and is never accepted from the client.
 
 | Method | Path | Owner | Purpose |
 |---|---|---|---|
-| `GET` | `/underwritings/{id}/comments?page=&page_size=` | iron_bank router | List comments |
-| `POST` | `/underwritings/{id}/comments` | iron_bank router | Create comment (creates thread lazily) |
+| `GET` | `/iron-bank/underwritings/{id}/comments?page=&page_size=` | iron_bank router | List comments (`200`) |
+| `POST` | `/iron-bank/underwritings/{id}/comments` | iron_bank router | Create comment, creating the thread lazily (`201`) |
 | `PATCH` | `/comments/{comment_id}` | discussions router | Edit (author only) |
 | `DELETE` | `/comments/{comment_id}` | discussions router | Soft delete (author only) |
 
@@ -551,9 +562,11 @@ app/core/discussions/
 
 app/iron_bank/
 ├── models/underwriting_thread.py
-├── repositories/underwriting_thread_repository.py
-├── services/underwriting_discussion_service.py   # lazy creation, list/create orchestration
-└── router.py                                      # GET/POST /underwritings/{id}/comments
+├── repositories/underwriting_thread_repository.py  # link table only; ON CONFLICT insert; never commits
+├── repositories/underwriting_repository.py         # + exists()
+├── services/underwriting_discussion_service.py     # lazy creation, list/create orchestration
+├── controllers/underwriting_comment_controller.py  # commits on create; reuses discussion_http_error
+└── router.py                                       # GET/POST /iron-bank/underwritings/{id}/comments
 
 app/dependencies.py    # get_user_lookup(): UserLookup backed by app.users
 app/__init__.py        # include the discussions router
@@ -566,8 +579,9 @@ app/__init__.py        # include the discussions router
 - Service: create/edit/delete counters, last-comment recompute on delete,
   mention row replacement on edit, author-only checks.
 - Lazy creation: concurrent first comments end with one thread and one link.
-- Real-DB tests (`tests/core/discussions/test_discussion_db.py`) are opt-in:
-  `RUN_DB_TESTS=1 uv run pytest tests/core/discussions/test_discussion_db.py`.
+- Real-DB tests (`tests/core/discussions/test_discussion_db.py`,
+  `tests/iron_bank/test_underwriting_discussion_db.py`) are opt-in:
+  `RUN_DB_TESTS=1 uv run pytest tests/core/discussions/test_discussion_db.py tests/iron_bank/test_underwriting_discussion_db.py`.
   They use `DATABASE_URL`, refuse the production project ref, and delete the
   threads they create. Point them at the dev Supabase project only.
 
