@@ -482,6 +482,17 @@ Create and edit return the single comment in the same shape, with its own
 | Invalid body (shape, unknown node/mark, limits, empty) | `422` with the failing path |
 | Invalid mention (unknown or deleted user) | `422` with the user ids |
 | Non-null `parent_comment_id` | `422` |
+| Unknown request field (e.g. `author_user_id`) | `422` (requests use `extra="forbid"`) |
+
+422 bodies use FastAPI's validation shape, `{"detail": [{"loc", "msg", "type", "ctx"?}]}`:
+
+- Body errors: `loc` starts at `"body"` (e.g. `["body", "content", 0, ...]`),
+  or `["body_version"]` for an unsupported version.
+- Mentions: `{"loc": ["body"], "type": "invalid_mention", "ctx": {"user_ids": [99]}}`.
+- Replies: `{"loc": ["parent_comment_id"], "type": "replies_not_supported"}`.
+
+`DELETE` returns `204` with no body. `app.core.discussions.controller.discussion_http_error`
+does this mapping and is reused by the iron_bank comment routes.
 
 ---
 
@@ -535,8 +546,8 @@ app/core/discussions/
 ├── exceptions.py      # CommentNotFound (404), NotCommentAuthor (403), RepliesNotSupported (422)
 ├── repository.py      # never commits; caller owns the transaction
 ├── service.py         # DiscussionService: the only entry point for domains; never commits
-├── controller.py
-└── router.py          # PATCH/DELETE /comments/{id}
+├── controller.py      # commits for its own routes; discussion_http_error() error → HTTP mapping
+└── router.py          # PATCH/DELETE /comments/{id}; registered in app/__init__.py
 
 app/iron_bank/
 ├── models/underwriting_thread.py

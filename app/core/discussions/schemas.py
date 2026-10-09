@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.core.discussions.body.nodes import CURRENT_BODY_VERSION
 
@@ -16,6 +16,9 @@ class BaseResponse(BaseModel):
 
 
 class CreateCommentRequest(BaseModel):
+    # The author always comes from auth; unknown fields are rejected.
+    model_config = ConfigDict(extra="forbid")
+
     body_version: int = CURRENT_BODY_VERSION
     # Raw Tiptap JSON; validated and normalized by the body pipeline.
     body: Any
@@ -24,6 +27,8 @@ class CreateCommentRequest(BaseModel):
 
 
 class UpdateCommentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     body_version: int = CURRENT_BODY_VERSION
     body: Any
 

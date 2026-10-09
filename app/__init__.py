@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_config
 from app.core.database import engine
+from app.core.discussions.router import router as discussions_router
 from app.core.profiling import ProfilingMiddleware, install_db_hooks
 from app.core.reference_data.router import router as reference_data_router
 from app.dependencies import get_current_user
@@ -89,5 +90,6 @@ def create_app() -> FastAPI:
     application.include_router(zillow_router)
     application.include_router(users_router)
     application.include_router(reference_data_router)
+    application.include_router(discussions_router)
 
     return application
