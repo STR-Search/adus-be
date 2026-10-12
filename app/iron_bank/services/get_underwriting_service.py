@@ -2,6 +2,8 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+from app.core.discussions.enums import ThreadKind
+from app.core.discussions.schemas import DiscussionSummary
 from app.core.logger import logger
 from app.core.reference_data.schemas import ReferenceDataOption
 from app.iron_bank.enums import SortOrder, UnderwritingSortBy
@@ -41,6 +43,8 @@ class GetUnderwritingService:
         user_repository: Any = None,
         market_repository: Any = None,
         realtor_repository: Any = None,
+        thread_repository: Any = None,
+        discussion_service: Any = None,
     ):
         self.repository = repository
         self.listings_service = listings_service
@@ -54,6 +58,10 @@ class GetUnderwritingService:
         self.user_repository = user_repository
         self.market_repository = market_repository
         self.realtor_repository = realtor_repository
+        # Comment summaries on the list paths: iron_bank's link table plus
+        # DiscussionService (never a join across the two schemas).
+        self.thread_repository = thread_repository
+        self.discussion_service = discussion_service
 
     async def get(self, underwriting_id: int) -> GetUnderwritingResult:
         underwriting = await self.repository.get_by_id(underwriting_id)
@@ -308,6 +316,7 @@ class GetUnderwritingService:
         results = [self._to_result(underwriting) for underwriting in items]
         await self._hydrate_automated_zillow(items, results)
         await self._enrich(results)
+        await self._populate_discussions(results)
         return GetUnderwritingsResult(
             data=results,
             total=total,
@@ -355,6 +364,30 @@ class GetUnderwritingService:
                 listing, listing_details.get(underwriting.zpid)
             )
             self._apply_zillow_to_details(result, zillow_property)
+
+    async def _populate_discussions(self, results: list[GetUnderwritingResult]) -> None:
+        """List paths only: attach each row's comment summary.
+
+        Two queries for the page, no cross-schema join: the link table gives
+        ``underwriting_id -> thread_id``, then ``DiscussionService`` reads the
+        stored counters for those threads. Rows without a thread get an empty
+        summary. Not part of ``_enrich`` so the single GET is unchanged.
+        """
+        if self.thread_repository is None or self.discussion_service is None:
+            return
+        if not results:
+            return
+        thread_ids = await self.thread_repository.get_thread_ids(
+            [result.id for result in results], ThreadKind.GENERAL
+        )
+        summaries = await self.discussion_service.get_summaries(
+            list(thread_ids.values())
+        )
+        for result in results:
+            thread_id = thread_ids.get(result.id)
+            result.discussion = (
+                summaries.get(thread_id) if thread_id is not None else None
+            ) or DiscussionSummary.empty()
 
     async def _enrich(self, results: list[GetUnderwritingResult]) -> None:
         """Post-read enrichment shared by the single-get, list, and simulation

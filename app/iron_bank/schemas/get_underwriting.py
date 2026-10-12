@@ -12,6 +12,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.core.discussions.schemas import DiscussionSummary
 from app.core.enums import PageSize
 from app.core.reference_data.schemas import ReferenceDataOption
 from app.core.serialization import PlainDecimal
@@ -207,14 +208,21 @@ class GetUnderwritingResult(UnderwritingRead):
         default_factory=list
     )
     comp_set: list[GetUnderwritingCompSet] = Field(default_factory=list)
+    # Comment summary from the stored thread counters. Populated on the list
+    # paths (normal and simulation) only; always present there, as
+    # {thread_id: null, comment_count: 0, ...} when no thread exists.
+    discussion: DiscussionSummary | None = None
 
     @model_serializer(mode="wrap")
-    def _drop_null_simulated(self, handler):
-        # Keep the non-simulation response contract unchanged: the `simulated`
-        # key only appears when the row went through simulation mode.
+    def _drop_unpopulated_optionals(self, handler):
+        # Keep each response contract unchanged: `simulated` only appears when
+        # the row went through simulation mode, `discussion` only on the list
+        # paths (not the single GET / edit context).
         data = handler(self)
-        if isinstance(data, dict) and data.get("simulated") is None:
-            data.pop("simulated", None)
+        if isinstance(data, dict):
+            for key in ("simulated", "discussion"):
+                if data.get(key) is None:
+                    data.pop(key, None)
         return data
 
 

@@ -13,8 +13,9 @@ import app.markets.models  # noqa: F401
 import app.iron_bank.models  # noqa: F401
 import app.users.models  # noqa: F401
 import app.core.reference_data.models  # noqa: F401
+import app.core.discussions.models  # noqa: F401
 
-TARGET_SCHEMAS = ["markets", "iron_bank", "users", "reference"]
+TARGET_SCHEMAS = ["markets", "iron_bank", "users", "reference", "discussions"]
 
 config = context.config
 # Read back by run_migrations_offline only; the online path builds its own engine below.

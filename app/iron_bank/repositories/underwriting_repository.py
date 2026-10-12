@@ -219,6 +219,14 @@ class UnderwritingRepository:
         )
         return result.scalar_one_or_none()
 
+    async def exists(self, underwriting_id: int) -> bool:
+        """Existence check without loading the (wide) row or its children."""
+        return bool(
+            await self.db.scalar(
+                select(select(Underwriting.id).where(Underwriting.id == underwriting_id).exists())
+            )
+        )
+
     async def get_all_paginated(
         self,
         *,
