@@ -275,6 +275,9 @@ class GetUnderwritingsQuery(BaseModel):
     property_pending: bool | None = None
     # Whether deal_pitch (the AI Overview) holds non-blank text; omit to ignore.
     has_deal_pitch: bool | None = None
+    # Whether the current user wrote, or is mentioned in, a (non-deleted)
+    # comment on the underwriting; omit to ignore.
+    involved_in_discussion: bool | None = None
     # free-text match on address/city/state; numeric terms also match sheet_number
     search: str | None = Field(None, max_length=100)
     min_purchase_price: Decimal | None = Field(None, ge=0)

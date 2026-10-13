@@ -91,7 +91,12 @@ class Comment(Base):
         ),
         CheckConstraint("body_version >= 1", name="ck_comments_body_version"),
         Index("idx_comments_thread_timeline", "thread_id", "created_at", "id"),
-        Index("idx_comments_author", "author_user_id"),
+        Index(
+            "idx_comments_author_thread",
+            "author_user_id",
+            "thread_id",
+            postgresql_include=["deleted_at"],
+        ),
         {"schema": "discussions"},
     )
 

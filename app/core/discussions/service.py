@@ -61,6 +61,12 @@ class DiscussionService:
             for t in threads
         }
 
+    async def get_involved_thread_ids(self, user_id: int) -> set[int]:
+        """Ids of threads where the user authored, or is mentioned in, a
+        non-deleted comment. Any subject type: callers intersect with their
+        own link table."""
+        return await self.repository.get_involved_thread_ids(user_id)
+
     # ── Comments ─────────────────────────────────────────────────────────────
 
     async def list_comments(

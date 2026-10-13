@@ -96,6 +96,8 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         source: str | None = None,
         property_pending: bool | None = None,
         has_deal_pitch: bool | None = None,
+        involved_in_discussion: bool | None = None,
+        current_user_id: int | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
@@ -137,6 +139,10 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             source=source,
             property_pending=property_pending,
             has_deal_pitch=has_deal_pitch,
+            involved_in_discussion=involved_in_discussion,
+            involved_thread_ids=await self._involved_thread_ids(
+                involved_in_discussion, current_user_id
+            ),
             search=search,
             min_purchase_price=min_purchase_price,
             max_purchase_price=max_purchase_price,

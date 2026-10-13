@@ -20,6 +20,7 @@ from sqlalchemy import (
     or_,
     select,
     tuple_,
+    union,
     update,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -214,6 +215,23 @@ class DiscussionRepository:
             delete(CommentMention).where(CommentMention.comment_id == comment_id)
         )
         await self.add_mentions(comment_id, user_ids)
+
+    async def get_involved_thread_ids(self, user_id: int) -> set[int]:
+        """Threads where ``user_id`` wrote, or is mentioned in, a live comment.
+
+        Joins ``comments`` on the mention branch because a soft delete keeps
+        the comment's mention rows.
+        """
+        authored = select(Comment.thread_id).where(
+            Comment.author_user_id == user_id, Comment.deleted_at.is_(None)
+        )
+        mentioned = (
+            select(Comment.thread_id)
+            .join(CommentMention, CommentMention.comment_id == Comment.id)
+            .where(CommentMention.user_id == user_id, Comment.deleted_at.is_(None))
+        )
+        result = await self.db.execute(union(authored, mentioned))
+        return set(result.scalars().all())
 
     async def get_mentioned_user_ids(self, comment_ids: Collection[int]) -> set[int]:
         if not comment_ids:
