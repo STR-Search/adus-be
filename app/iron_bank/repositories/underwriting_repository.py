@@ -1,9 +1,10 @@
 import math
+from collections.abc import Collection
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import String, func, or_, select, text
+from sqlalchemy import String, exists, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,6 +16,7 @@ from app.iron_bank.models import (
     UnderwritingOperatingExpense,
     UnderwritingOptimizationItem,
     UnderwritingTax,
+    UnderwritingThread,
 )
 from app.iron_bank.schemas.underwriting import (
     BOOLEAN_TAG_FIELDS,
@@ -121,6 +123,24 @@ def _deal_pitch_condition(has_deal_pitch: bool | None) -> list:
     if has_deal_pitch:
         return [func.trim(column) != ""]
     return [or_(column.is_(None), func.trim(column) == "")]
+
+
+def _discussion_involvement_condition(
+    involved: bool | None, thread_ids: Collection[int] | None
+) -> list:
+    """WHERE condition for whether the caller is involved in a row's discussion.
+
+    ``thread_ids`` are the threads the caller is involved in, resolved up front
+    by ``DiscussionService`` so this never joins the ``discussions`` schema.
+    A row matches if any of its linked threads is among them.
+    """
+    if involved is None:
+        return []
+    linked = exists().where(
+        UnderwritingThread.underwriting_id == Underwriting.id,
+        UnderwritingThread.thread_id.in_(set(thread_ids or ())),
+    )
+    return [linked if involved else ~linked]
 
 
 def _value_set_conditions(tags, allowed_fields: tuple[str, ...], kind: str) -> list:
@@ -244,6 +264,8 @@ class UnderwritingRepository:
         source: str | None = None,
         property_pending: bool | None = None,
         has_deal_pitch: bool | None = None,
+        involved_in_discussion: bool | None = None,
+        involved_thread_ids: Collection[int] | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
@@ -346,6 +368,9 @@ class UnderwritingRepository:
             ),
             *_property_pending_condition(property_pending),
             *_deal_pitch_condition(has_deal_pitch),
+            *_discussion_involvement_condition(
+                involved_in_discussion, involved_thread_ids
+            ),
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
             *_numeric_tag_conditions(numeric_tags),
@@ -404,6 +429,8 @@ class UnderwritingRepository:
         source: str | None = None,
         property_pending: bool | None = None,
         has_deal_pitch: bool | None = None,
+        involved_in_discussion: bool | None = None,
+        involved_thread_ids: Collection[int] | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
@@ -541,6 +568,9 @@ class UnderwritingRepository:
             ),
             *_property_pending_condition(property_pending),
             *_deal_pitch_condition(has_deal_pitch),
+            *_discussion_involvement_condition(
+                involved_in_discussion, involved_thread_ids
+            ),
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
             *_numeric_tag_conditions(numeric_tags),

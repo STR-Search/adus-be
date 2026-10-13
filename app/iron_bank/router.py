@@ -675,8 +675,11 @@ async def get_boolean_tag_options(
 async def get_underwritings(
     filters: Annotated[GetUnderwritingsQuery, Query()],
     controller: GetUnderwritingController = Depends(get_get_underwriting_controller),
+    current_user=Depends(get_current_user),
 ):
-    return await controller.get_underwritings(**filters.model_dump())
+    return await controller.get_underwritings(
+        **filters.model_dump(), current_user_id=current_user.id
+    )
 
 
 @router.get(

@@ -246,6 +246,8 @@ class GetUnderwritingService:
         source: str | None = None,
         property_pending: bool | None = None,
         has_deal_pitch: bool | None = None,
+        involved_in_discussion: bool | None = None,
+        current_user_id: int | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
@@ -287,6 +289,10 @@ class GetUnderwritingService:
             source=source,
             property_pending=property_pending,
             has_deal_pitch=has_deal_pitch,
+            involved_in_discussion=involved_in_discussion,
+            involved_thread_ids=await self._involved_thread_ids(
+                involved_in_discussion, current_user_id
+            ),
             search=search,
             min_purchase_price=min_purchase_price,
             max_purchase_price=max_purchase_price,
@@ -364,6 +370,22 @@ class GetUnderwritingService:
                 listing, listing_details.get(underwriting.zpid)
             )
             self._apply_zillow_to_details(result, zillow_property)
+
+    async def _involved_thread_ids(
+        self, involved_in_discussion: bool | None, current_user_id: int | None
+    ) -> set[int] | None:
+        """Threads the current user is involved in, for the involvement filter.
+
+        Resolved through ``DiscussionService`` before the list query, which
+        then matches them against the link table (no cross-schema join).
+        """
+        if involved_in_discussion is None:
+            return None
+        if current_user_id is None or self.discussion_service is None:
+            raise ValueError(
+                "involved_in_discussion requires current_user_id and a discussion service"
+            )
+        return await self.discussion_service.get_involved_thread_ids(current_user_id)
 
     async def _populate_discussions(self, results: list[GetUnderwritingResult]) -> None:
         """List paths only: attach each row's comment summary.

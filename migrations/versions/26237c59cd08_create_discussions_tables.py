@@ -112,12 +112,16 @@ def upgrade() -> None:
         unique=False,
         schema="discussions",
     )
+    # Covers the "involved in discussion" lookup (threads a user authored in)
+    # index-only: deleted_at is included so the live-comment check needs no
+    # heap read. Still serves plain author lookups.
     op.create_index(
-        "idx_comments_author",
+        "idx_comments_author_thread",
         "comments",
-        ["author_user_id"],
+        ["author_user_id", "thread_id"],
         unique=False,
         schema="discussions",
+        postgresql_include=["deleted_at"],
     )
 
     # Circular reference: a thread points at its latest comment.
@@ -163,7 +167,9 @@ def downgrade() -> None:
         "fk_threads_last_comment", "threads", type_="foreignkey", schema="discussions"
     )
 
-    op.drop_index("idx_comments_author", table_name="comments", schema="discussions")
+    op.drop_index(
+        "idx_comments_author_thread", table_name="comments", schema="discussions"
+    )
     op.drop_index(
         "idx_comments_thread_timeline", table_name="comments", schema="discussions"
     )
