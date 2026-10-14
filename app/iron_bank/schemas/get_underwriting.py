@@ -76,6 +76,7 @@ class ZillowProperty(BaseModel):
     original_photos: list | None = None
     lot_size_sqft: Decimal | None = None
     description: str | None = None
+    year_built: int | None = None
 
     @computed_field
     @property
@@ -235,6 +236,7 @@ class SimulationParams(BaseModel):
 
 _RANGE_PAIRS = (
     ("min_bedrooms", "max_bedrooms"),
+    ("min_year_built", "max_year_built"),
     ("min_purchase_price", "max_purchase_price"),
     ("min_total_oop", "max_total_oop"),
     ("min_budget_to_pp", "max_budget_to_pp"),
@@ -264,6 +266,11 @@ class GetUnderwritingsQuery(BaseModel):
     zpid: str | None = None
     min_bedrooms: int | None = Field(None, ge=0)
     max_bedrooms: int | None = Field(None, ge=0)
+    # Matched against the live Zillow listing (zillow.scheduled_listing_details
+    # via zpid), not the stored snapshot, so rows without a zpid never match a
+    # bounded filter.
+    min_year_built: int | None = Field(None, ge=0)
+    max_year_built: int | None = Field(None, ge=0)
     market_ids: list[int] | None = Field(None, alias="market_id")
     states: list[USState] | None = Field(None, alias="state")
     # Accepts repeated or comma-separated statuses; they OR together.

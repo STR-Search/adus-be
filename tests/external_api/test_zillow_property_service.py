@@ -30,7 +30,8 @@ SAMPLE_PROPERTY = {
         }
     ],
     "description": "Charming bungalow near downtown.",
-    "year_built": 1927,  # extra field — must be tolerated, not mapped
+    "year_built": 1927,
+    "home_type": "SINGLE_FAMILY",  # extra field — must be tolerated, not mapped
 }
 
 PROPERTY_URL = (
@@ -69,6 +70,7 @@ def test_to_zillow_property_maps_canonical_shape():
         "original_photos": SAMPLE_PROPERTY["original_photos"],
         "lot_size_sqft": 10698.0,
         "description": "Charming bungalow near downtown.",
+        "year_built": 1927,
     }
 
 

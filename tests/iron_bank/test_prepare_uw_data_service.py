@@ -83,6 +83,7 @@ class TestPrepare:
                 original_photos=["a.jpg"],
                 lot_size_sqft=21780,
                 description="Cabin in the woods.",
+                year_built=1978,
             ),
             market=SimpleNamespace(
                 market_name="Smoky Mountains",
@@ -153,6 +154,7 @@ class TestPrepare:
             "original_photos": ["a.jpg"],
             "lot_size_sqft": 21780,
             "description": "Cabin in the woods.",
+            "year_built": 1978,
             "lot_size_acres": Decimal("0.50"),
         }
 

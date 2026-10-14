@@ -749,6 +749,7 @@ async def test_webhook_payload_hydrates_zillow_property_for_automated_underwriti
             original_photos=[{"url": "a.jpg"}],
             lot_size_sqft=8700,
             description="Cabin in the woods.",
+            year_built=1978,
         )
     )
     underwriting = _webhook_underwriting(is_automated=True, detail=None)
@@ -775,6 +776,7 @@ async def test_webhook_payload_hydrates_zillow_property_for_automated_underwriti
     assert zillow_property["lot_size_sqft"] == "8700"
     assert zillow_property["original_photos"] == [{"url": "a.jpg"}]
     assert zillow_property["description"] == "Cabin in the woods."
+    assert zillow_property["year_built"] == 1978
 
 
 @pytest.mark.asyncio

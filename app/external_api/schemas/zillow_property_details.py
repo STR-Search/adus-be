@@ -23,3 +23,4 @@ class ZillowPropertyDetails(BaseModel):
     lot_size_sqft: float | None = None
     original_photos: list | None = None
     description: str | None = None
+    year_built: int | None = None
