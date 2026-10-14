@@ -146,6 +146,7 @@ class ZillowPropertyService:
             "original_photos": details.original_photos,
             "lot_size_sqft": details.lot_size_sqft,
             "description": details.description,
+            "year_built": details.year_built,
         }
 
     @staticmethod

@@ -158,6 +158,7 @@ class NonAutomatedUnderwritingPayloadBuilder(BaseUnderwritingPayloadBuilder):
             "original_photos": None,
             "lot_size_sqft": None,
             "description": None,
+            "year_built": None,
         }
 
     def _build(

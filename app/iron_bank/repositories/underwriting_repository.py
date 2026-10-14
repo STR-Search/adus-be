@@ -4,7 +4,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import String, exists, func, or_, select, text
+from sqlalchemy import Integer, String, column, exists, func, or_, select, table, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -28,6 +28,16 @@ from app.iron_bank.schemas.underwriting import (
 _SIMULATION_EXCLUDED_DEAL_STATUSES = (
     DealStatus.DELETE_ZILLOW,
     DealStatus.DELETE_DEAL,
+)
+
+# zillow.scheduled_listing_details, described just far enough to filter on. A
+# lightweight table() rather than the zillow domain's model, which iron_bank
+# must not import -- the same reason bulk_sync_property_pending uses raw SQL.
+_listing_details = table(
+    "scheduled_listing_details",
+    column("zpid", String),
+    column("year_built", Integer),
+    schema="zillow",
 )
 
 
@@ -72,6 +82,29 @@ def _numeric_range_conditions(column, minimum, maximum) -> list:
     if maximum is not None:
         conditions.append(column <= maximum)
     return conditions
+
+
+def _listing_detail_conditions(
+    min_year_built: int | None, max_year_built: int | None
+) -> list:
+    """WHERE condition for attributes read off the live Zillow listing.
+
+    A correlated EXISTS (a semi-join on ``zpid``, the details table's primary
+    key) rather than a JOIN, so the list query, its count subquery, and the
+    simulation fetch keep selecting exactly the rows they did before. All
+    bounds share one EXISTS so they are checked against the same listing row.
+
+    Every row with a zpid is matched this way, automated or not: create-from-URL
+    refuses to save until the listing is in ``zillow.scheduled_listings``. Rows
+    without a zpid (blank, legacy sheet, early URL deals) never match a bounded
+    filter, which is the same NULL behaviour as the other numeric ranges.
+    """
+    bounds = _numeric_range_conditions(
+        _listing_details.c.year_built, min_year_built, max_year_built
+    )
+    if not bounds:
+        return []
+    return [exists().where(_listing_details.c.zpid == Underwriting.zpid, *bounds)]
 
 
 def _boolean_tag_conditions(boolean_tags: dict[str, bool] | None) -> list:
@@ -255,6 +288,8 @@ class UnderwritingRepository:
         zpid: str | None = None,
         min_bedrooms: int | None = None,
         max_bedrooms: int | None = None,
+        min_year_built: int | None = None,
+        max_year_built: int | None = None,
         market_ids: list[int] | None = None,
         states: list[str] | None = None,
         deal_statuses: list[str] | None = None,
@@ -367,6 +402,7 @@ class UnderwritingRepository:
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
             *_property_pending_condition(property_pending),
+            *_listing_detail_conditions(min_year_built, max_year_built),
             *_deal_pitch_condition(has_deal_pitch),
             *_discussion_involvement_condition(
                 involved_in_discussion, involved_thread_ids
@@ -420,6 +456,8 @@ class UnderwritingRepository:
         zpid: str | None = None,
         min_bedrooms: int | None = None,
         max_bedrooms: int | None = None,
+        min_year_built: int | None = None,
+        max_year_built: int | None = None,
         market_ids: list[int] | None = None,
         states: list[str] | None = None,
         deal_statuses: list[str] | None = None,
@@ -567,6 +605,7 @@ class UnderwritingRepository:
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
             *_property_pending_condition(property_pending),
+            *_listing_detail_conditions(min_year_built, max_year_built),
             *_deal_pitch_condition(has_deal_pitch),
             *_discussion_involvement_condition(
                 involved_in_discussion, involved_thread_ids
