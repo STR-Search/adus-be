@@ -70,6 +70,7 @@ class PrepareUwDataService:
             ),
             "lot_size_sqft": listing_details.lot_size_sqft if listing_details else None,
             "description": listing_details.description if listing_details else None,
+            "year_built": listing_details.year_built if listing_details else None,
         }
 
     def _apply_opex_config_values(

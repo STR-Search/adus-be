@@ -20,14 +20,18 @@ repositories, controllers, and router.
   (`reference.enum_options` table). Any domain stores a stable **slug** on its
   tag columns and resolves labels via `ReferenceDataService`. Full layered CRUD
   (repository/service/controller/router) plus `GET/POST/PATCH /reference-data`.
+- `app/core/discussions/` — shared comment threads (`discussions` schema).
+  Domains link entities to threads via their own link tables (e.g.
+  `iron_bank.underwriting_threads`) and call it only through its service; it
+  never imports a domain. Design: `docs/underwriting_discussions.md`.
 - `app/middleware/` — auth. Do not reorganize.
 - `app/dependencies.py` — shared FastAPI dependencies (DB session, auth guards)
 
 ## Database Rules
-- Managed schemas: `markets`, `iron_bank`, `users`, and `reference`
+- Managed schemas: `markets`, `iron_bank`, `users`, `reference`, and `discussions`
 - `public` schema is owned by another org — never touch it
 - Alembic version table lives in `markets` schema
-- Four Alembic branches: `markets`, `iron_bank`, `users`, and `reference`
+- Five Alembic branches: `markets`, `iron_bank`, `users`, `reference`, and `discussions`
 
 ## Auth
 - Global guard: `dependencies=[Depends(get_current_user)]` in `app/__init__.py`

@@ -1,9 +1,10 @@
 import math
+from collections.abc import Collection
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import String, func, or_, select, text
+from sqlalchemy import Integer, String, column, exists, func, or_, select, table, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,6 +16,7 @@ from app.iron_bank.models import (
     UnderwritingOperatingExpense,
     UnderwritingOptimizationItem,
     UnderwritingTax,
+    UnderwritingThread,
 )
 from app.iron_bank.schemas.underwriting import (
     BOOLEAN_TAG_FIELDS,
@@ -26,6 +28,16 @@ from app.iron_bank.schemas.underwriting import (
 _SIMULATION_EXCLUDED_DEAL_STATUSES = (
     DealStatus.DELETE_ZILLOW,
     DealStatus.DELETE_DEAL,
+)
+
+# zillow.scheduled_listing_details, described just far enough to filter on. A
+# lightweight table() rather than the zillow domain's model, which iron_bank
+# must not import -- the same reason bulk_sync_property_pending uses raw SQL.
+_listing_details = table(
+    "scheduled_listing_details",
+    column("zpid", String),
+    column("year_built", Integer),
+    schema="zillow",
 )
 
 
@@ -70,6 +82,29 @@ def _numeric_range_conditions(column, minimum, maximum) -> list:
     if maximum is not None:
         conditions.append(column <= maximum)
     return conditions
+
+
+def _listing_detail_conditions(
+    min_year_built: int | None, max_year_built: int | None
+) -> list:
+    """WHERE condition for attributes read off the live Zillow listing.
+
+    A correlated EXISTS (a semi-join on ``zpid``, the details table's primary
+    key) rather than a JOIN, so the list query, its count subquery, and the
+    simulation fetch keep selecting exactly the rows they did before. All
+    bounds share one EXISTS so they are checked against the same listing row.
+
+    Every row with a zpid is matched this way, automated or not: create-from-URL
+    refuses to save until the listing is in ``zillow.scheduled_listings``. Rows
+    without a zpid (blank, legacy sheet, early URL deals) never match a bounded
+    filter, which is the same NULL behaviour as the other numeric ranges.
+    """
+    bounds = _numeric_range_conditions(
+        _listing_details.c.year_built, min_year_built, max_year_built
+    )
+    if not bounds:
+        return []
+    return [exists().where(_listing_details.c.zpid == Underwriting.zpid, *bounds)]
 
 
 def _boolean_tag_conditions(boolean_tags: dict[str, bool] | None) -> list:
@@ -121,6 +156,24 @@ def _deal_pitch_condition(has_deal_pitch: bool | None) -> list:
     if has_deal_pitch:
         return [func.trim(column) != ""]
     return [or_(column.is_(None), func.trim(column) == "")]
+
+
+def _discussion_involvement_condition(
+    involved: bool | None, thread_ids: Collection[int] | None
+) -> list:
+    """WHERE condition for whether the caller is involved in a row's discussion.
+
+    ``thread_ids`` are the threads the caller is involved in, resolved up front
+    by ``DiscussionService`` so this never joins the ``discussions`` schema.
+    A row matches if any of its linked threads is among them.
+    """
+    if involved is None:
+        return []
+    linked = exists().where(
+        UnderwritingThread.underwriting_id == Underwriting.id,
+        UnderwritingThread.thread_id.in_(set(thread_ids or ())),
+    )
+    return [linked if involved else ~linked]
 
 
 def _value_set_conditions(tags, allowed_fields: tuple[str, ...], kind: str) -> list:
@@ -219,6 +272,14 @@ class UnderwritingRepository:
         )
         return result.scalar_one_or_none()
 
+    async def exists(self, underwriting_id: int) -> bool:
+        """Existence check without loading the (wide) row or its children."""
+        return bool(
+            await self.db.scalar(
+                select(select(Underwriting.id).where(Underwriting.id == underwriting_id).exists())
+            )
+        )
+
     async def get_all_paginated(
         self,
         *,
@@ -227,6 +288,8 @@ class UnderwritingRepository:
         zpid: str | None = None,
         min_bedrooms: int | None = None,
         max_bedrooms: int | None = None,
+        min_year_built: int | None = None,
+        max_year_built: int | None = None,
         market_ids: list[int] | None = None,
         states: list[str] | None = None,
         deal_statuses: list[str] | None = None,
@@ -236,6 +299,8 @@ class UnderwritingRepository:
         source: str | None = None,
         property_pending: bool | None = None,
         has_deal_pitch: bool | None = None,
+        involved_in_discussion: bool | None = None,
+        involved_thread_ids: Collection[int] | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
@@ -337,7 +402,11 @@ class UnderwritingRepository:
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
             *_property_pending_condition(property_pending),
+            *_listing_detail_conditions(min_year_built, max_year_built),
             *_deal_pitch_condition(has_deal_pitch),
+            *_discussion_involvement_condition(
+                involved_in_discussion, involved_thread_ids
+            ),
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
             *_numeric_tag_conditions(numeric_tags),
@@ -387,6 +456,8 @@ class UnderwritingRepository:
         zpid: str | None = None,
         min_bedrooms: int | None = None,
         max_bedrooms: int | None = None,
+        min_year_built: int | None = None,
+        max_year_built: int | None = None,
         market_ids: list[int] | None = None,
         states: list[str] | None = None,
         deal_statuses: list[str] | None = None,
@@ -396,6 +467,8 @@ class UnderwritingRepository:
         source: str | None = None,
         property_pending: bool | None = None,
         has_deal_pitch: bool | None = None,
+        involved_in_discussion: bool | None = None,
+        involved_thread_ids: Collection[int] | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
@@ -532,7 +605,11 @@ class UnderwritingRepository:
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
             *_property_pending_condition(property_pending),
+            *_listing_detail_conditions(min_year_built, max_year_built),
             *_deal_pitch_condition(has_deal_pitch),
+            *_discussion_involvement_condition(
+                involved_in_discussion, involved_thread_ids
+            ),
             *_boolean_tag_conditions(boolean_tags),
             *_single_select_tag_conditions(single_select_tags),
             *_numeric_tag_conditions(numeric_tags),

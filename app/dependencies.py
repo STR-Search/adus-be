@@ -1,3 +1,5 @@
+from collections.abc import Collection
+
 from fastapi import Depends, HTTPException
 from fastapi.security import APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -5,12 +7,13 @@ from starlette.requests import Request
 
 from app.core.clerk import verify_clerk_token
 from app.core.database import get_db
+from app.core.discussions.interfaces import UserLookup, UserRef
 from app.users.models.user import User
 from app.users.repositories.api_key_repository import ApiKeyRepository
 from app.users.repositories.user_repository import UserRepository
 from app.users.services.api_key_service import ApiKeyService
 
-__all__ = ["get_db", "get_current_user"]
+__all__ = ["get_current_user", "get_db", "get_user_lookup"]
 
 API_KEY_HEADER = "x-adus-api-key"
 
@@ -78,3 +81,27 @@ async def _user_from_clerk_token(request: Request, db: AsyncSession) -> User:
         raise HTTPException(status_code=401, detail="User not registered")
 
     return user
+
+
+class _UsersUserLookup:
+    """``UserLookup`` backed by the users domain, for ``app.core.discussions``."""
+
+    def __init__(self, repository: UserRepository):
+        self.repository = repository
+
+    async def get_users(self, user_ids: Collection[int]) -> dict[int, UserRef]:
+        users = await self.repository.get_by_ids_including_deleted(set(user_ids))
+        return {
+            user.id: UserRef(
+                id=user.id,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                email=user.email,
+                is_deleted=bool(user.is_deleted),  # NULL counts as active
+            )
+            for user in users
+        }
+
+
+def get_user_lookup(db: AsyncSession = Depends(get_db)) -> UserLookup:
+    return _UsersUserLookup(UserRepository(db))

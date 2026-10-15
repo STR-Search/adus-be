@@ -12,6 +12,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.core.discussions.schemas import DiscussionSummary
 from app.core.enums import PageSize
 from app.core.reference_data.schemas import ReferenceDataOption
 from app.core.serialization import PlainDecimal
@@ -75,6 +76,7 @@ class ZillowProperty(BaseModel):
     original_photos: list | None = None
     lot_size_sqft: Decimal | None = None
     description: str | None = None
+    year_built: int | None = None
 
     @computed_field
     @property
@@ -207,14 +209,21 @@ class GetUnderwritingResult(UnderwritingRead):
         default_factory=list
     )
     comp_set: list[GetUnderwritingCompSet] = Field(default_factory=list)
+    # Comment summary from the stored thread counters. Populated on the list
+    # paths (normal and simulation) only; always present there, as
+    # {thread_id: null, comment_count: 0, ...} when no thread exists.
+    discussion: DiscussionSummary | None = None
 
     @model_serializer(mode="wrap")
-    def _drop_null_simulated(self, handler):
-        # Keep the non-simulation response contract unchanged: the `simulated`
-        # key only appears when the row went through simulation mode.
+    def _drop_unpopulated_optionals(self, handler):
+        # Keep each response contract unchanged: `simulated` only appears when
+        # the row went through simulation mode, `discussion` only on the list
+        # paths (not the single GET / edit context).
         data = handler(self)
-        if isinstance(data, dict) and data.get("simulated") is None:
-            data.pop("simulated", None)
+        if isinstance(data, dict):
+            for key in ("simulated", "discussion"):
+                if data.get(key) is None:
+                    data.pop(key, None)
         return data
 
 
@@ -227,6 +236,7 @@ class SimulationParams(BaseModel):
 
 _RANGE_PAIRS = (
     ("min_bedrooms", "max_bedrooms"),
+    ("min_year_built", "max_year_built"),
     ("min_purchase_price", "max_purchase_price"),
     ("min_total_oop", "max_total_oop"),
     ("min_budget_to_pp", "max_budget_to_pp"),
@@ -256,6 +266,11 @@ class GetUnderwritingsQuery(BaseModel):
     zpid: str | None = None
     min_bedrooms: int | None = Field(None, ge=0)
     max_bedrooms: int | None = Field(None, ge=0)
+    # Matched against the live Zillow listing (zillow.scheduled_listing_details
+    # via zpid), not the stored snapshot, so rows without a zpid never match a
+    # bounded filter.
+    min_year_built: int | None = Field(None, ge=0)
+    max_year_built: int | None = Field(None, ge=0)
     market_ids: list[int] | None = Field(None, alias="market_id")
     states: list[USState] | None = Field(None, alias="state")
     # Accepts repeated or comma-separated statuses; they OR together.
@@ -267,6 +282,9 @@ class GetUnderwritingsQuery(BaseModel):
     property_pending: bool | None = None
     # Whether deal_pitch (the AI Overview) holds non-blank text; omit to ignore.
     has_deal_pitch: bool | None = None
+    # Whether the current user wrote, or is mentioned in, a (non-deleted)
+    # comment on the underwriting; omit to ignore.
+    involved_in_discussion: bool | None = None
     # free-text match on address/city/state; numeric terms also match sheet_number
     search: str | None = Field(None, max_length=100)
     min_purchase_price: Decimal | None = Field(None, ge=0)

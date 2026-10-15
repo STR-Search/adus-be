@@ -87,6 +87,8 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         zpid: str | None = None,
         min_bedrooms: int | None = None,
         max_bedrooms: int | None = None,
+        min_year_built: int | None = None,
+        max_year_built: int | None = None,
         market_ids: list[int] | None = None,
         states: list[str] | None = None,
         deal_statuses: list[str] | None = None,
@@ -96,6 +98,8 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         source: str | None = None,
         property_pending: bool | None = None,
         has_deal_pitch: bool | None = None,
+        involved_in_discussion: bool | None = None,
+        current_user_id: int | None = None,
         search: str | None = None,
         min_purchase_price: Decimal | None = None,
         max_purchase_price: Decimal | None = None,
@@ -128,6 +132,8 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             zpid=zpid,
             min_bedrooms=min_bedrooms,
             max_bedrooms=max_bedrooms,
+            min_year_built=min_year_built,
+            max_year_built=max_year_built,
             market_ids=market_ids,
             states=states,
             deal_statuses=deal_statuses,
@@ -137,6 +143,10 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             source=source,
             property_pending=property_pending,
             has_deal_pitch=has_deal_pitch,
+            involved_in_discussion=involved_in_discussion,
+            involved_thread_ids=await self._involved_thread_ids(
+                involved_in_discussion, current_user_id
+            ),
             search=search,
             min_purchase_price=min_purchase_price,
             max_purchase_price=max_purchase_price,
@@ -189,6 +199,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         results = [self._to_result(underwriting) for underwriting in items]
         await self._hydrate_automated_zillow(items, results)
         await self._enrich(results)
+        await self._populate_discussions(results)
 
         rows_by_id = {row.id: row for row in page_rows}
         for result in results:
