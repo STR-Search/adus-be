@@ -243,14 +243,14 @@ class TestWithMarketContext:
         assert cleaning_cost["turns_per_month"] == Decimal("38")
         assert cleaning_cost["monthly_cleaning_cost"] == Decimal("10450")
 
-    def test_seeds_optimization_items_with_must_haves_inside_the_defaults(self):
+    def test_seeds_optimization_items_with_must_haves_after_the_defaults(self):
         payload = self._build()
 
         assert [item.category for item in payload.optimization_list] == [
             "Furniture / Decor / Essentials",
-            "Hot Tub",
             "Design / Project Management",
             "Install / Staging / Warehousing",
+            "Hot Tub",
         ]
         by_category = {item.category: item for item in payload.optimization_list}
         # furnishings prices at the mid tier, matching the automated flow...

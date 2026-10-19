@@ -11,10 +11,10 @@ The list is built by ``BaseUnderwritingPayloadBuilder._build_optimization_list``
 off a ``MarketContext`` from ``PrepareUwDataService.prepare_market_context`` —
 the same two calls the automated and create-from-URL flows make — so the row
 set, ordering, price tiers and ``sort_order`` stamping cannot drift from what
-the app writes. The seeded options bracket the market's must-have amenities:
-Furniture/Decor/Essentials first (priced at the MID tier), then the must-haves
-in the market's own order (priced LOW, with the in-ground pool ids excluded),
-then Design/Project Management and Install/Staging/Warehousing.
+the app writes. The seeded options lead: Furniture/Decor/Essentials (priced at
+the MID tier), then Design/Project Management and Install/Staging/Warehousing,
+then the market's must-haves (priced LOW, with the in-ground pool ids
+excluded) — Cohost Essentials first if listed, the rest in the market's order.
 
 Note the inputs differ from the opex script: there is no purchase price (no
 item is a function of it) and ``property_size`` is used RAW, not bucketed —
