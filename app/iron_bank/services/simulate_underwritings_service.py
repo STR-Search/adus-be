@@ -163,7 +163,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
         )
 
         simulated_rows = [
-            self._simulate_row(row, interest_rate, down_payment_pct) for row in rows
+            self.simulate_row(row, interest_rate, down_payment_pct) for row in rows
         ]
 
         filtered = [
@@ -217,7 +217,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             ),
         )
 
-    def _simulate_row(
+    def simulate_row(
         self,
         row: Any,
         interest_rate: Decimal | None,

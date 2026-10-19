@@ -13,6 +13,7 @@ repositories, controllers, and router.
 | Market truth tables | `app/markets/` | `markets` |
 | Financial data | `app/iron_bank/` | `iron_bank` |
 | Third-party APIs | `app/external_api/` | none |
+| Deal recommendation agent | `app/deal_recommendation/` | `deal_recommendation` |
 
 ### Shared
 - `app/core/` — config, DB engine, logger. Do not reorganize.
@@ -28,10 +29,10 @@ repositories, controllers, and router.
 - `app/dependencies.py` — shared FastAPI dependencies (DB session, auth guards)
 
 ## Database Rules
-- Managed schemas: `markets`, `iron_bank`, `users`, `reference`, and `discussions`
+- Managed schemas: `markets`, `iron_bank`, `users`, `reference`, `discussions`, and `deal_recommendation`
 - `public` schema is owned by another org — never touch it
 - Alembic version table lives in `markets` schema
-- Five Alembic branches: `markets`, `iron_bank`, `users`, `reference`, and `discussions`
+- Six Alembic branches: `markets`, `iron_bank`, `users`, `reference`, `discussions`, and `deal_recommendation`
 
 ## Auth
 - Global guard: `dependencies=[Depends(get_current_user)]` in `app/__init__.py`
@@ -69,3 +70,5 @@ alembic heads
 - All models use `__table_args__ = {"schema": "markets"}` (or `"iron_bank"` for iron_bank models)
 - Routers registered in `app/__init__.py`
 - Never import between domains — shared logic goes in `app/core/`
+- Exception: `app/deal_recommendation` may import `app/iron_bank/services/deal_catalog_service.py`
+  (a read-only facade that returns dataclasses) and nothing else from another domain.

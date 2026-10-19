@@ -57,6 +57,16 @@ _listing_details = table(
 )
 
 
+# markets.market_keys_master, described just far enough to read market names
+# for the deal-recommendation facade (same no-cross-domain-import reason).
+_market_keys_master = table(
+    "market_keys_master",
+    column("id", Integer),
+    column("market_name", String),
+    schema="markets",
+)
+
+
 def _date_range_conditions(column, minimum: date | None, maximum: date | None) -> list:
     """Half-open day-range conditions for a ``timestamptz`` column.
 
@@ -635,6 +645,130 @@ class UnderwritingRepository:
 
         result = await self.db.execute(query)
         return list(result.all())
+
+    async def get_recommendation_pool_rows(
+        self,
+        *,
+        statuses: Collection[str],
+        property_pending: bool | None = False,
+        min_deal_approved: date | None = None,
+        max_deal_approved: date | None = None,
+        ids: Collection[int] | None = None,
+    ) -> list[Any]:
+        """Thin rows for the deal-recommendation candidate pool.
+
+        The simulation inputs plus the display, location and tag columns the
+        recommendation facade needs. No pagination: the pool is small (~1k).
+        """
+        tag_columns = [
+            getattr(Underwriting, name)
+            for name in (
+                *BOOLEAN_TAG_FIELDS,
+                *MULTI_SELECT_TAG_FIELDS,
+                *SINGLE_SELECT_TAG_FIELDS,
+            )
+        ]
+        query = (
+            select(
+                Underwriting.id,
+                Underwriting.purchase_price,
+                Underwriting.total_oop,
+                Underwriting.l_cash_on_cash,
+                Underwriting.m_cash_on_cash,
+                Underwriting.h_cash_on_cash,
+                Underwriting.budget_to_pp,
+                Underwriting.optimization_total,
+                Underwriting.operating_expense_total,
+                Underwriting.source,
+                Underwriting.prr,
+                Underwriting.sheet_number,
+                Underwriting.created_at,
+                Underwriting.deal_approved,
+                Underwriting.property_address,
+                Underwriting.street,
+                Underwriting.city,
+                Underwriting.state,
+                Underwriting.bedrooms,
+                Underwriting.bathrooms,
+                Underwriting.market_id,
+                Underwriting.deal_status,
+                Underwriting.mid_gross_revenue,
+                *tag_columns,
+                UnderwritingDetail.purchase_details,
+                UnderwritingDetail.forecasted_revenue,
+                UnderwritingDetail.y1_coc_incl_tax_savings,
+                UnderwritingTax.tax_savings,
+            )
+            .outerjoin(
+                UnderwritingDetail,
+                UnderwritingDetail.underwriting_id == Underwriting.id,
+            )
+            .outerjoin(
+                UnderwritingTax,
+                UnderwritingTax.underwriting_id == Underwriting.id,
+            )
+            .where(Underwriting.deal_status.in_(list(statuses)))
+        )
+        if property_pending is not None:
+            query = query.where(
+                func.coalesce(Underwriting.property_pending, False) == property_pending
+            )
+        for condition in _date_range_conditions(
+            Underwriting.deal_approved, min_deal_approved, max_deal_approved
+        ):
+            query = query.where(condition)
+        if ids is not None:
+            query = query.where(Underwriting.id.in_(list(ids)))
+        result = await self.db.execute(query)
+        return list(result.all())
+
+    async def search_text(self, ids: Collection[int], terms: list[str]) -> set[int]:
+        """Ids whose free text contains every term (case-insensitive).
+
+        A term may match any of the deal's text fields or any of its
+        optimization items; items are matched via EXISTS so rows don't multiply.
+        """
+        if not ids or not terms:
+            return set(ids)
+        query = (
+            select(Underwriting.id)
+            .outerjoin(
+                UnderwritingDetail,
+                UnderwritingDetail.underwriting_id == Underwriting.id,
+            )
+            .where(Underwriting.id.in_(list(ids)))
+        )
+        for term in terms:
+            pattern = f"%{term}%"
+            item_match = exists().where(
+                UnderwritingOptimizationItem.underwriting_id == Underwriting.id,
+                or_(
+                    UnderwritingOptimizationItem.category.ilike(pattern),
+                    UnderwritingOptimizationItem.spec.ilike(pattern),
+                    UnderwritingOptimizationItem.notes.ilike(pattern),
+                ),
+            )
+            query = query.where(
+                or_(
+                    Underwriting.deal_pitch.ilike(pattern),
+                    Underwriting.note.ilike(pattern),
+                    UnderwritingDetail.analyst_notes.ilike(pattern),
+                    UnderwritingDetail.construction_and_design_notes.ilike(pattern),
+                    item_match,
+                )
+            )
+        result = await self.db.execute(query)
+        return set(result.scalars().all())
+
+    async def get_market_names(self, market_ids: Collection[int]) -> dict[int, str]:
+        if not market_ids:
+            return {}
+        result = await self.db.execute(
+            select(_market_keys_master.c.id, _market_keys_master.c.market_name).where(
+                _market_keys_master.c.id.in_(list(market_ids))
+            )
+        )
+        return {row.id: row.market_name for row in result.all() if row.market_name}
 
     async def get_by_ids(self, ids: list[int]) -> list[Underwriting]:
         """Fully hydrated rows for one page of ids.

@@ -41,6 +41,13 @@ class Config(BaseSettings):
     N8N_WEBHOOK_ANALYST_COMPLETED_ENABLED: bool = False
     N8N_WEBHOOK_TIMEOUT_SECONDS: int = 10
 
+    # Deal recommendation agent (app/deal_recommendation). The key is read by
+    # the Anthropic SDK; the agent is unavailable while it is empty.
+    ANTHROPIC_API_KEY: str = ""
+    DEAL_REC_MODEL: str = "claude-sonnet-5-5"
+    DEAL_REC_EFFORT: str = "high"
+    DEAL_REC_MAX_TOOL_CALLS: int = 12
+
     # Log the original DBAPI error (message + SQL + params) at the engine
     # boundary. Server-side only; never reaches clients. Safe to leave on in
     # every environment — kept as a flag purely so verbosity is toggleable.
