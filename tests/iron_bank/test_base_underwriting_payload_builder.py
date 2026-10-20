@@ -183,7 +183,7 @@ class TestOperatingExpenseOrder:
 
 
 class TestOptimizationListOrder:
-    """The seeded rows bracket the must-haves, and sort_order is stamped from
+    """The seeded rows lead the must-haves, and sort_order is stamped from
     this list's positions on save, so the order is the contract."""
 
     _CATALOG = [
@@ -195,6 +195,7 @@ class TestOptimizationListOrder:
         _option(1, "Hot Tub"),
         _option(2, "Fire Pit"),
         _option(3, "Sauna"),
+        _option(22, "Cohost Essentials"),
     ]
 
     def _categories(self, must_have_amenity_ids: list[int]) -> list[str]:
@@ -206,31 +207,45 @@ class TestOptimizationListOrder:
         )
         return [item["category"] for item in items]
 
-    def test_must_haves_sit_between_furnishings_and_the_service_lines(self):
-        # Several must-haves, so the order within the middle block is pinned too:
+    def test_must_haves_follow_the_seeded_options(self):
+        # Several must-haves, so the order within that block is pinned too:
         # it follows the order the market lists them, not the catalog's.
         assert self._categories([3, 1, 2]) == [
             "Furnishings",
+            "Project Mgmt",
+            "Shipping",
             "Sauna",
             "Hot Tub",
             "Fire Pit",
-            "Project Mgmt",
-            "Shipping",
         ]
 
-    def test_the_bracket_holds_with_no_must_haves(self):
+    def test_cohost_essentials_leads_the_must_haves(self):
+        assert self._categories([3, 1, 22, 2]) == [
+            "Furnishings",
+            "Project Mgmt",
+            "Shipping",
+            "Cohost Essentials",
+            "Sauna",
+            "Hot Tub",
+            "Fire Pit",
+        ]
+
+    def test_cohost_essentials_is_not_seeded_unless_a_must_have(self):
+        assert "Cohost Essentials" not in self._categories([3, 1])
+
+    def test_the_seeded_options_hold_with_no_must_haves(self):
         assert self._categories([]) == ["Furnishings", "Project Mgmt", "Shipping"]
 
-    def test_a_must_have_naming_a_seeded_option_stays_in_its_bracket(self):
+    def test_a_must_have_naming_a_seeded_option_does_not_move_it(self):
         # Can't happen with today's ids (catalog ids are positive, the seeded
-        # sentinels are not), but the bracket must not depend on that.
+        # sentinels are not), but the seeded order must not depend on that.
         assert self._categories(
             [
                 PrepareUwDataService.CONSOLIDATED_SHIPPING_OPTION_ID,
                 1,
                 PrepareUwDataService.FURNISHINGS_OPTION_ID,
             ]
-        ) == ["Furnishings", "Hot Tub", "Project Mgmt", "Shipping"]
+        ) == ["Furnishings", "Project Mgmt", "Shipping", "Hot Tub"]
 
     def test_furnishings_seeds_at_mid_and_everything_else_at_low(self):
         # Priced per tier so the row proves which field it was read from.
@@ -277,10 +292,9 @@ class TestOptimizationListOrder:
 
         assert [item["tier"] for item in items] == ["Mid"]
 
-    def test_every_seeded_option_is_placed_in_the_bracket(self):
+    def test_every_seeded_option_is_placed(self):
         # Guards drift: a fourth synthetic option added to the prepare service
         # would otherwise be silently left out of the seeded payload.
-        builder = BaseUnderwritingPayloadBuilder
-        assert set(
-            builder._LEADING_AMENITY_OPTION_IDS + builder._TRAILING_AMENITY_OPTION_IDS
-        ) == set(PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS)
+        assert set(BaseUnderwritingPayloadBuilder._LEADING_AMENITY_OPTION_IDS) == set(
+            PrepareUwDataService.SEEDED_AMENITY_OPTION_IDS
+        )

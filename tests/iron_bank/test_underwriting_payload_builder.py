@@ -162,7 +162,7 @@ def _prepared_with_amenities(*, amenities, must_have_amenity_ids):
     }
 
 
-def test_seeds_optimization_items_with_must_haves_bracketed_by_base_options():
+def test_seeds_optimization_items_with_must_haves_after_base_options():
     prepared = _prepared_with_amenities(
         amenities=[
             # Furnishings seeds at the mid tier; everything else at low. The two
@@ -198,20 +198,6 @@ def test_seeds_optimization_items_with_must_haves_bracketed_by_base_options():
             "tier": "Mid",
         },
         {
-            "category": "Fire Pit",
-            "total_price": Decimal("2200"),
-            "base_price": Decimal("2200"),
-            "metric": "flat",
-            "tier": "Low",
-        },
-        {
-            "category": "Hot Tub",
-            "total_price": Decimal("9500"),
-            "base_price": Decimal("9500"),
-            "metric": "flat",
-            "tier": "Low",
-        },
-        {
             "category": "STR Cribs - Project Management",
             "total_price": Decimal("12000"),
             "base_price": Decimal("12000"),
@@ -222,6 +208,20 @@ def test_seeds_optimization_items_with_must_haves_bracketed_by_base_options():
             "category": "Consolidated Shipping",
             "total_price": Decimal("18225"),
             "base_price": Decimal("18225"),
+            "metric": "flat",
+            "tier": "Low",
+        },
+        {
+            "category": "Fire Pit",
+            "total_price": Decimal("2200"),
+            "base_price": Decimal("2200"),
+            "metric": "flat",
+            "tier": "Low",
+        },
+        {
+            "category": "Hot Tub",
+            "total_price": Decimal("9500"),
+            "base_price": Decimal("9500"),
             "metric": "flat",
             "tier": "Low",
         },
