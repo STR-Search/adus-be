@@ -4,7 +4,18 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Integer, String, column, exists, func, or_, select, table, text
+from sqlalchemy import (
+    Integer,
+    String,
+    bindparam,
+    column,
+    exists,
+    func,
+    or_,
+    select,
+    table,
+    text,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -24,6 +35,11 @@ from app.iron_bank.schemas.underwriting import (
     NUMERIC_TAG_FIELDS,
     SINGLE_SELECT_TAG_FIELDS,
 )
+
+# Zillow ``home_status`` values that mean the listing is NOT pending. Any other
+# value -- including a missing status -- marks the underwriting pending. Shared
+# by the save-time rule and ``bulk_sync_property_pending`` so the two can't drift.
+NOT_PENDING_HOME_STATUSES = ("FOR_SALE", "OTHER")
 
 _SIMULATION_EXCLUDED_DEAL_STATUSES = (
     DealStatus.DELETE_ZILLOW,
@@ -863,25 +879,32 @@ class UnderwritingRepository:
 
         Mirrors the save-time rule in
         ``SaveUnderwritingService._apply_listing_boolean_fields``
-        (``home_status != "FOR_SALE"``, so a NULL status is also pending) as a
-        set-based ``UPDATE ... FROM`` join on ``zpid``. ``IS DISTINCT FROM
-        'FOR_SALE'`` is the null-safe form: true for NULL and any non-FOR_SALE
-        value, false only for exactly ``FOR_SALE``. Underwritings whose ``zpid``
-        has no matching scheduled listing are left untouched, and the second
-        ``IS DISTINCT FROM`` guard writes only rows whose flag actually changes,
-        so ``rowcount`` reports the number updated. Raw SQL (rather than the ORM)
-        keeps this repository from importing the ``zillow`` domain's model.
+        (``home_status not in NOT_PENDING_HOME_STATUSES``, so a NULL status is
+        also pending) as a set-based ``UPDATE ... FROM`` join on ``zpid``. The
+        ``COALESCE`` is what makes NULL pending: a bare ``NULL NOT IN (...)``
+        yields NULL, not true. Underwritings whose ``zpid`` has no matching
+        scheduled listing are left untouched, and the ``IS DISTINCT FROM`` guard
+        writes only rows whose flag actually changes, so ``rowcount`` reports the
+        number updated. Raw SQL (rather than the ORM) keeps this repository from
+        importing the ``zillow`` domain's model.
         """
         try:
-            result = await self.db.execute(text("""
+            result = await self.db.execute(
+                text("""
                     UPDATE iron_bank.underwritings AS uw
-                    SET property_pending = (sl.home_status IS DISTINCT FROM 'FOR_SALE')
+                    SET property_pending = (
+                        COALESCE(sl.home_status, '') NOT IN :not_pending_statuses
+                    )
                     FROM zillow.scheduled_listings AS sl
                     WHERE uw.zpid = sl.zpid
                       AND uw.property_pending IS DISTINCT FROM (
-                          sl.home_status IS DISTINCT FROM 'FOR_SALE'
+                          COALESCE(sl.home_status, '') NOT IN :not_pending_statuses
                       )
-                    """))
+                    """).bindparams(
+                    bindparam("not_pending_statuses", expanding=True)
+                ),
+                {"not_pending_statuses": list(NOT_PENDING_HOME_STATUSES)},
+            )
             await self.db.commit()
             return result.rowcount
         except Exception:

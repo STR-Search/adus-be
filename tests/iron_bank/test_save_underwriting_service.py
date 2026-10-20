@@ -115,11 +115,11 @@ async def test_save_persists_client_provided_zillow_property():
     ("home_status", "expected_property_pending"),
     [
         # An unknown home status is treated as pending — we only clear the flag
-        # for a listing we positively know is still for sale.
+        # for a listing whose status is positively FOR_SALE or OTHER.
         (None, True),
         ("FOR_SALE", False),
+        ("OTHER", False),
         ("SOLD", True),
-        ("OTHER", True),
         ("RECENTLY_SOLD", True),
         ("PENDING", True),
     ],
