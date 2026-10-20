@@ -8,8 +8,8 @@ class SyncUnderwritingPropertyPendingJob:
 
     Mirrors the boolean logic applied at save time in
     ``SaveUnderwritingService._apply_listing_boolean_fields``: a listing whose
-    ``home_status`` is anything other than ``FOR_SALE`` (or missing) is treated
-    as pending. This keeps that flag current as listings change status after
+    ``home_status`` is anything other than ``FOR_SALE`` or ``OTHER`` (or
+    missing) is treated as pending. This keeps that flag current as listings change status after
     the underwriting was first saved.
 
     The value is a pure function of the joined listing's ``home_status``, so the

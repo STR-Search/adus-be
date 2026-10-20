@@ -5,7 +5,10 @@ import structlog
 from fastapi.encoders import jsonable_encoder
 
 from app.airbnb_public.schemas.cleaned_data import RevenuePotentialPercentiles
-from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
+from app.iron_bank.repositories.underwriting_repository import (
+    NOT_PENDING_HOME_STATUSES,
+    UnderwritingRepository,
+)
 from app.iron_bank.schemas.save_underwriting import (
     ForecastedRevenueInput,
     SaveUnderwritingPayload,
@@ -185,7 +188,9 @@ class SaveUnderwritingService:
         if listing is None:
             return
 
-        underwriting_data["property_pending"] = listing.home_status != "FOR_SALE"
+        underwriting_data["property_pending"] = (
+            listing.home_status not in NOT_PENDING_HOME_STATUSES
+        )
 
     async def _build_detail_data(
         self,
