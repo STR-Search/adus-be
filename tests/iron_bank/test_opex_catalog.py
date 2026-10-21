@@ -212,6 +212,7 @@ class TestKeyedOn:
             "capex_reserve": OpexKeyedOn.BEDROOMS,
             "misc": OpexKeyedOn.NONE,
             "hoa_fees": OpexKeyedOn.BEDROOMS,
+            "project_loan": OpexKeyedOn.NONE,
         }
 
     def test_the_derived_rows_follow_their_source_columns(self):

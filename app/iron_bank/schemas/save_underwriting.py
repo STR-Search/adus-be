@@ -49,6 +49,7 @@ class UnderwritingDetailsInput(BaseModel):
     forecasted_revenue: ForecastedRevenueInput | None = None
     cleaning_cost: dict[str, Any] | None = None
     property_taxes: dict[str, Any] | None = None
+    opex_project_loan: dict[str, Any] | None = None
     zillow_property: StoredZillowProperty | None = None
     analyst_notes: str | None = None
     construction_and_design_notes: str | None = None

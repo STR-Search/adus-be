@@ -103,6 +103,7 @@ class GetUnderwritingDetails(BaseModel):
     forecasted_revenue: dict[str, Any] | None = None
     cleaning_cost: dict[str, Any] | None = None
     property_taxes: dict[str, Any] | None = None
+    opex_project_loan: dict[str, Any] | None = None
     zillow_property: ZillowProperty | None = None
     analyst_notes: str | None = None
     construction_and_design_notes: str | None = None

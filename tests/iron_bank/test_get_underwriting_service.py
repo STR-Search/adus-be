@@ -74,6 +74,11 @@ def _underwriting():
                     "purchase_price": Decimal("485000"),
                 },
             },
+            opex_project_loan={
+                "loan_amount": None,
+                "interest_rate": Decimal("0.065"),
+                "terms_years": 7,
+            },
             zillow_property=None,
             analyst_notes="Existing hot tub and cabin aesthetic.",
             construction_and_design_notes="Cosmetic refresh, no structural work.",
