@@ -10,7 +10,7 @@ from app.iron_bank.schemas.save_underwriting import (
     PurchaseDetailsInput,
     UnderwritingTaxInput,
 )
-from app.iron_bank.services.underwriting_calculator import UnderwritingCalculator
+from app.iron_bank.services.engine.underwriting_calculator import UnderwritingCalculator
 
 
 def test_calculates_taxes_using_sla_multiplier_pct():

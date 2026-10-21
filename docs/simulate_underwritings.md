@@ -13,14 +13,14 @@ Either or both may be sent. When at least one is present, every underwriting's
 financing-derived metrics are recalculated with the override(s) and the list's
 **filtering, sorting, and pagination run on the simulated values**. Nothing is
 persisted — the service
-([`SimulateUnderwritingsService`](../app/iron_bank/services/simulate_underwritings_service.py))
+([`SimulateUnderwritingsService`](../app/iron_bank/services/operations/simulate_underwritings_service.py))
 is strictly read-only. Without the params, the endpoint behaves exactly as
 before (same service, same response shape, no `simulated`/`simulation` keys).
 
 ## What is recalculated
 
 The formulas are the same ones the save/update paths use —
-[`UnderwritingCalculator`](../app/iron_bank/services/underwriting_calculator.py)
+[`UnderwritingCalculator`](../app/iron_bank/services/engine/underwriting_calculator.py)
 is the single source of truth.
 
 | Override | Directly changes | Cascades into |
@@ -140,7 +140,7 @@ the stored metrics:
 |---|---|
 | Query params, echo block, `simulated` flag | [`app/iron_bank/schemas/get_underwriting.py`](../app/iron_bank/schemas/get_underwriting.py) |
 | Controller branching | [`app/iron_bank/controllers/get_underwriting_controller.py`](../app/iron_bank/controllers/get_underwriting_controller.py) |
-| Simulation orchestration | [`app/iron_bank/services/simulate_underwritings_service.py`](../app/iron_bank/services/simulate_underwritings_service.py) |
+| Simulation orchestration | [`app/iron_bank/services/operations/simulate_underwritings_service.py`](../app/iron_bank/services/operations/simulate_underwritings_service.py) |
 | Lean input query + page hydration | [`app/iron_bank/repositories/underwriting_repository.py`](../app/iron_bank/repositories/underwriting_repository.py) |
-| Formulas | [`app/iron_bank/services/underwriting_calculator.py`](../app/iron_bank/services/underwriting_calculator.py) |
+| Formulas | [`app/iron_bank/services/engine/underwriting_calculator.py`](../app/iron_bank/services/engine/underwriting_calculator.py) |
 | Behavioral coverage | [`tests/iron_bank/test_simulate_underwritings_service.py`](../tests/iron_bank/test_simulate_underwritings_service.py) |

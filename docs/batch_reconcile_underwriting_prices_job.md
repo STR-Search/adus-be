@@ -442,10 +442,10 @@ The per-`zpid` `status` can be:
 | CLI entry point | `scripts/run_uw_auto_prepare.py` |
 | Batch selector and result aggregation | `app/workflows/batch_reconcile_underwriting_prices_job.py` |
 | Single-property reconciliation orchestration | `app/workflows/reconcile_underwriting_price_job.py` |
-| Price normalization and reconciliation payload | `app/iron_bank/services/purchase_price_reconciliation_payload_builder.py` |
-| Reconciliation update/calculation | `app/iron_bank/services/update_underwriting_service.py` |
-| Shared save/update calculations | `app/iron_bank/services/save_underwriting_service.py` |
-| Core underwriting math | `app/iron_bank/services/underwriting_calculator.py` |
+| Price normalization and reconciliation payload | `app/iron_bank/services/payload_builders/purchase_price_reconciliation_payload_builder.py` |
+| Reconciliation update/calculation | `app/iron_bank/services/operations/update_underwriting_service.py` |
+| Shared save/update calculations | `app/iron_bank/services/operations/save_underwriting_service.py` |
+| Core underwriting math | `app/iron_bank/services/engine/underwriting_calculator.py` |
 | Underwriting persistence | `app/iron_bank/repositories/underwriting_repository.py` |
 | Price-change zpid selection | `app/zillow/repositories/scheduled_listing_details_repository.py` |
 | Current Zillow price lookup | `app/zillow/repositories/scheduled_listings_repository.py` |

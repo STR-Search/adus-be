@@ -23,9 +23,11 @@ from app.iron_bank.schemas.get_underwriting import (
     ZillowProperty,
 )
 from app.iron_bank.schemas.underwriting import BOOLEAN_TAG_LABELS, UnderwritingRead
-from app.iron_bank.services import opex_catalog
-from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
-from app.iron_bank.services.reference_label_resolver import apply_reference_labels
+from app.iron_bank.services.engine import opex_catalog
+from app.iron_bank.services.engine.prepare_uw_data_service import PrepareUwDataService
+from app.iron_bank.services.operations.reference_label_resolver import (
+    apply_reference_labels,
+)
 
 
 class GetUnderwritingService:

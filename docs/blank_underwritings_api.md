@@ -90,7 +90,7 @@ somewhere shared rather than copying it.
 
 ## 3. Payload builder — a second entry point, not a new class
 
-`app/iron_bank/services/non_automated_underwriting_payload_builder.py`
+`app/iron_bank/services/payload_builders/non_automated_underwriting_payload_builder.py`
 
 Refactor `build_from_zillow_property` so everything from `purchase_price` downward becomes
 a private `_build(...)`, then add `build_blank(...)` alongside it.
@@ -176,7 +176,7 @@ is a snapshot, and after the first edit it is deliberately stale.
 
 ## 4. Service
 
-New `app/iron_bank/services/create_blank_underwriting_service.py`:
+New `app/iron_bank/services/creation/create_blank_underwriting_service.py`:
 
 ```python
 context = await self.market_context_reader.build_market_context(

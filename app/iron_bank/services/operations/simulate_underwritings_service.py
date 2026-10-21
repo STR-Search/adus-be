@@ -20,8 +20,10 @@ from app.iron_bank.schemas.save_underwriting import (
     OptimizationItemInput,
     PurchaseDetailsInput,
 )
-from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
-from app.iron_bank.services.underwriting_calculator import UnderwritingCalculator
+from app.iron_bank.services.engine.underwriting_calculator import UnderwritingCalculator
+from app.iron_bank.services.operations.get_underwriting_service import (
+    GetUnderwritingService,
+)
 
 
 @dataclass

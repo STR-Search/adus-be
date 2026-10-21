@@ -1,7 +1,7 @@
 -- Reseed uw_operating_expenses for 69 market_108 underwritings
 -- still holding only the two placeholder rows (Property Taxes, MISC @ 0.00).
 --
--- Generated from app.iron_bank.services.opex_catalog via
+-- Generated from app.iron_bank.services.engine.opex_catalog via
 -- scripts/generate_uw_operating_expenses_sql.py, so the row set, labels,
 -- amounts and sort_order match exactly what the app seeds on save.
 --

@@ -2,7 +2,7 @@
 
 Every value the FE supplies (i.e. every non-derived calculation input) and
 what recalculates when it changes. The formulas live in
-[`UnderwritingCalculator`](../app/iron_bank/services/underwriting_calculator.py)
+[`UnderwritingCalculator`](../app/iron_bank/services/engine/underwriting_calculator.py)
 and are shared by save, update, purchase-price reconciliation, and
 [simulation](simulate_underwritings.md) — so this chart holds for all four
 paths. (When a given path actually *runs* a calculation is a separate
@@ -167,7 +167,7 @@ cascades is served unchanged.
 
 | Concern | Source |
 |---|---|
-| All formulas | [`app/iron_bank/services/underwriting_calculator.py`](../app/iron_bank/services/underwriting_calculator.py) |
+| All formulas | [`app/iron_bank/services/engine/underwriting_calculator.py`](../app/iron_bank/services/engine/underwriting_calculator.py) |
 | Which fields are FE inputs | [`app/iron_bank/schemas/save_underwriting.py`](../app/iron_bank/schemas/save_underwriting.py) |
-| Orchestration (what triggers which calculation) | [`app/iron_bank/services/save_underwriting_service.py`](../app/iron_bank/services/save_underwriting_service.py), [`update_underwriting_service.md`](update_underwriting_service.md) |
+| Orchestration (what triggers which calculation) | [`app/iron_bank/services/operations/save_underwriting_service.py`](../app/iron_bank/services/operations/save_underwriting_service.py), [`update_underwriting_service.md`](update_underwriting_service.md) |
 | Auto revenue estimation | `SaveUnderwritingService._build_forecasted_revenue_input` |

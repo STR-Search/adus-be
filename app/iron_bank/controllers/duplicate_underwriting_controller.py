@@ -2,7 +2,7 @@ from fastapi import HTTPException
 
 from app.core.logger import logger
 from app.iron_bank.schemas.duplicate_underwriting import DuplicateUnderwritingResult
-from app.iron_bank.services.duplicate_underwriting_service import (
+from app.iron_bank.services.creation.duplicate_underwriting_service import (
     DuplicateUnderwritingService,
 )
 

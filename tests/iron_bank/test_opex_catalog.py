@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from app.iron_bank.enums import OpexKeyedOn
 from app.iron_bank.schemas.prepare_uw import PreparedOpex
-from app.iron_bank.services import opex_catalog
+from app.iron_bank.services.engine import opex_catalog
 from app.markets.schemas.opex import OpexByBedroomsSchema, OpexBySizeSchema
 
 

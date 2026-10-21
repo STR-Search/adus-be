@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from app.iron_bank.defaults import UW_CONFIG_DEFAULTS
 from app.iron_bank.schemas.prepare_uw import MarketContext, PrepareUwDataResult
-from app.iron_bank.services import opex_catalog
+from app.iron_bank.services.engine import opex_catalog
 
 
 class PrepareUwDataService:

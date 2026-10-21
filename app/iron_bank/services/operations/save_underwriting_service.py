@@ -18,7 +18,7 @@ from app.iron_bank.schemas.underwriting import (
     MULTI_SELECT_TAG_FIELDS,
     SINGLE_SELECT_TAG_FIELDS,
 )
-from app.iron_bank.services.underwriting_calculator import UnderwritingCalculator
+from app.iron_bank.services.engine.underwriting_calculator import UnderwritingCalculator
 from app.markets.schemas.market import MarketKeysMasterSchema
 from app.zillow.models.scheduled_listings import ScheduledListing
 

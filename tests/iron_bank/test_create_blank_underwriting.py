@@ -20,15 +20,17 @@ from app.iron_bank.router import get_create_blank_underwriting_controller, route
 from app.iron_bank.schemas.create_blank_underwriting import (
     CreateBlankUnderwritingPayload,
 )
-from app.iron_bank.services import opex_catalog
-from app.iron_bank.services.create_blank_underwriting_service import (
+from app.iron_bank.services.creation.create_blank_underwriting_service import (
     CreateBlankUnderwritingService,
 )
-from app.iron_bank.services.non_automated_underwriting_payload_builder import (
+from app.iron_bank.services.engine import opex_catalog
+from app.iron_bank.services.engine.prepare_uw_data_service import PrepareUwDataService
+from app.iron_bank.services.operations.save_underwriting_service import (
+    SaveUnderwritingService,
+)
+from app.iron_bank.services.payload_builders.non_automated_underwriting_payload_builder import (
     NonAutomatedUnderwritingPayloadBuilder,
 )
-from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
-from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
 
 PURCHASE_PRICE = Decimal("389000")
 FRED_VALUE = 6.5
