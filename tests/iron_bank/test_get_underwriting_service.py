@@ -7,8 +7,10 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingDetails,
     GetUnderwritingResult,
 )
-from app.iron_bank.services import opex_catalog
-from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
+from app.iron_bank.services.engine import opex_catalog
+from app.iron_bank.services.operations.get_underwriting_service import (
+    GetUnderwritingService,
+)
 from app.markets.schemas.opex import OpexByBedroomsSchema, OpexBySizeSchema
 
 

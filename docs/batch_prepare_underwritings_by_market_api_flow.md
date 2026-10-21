@@ -416,9 +416,9 @@ Field meanings:
 | Market-scoped batch job | `app/workflows/batch_prepare_and_save_underwritings_by_market_job.py` |
 | Single-property prepare/save job | `app/workflows/prepare_and_save_underwriting_job.py` |
 | Cross-domain prepared data job | `app/workflows/prepare_uw_data_job.py` |
-| Prepared data shaping | `app/iron_bank/services/prepare_uw_data_service.py` |
-| Automated save payload builder | `app/iron_bank/services/underwriting_payload_builder.py` |
-| Save-time calculations and persistence orchestration | `app/iron_bank/services/save_underwriting_service.py` |
+| Prepared data shaping | `app/iron_bank/services/engine/prepare_uw_data_service.py` |
+| Automated save payload builder | `app/iron_bank/services/payload_builders/underwriting_payload_builder.py` |
+| Save-time calculations and persistence orchestration | `app/iron_bank/services/operations/save_underwriting_service.py` |
 | Underwriting DB writes | `app/iron_bank/repositories/underwriting_repository.py` |
 | Market-scoped listing selection | `app/zillow/repositories/scheduled_listings_repository.py` |
 

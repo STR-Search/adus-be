@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.iron_bank.services import opex_catalog
-from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
+from app.iron_bank.services.engine import opex_catalog
+from app.iron_bank.services.engine.prepare_uw_data_service import PrepareUwDataService
 from app.markets.schemas.opex import OpexByBedroomsSchema
 from app.workflows.prepare_uw_data_job import (
     BedroomContextNotFoundError,
@@ -282,7 +282,9 @@ class TestBuildMarketContext:
 def test_from_session_wires_real_services():
     job = PrepareUwDataJob.from_session(db=object())
 
-    from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
+    from app.iron_bank.services.engine.prepare_uw_data_service import (
+        PrepareUwDataService,
+    )
     from app.zillow.services.scheduled_listings_service import ScheduledListingsService
 
     assert isinstance(job.uw_data_service, PrepareUwDataService)

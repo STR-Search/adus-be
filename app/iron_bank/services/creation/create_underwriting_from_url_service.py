@@ -4,10 +4,12 @@ import structlog
 
 from app.iron_bank.schemas.prepare_uw import MarketContext
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingResult
-from app.iron_bank.services.non_automated_underwriting_payload_builder import (
+from app.iron_bank.services.operations.save_underwriting_service import (
+    SaveUnderwritingService,
+)
+from app.iron_bank.services.payload_builders.non_automated_underwriting_payload_builder import (
     NonAutomatedUnderwritingPayloadBuilder,
 )
-from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
 
 logger = structlog.get_logger(__name__)
 

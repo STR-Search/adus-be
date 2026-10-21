@@ -42,7 +42,7 @@ from the sheet — not to keep the fallbacks.
 
 ## 1. Edit-context fallback
 
-**`app/iron_bank/services/get_underwriting_service.py`** (~lines 73–93, in
+**`app/iron_bank/services/operations/get_underwriting_service.py`** (~lines 73–93, in
 `get_edit_context`)
 
 `_zillow_from_listing` and `_zillow_from_stored` each return a 2-tuple whose
@@ -73,7 +73,7 @@ is permanent. Update its comment to say so.
 
 ## 2. Update-path fallback
 
-**`app/iron_bank/services/update_underwriting_service.py`**,
+**`app/iron_bank/services/operations/update_underwriting_service.py`**,
 `_resolve_bedrooms_for_update` (~lines 166–205)
 
 Delete the last three blocks — the payload `zillow_property`, the stored

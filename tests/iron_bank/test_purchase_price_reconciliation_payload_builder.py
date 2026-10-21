@@ -1,7 +1,7 @@
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.iron_bank.services.purchase_price_reconciliation_payload_builder import (
+from app.iron_bank.services.payload_builders.purchase_price_reconciliation_payload_builder import (
     PurchasePriceReconciliationPayloadBuilder,
 )
 

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.iron_bank.enums import SortOrder, UnderwritingSortBy
-from app.iron_bank.services.simulate_underwritings_service import (
+from app.iron_bank.services.operations.simulate_underwritings_service import (
     SimulateUnderwritingsService,
     _SimulatedRow,
 )

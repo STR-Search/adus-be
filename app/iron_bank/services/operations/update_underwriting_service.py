@@ -24,10 +24,14 @@ from app.iron_bank.schemas.update_underwriting import (
     UpdateUnderwritingPayload,
     UpdateUnderwritingResult,
 )
-from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
-from app.iron_bank.services.reference_label_resolver import apply_reference_labels
-from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
-from app.iron_bank.services.underwriting_calculator import UnderwritingCalculator
+from app.iron_bank.services.engine.prepare_uw_data_service import PrepareUwDataService
+from app.iron_bank.services.engine.underwriting_calculator import UnderwritingCalculator
+from app.iron_bank.services.operations.reference_label_resolver import (
+    apply_reference_labels,
+)
+from app.iron_bank.services.operations.save_underwriting_service import (
+    SaveUnderwritingService,
+)
 
 
 class UpdateUnderwritingService(SaveUnderwritingService):

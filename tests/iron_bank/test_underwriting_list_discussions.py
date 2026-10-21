@@ -10,8 +10,10 @@ import pytest
 
 from app.core.discussions.enums import SubjectType
 from app.core.discussions.service import DiscussionService
-from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
-from app.iron_bank.services.simulate_underwritings_service import (
+from app.iron_bank.services.operations.get_underwriting_service import (
+    GetUnderwritingService,
+)
+from app.iron_bank.services.operations.simulate_underwritings_service import (
     SimulateUnderwritingsService,
 )
 from tests.core.discussions.conftest import (

@@ -2,7 +2,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.iron_bank.schemas.prepare_uw import PrepareUwDataResult
-from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
+from app.iron_bank.services.engine.prepare_uw_data_service import PrepareUwDataService
 
 
 class FakeSchema(SimpleNamespace):
