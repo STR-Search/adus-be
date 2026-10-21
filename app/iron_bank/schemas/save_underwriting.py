@@ -41,6 +41,14 @@ class ForecastedRevenueInput(BaseModel):
     scenarios: ForecastedRevenueScenariosInput
 
 
+class ProjectLoanInput(BaseModel):
+    # Extra keys (notably the client's copy of monthly_amount) are dropped:
+    # monthly_amount is always recalculated from the terms.
+    loan_amount: Decimal | None = Field(None, ge=0)
+    interest_rate: FractionalPercentage | None = None
+    terms_years: int | None = Field(None, gt=0)
+
+
 class UnderwritingDetailsInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -49,7 +57,7 @@ class UnderwritingDetailsInput(BaseModel):
     forecasted_revenue: ForecastedRevenueInput | None = None
     cleaning_cost: dict[str, Any] | None = None
     property_taxes: dict[str, Any] | None = None
-    opex_project_loan: dict[str, Any] | None = None
+    opex_project_loan: ProjectLoanInput | None = None
     zillow_property: StoredZillowProperty | None = None
     analyst_notes: str | None = None
     construction_and_design_notes: str | None = None

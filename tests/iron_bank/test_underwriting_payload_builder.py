@@ -90,7 +90,7 @@ def test_builds_save_payload_from_prepared_uw_data():
         # no source yet — seeded blank, its terms live on details
         {"expense": "Project Loan", "monthly": None},
     ]
-    assert payload.details.opex_project_loan == {
+    assert payload.details.opex_project_loan.model_dump() == {
         "loan_amount": None,
         "interest_rate": Decimal("0.065"),
         "terms_years": 7,

@@ -28,6 +28,12 @@ def make_underwriting():
                     "high": {"forecasted_revenue": 127000},
                 },
             },
+            opex_project_loan={
+                "loan_amount": 50000.0,
+                "interest_rate": 0.065,
+                "terms_years": 7,
+                "monthly_amount": 742.47,
+            },
         ),
         taxes=SimpleNamespace(
             land_assumptions_pct=Decimal("0.20"),

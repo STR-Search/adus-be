@@ -290,10 +290,12 @@ class SimulateUnderwritingsService(GetUnderwritingService):
             purchase_details=purchase_details,
             operating_expenses=operating_expenses,
             optimization_items=optimization_items,
+            project_loan=row.opex_project_loan,
         )
         total_oop = self.calculator.calculate_total_oop(
             purchase_details=purchase_details,
             optimization_items=optimization_items,
+            project_loan=row.opex_project_loan,
         )
         cash_on_cash = self.calculator.calculate_cash_on_cash(
             forecasted_revenue=forecasted_revenue,
@@ -309,6 +311,7 @@ class SimulateUnderwritingsService(GetUnderwritingService):
                 tax_data={"tax_savings": row.tax_savings},
                 purchase_details=purchase_details,
                 optimization_items=optimization_items,
+                project_loan=row.opex_project_loan,
             )
             if row.tax_savings is not None
             else None
