@@ -537,6 +537,7 @@ class GetUnderwritingService:
             "forecasted_revenue": detail.forecasted_revenue,
             "cleaning_cost": detail.cleaning_cost,
             "property_taxes": detail.property_taxes,
+            "opex_project_loan": detail.opex_project_loan,
             "zillow_property": detail.zillow_property,
             "analyst_notes": detail.analyst_notes,
             "construction_and_design_notes": detail.construction_and_design_notes,

@@ -85,6 +85,7 @@ OPEX_ROWS = (
     ("capex_reserve", "CapEx Reserve"),
     ("misc", "MISC"),
     ("hoa_fees", "HOA Fees"),
+    ("project_loan", "Project Loan"),
 )
 # Rows with no opex column behind them: no market supplies them, so every
 # underwriting starts from this amount and the analyst adjusts it. Merged under
@@ -105,9 +106,15 @@ OPEX_ROW_DEFAULTS = {"misc": Decimal("0")}
 # ``opex_by_bedrooms`` column needs no change here. ``test_opex_catalog`` checks
 # both sets against the real opex schemas, which is where a new column shows up.
 _SIZE_KEYED_ROWS = frozenset({"internet", "pest_control", "utilities"})
-# No market supplies these at all — they seed from OPEX_ROW_DEFAULTS and only
-# ever change by hand.
-_UNSOURCED_ROWS = frozenset(OPEX_ROW_DEFAULTS)
+# No market supplies these at all — they seed from OPEX_ROW_DEFAULTS (or blank,
+# for project_loan) and only ever change by hand.
+_UNSOURCED_ROWS = frozenset({*OPEX_ROW_DEFAULTS, "project_loan"})
+
+# The ``uw_details.opex_project_loan`` blob every underwriting is created with.
+# Hardcoded until the terms get a real source; ``loan_amount`` stays blank for
+# the analyst, and so does the Project Loan opex row it would drive.
+_PROJECT_LOAN_DEFAULT_INTEREST_RATE = Decimal("0.065")
+_PROJECT_LOAN_DEFAULT_TERMS_YEARS = 7
 
 
 def _money(value: Decimal) -> Decimal:
@@ -166,6 +173,19 @@ def build_cleaning_cost(cleaning: dict[str, Any]) -> dict[str, Any] | None:
     if fee is not None and turns is not None:
         result["monthly_cleaning_cost"] = fee * turns
     return result
+
+
+def build_opex_project_loan() -> dict[str, Any]:
+    """Resolve the ``uw_details.opex_project_loan`` blob seeded at creation.
+
+    Only the terms are defaulted. The monthly Project Loan opex row is not
+    derived from them yet — it seeds blank like any unresolved row.
+    """
+    return {
+        "loan_amount": None,
+        "interest_rate": _PROJECT_LOAN_DEFAULT_INTEREST_RATE,
+        "terms_years": _PROJECT_LOAN_DEFAULT_TERMS_YEARS,
+    }
 
 
 def build_opex_property_taxes(

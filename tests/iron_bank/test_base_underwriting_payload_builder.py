@@ -84,6 +84,7 @@ class TestOperatingExpenseOrder:
             "CapEx Reserve",
             "MISC",
             "HOA Fees",
+            "Project Loan",
         ]
 
     def test_labels_carry_the_resolved_amounts(self):

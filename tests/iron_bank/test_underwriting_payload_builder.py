@@ -87,7 +87,14 @@ def test_builds_save_payload_from_prepared_uw_data():
         # no opex column behind it — seeded at zero for the analyst to adjust
         {"expense": "MISC", "monthly": Decimal("0")},
         {"expense": "HOA Fees", "monthly": None},
+        # no source yet — seeded blank, its terms live on details
+        {"expense": "Project Loan", "monthly": None},
     ]
+    assert payload.details.opex_project_loan == {
+        "loan_amount": None,
+        "interest_rate": Decimal("0.065"),
+        "terms_years": 7,
+    }
 
 
 def test_maps_prepared_address_parts_onto_columns():
@@ -124,7 +131,10 @@ def test_builds_draft_payload_when_optional_prepared_fields_are_missing():
     assert payload.zpid == "12345"
     assert payload.market_id is None
     assert payload.purchase_price is None
-    assert payload.details is None
+    # Only the project loan terms, which seed whatever else is missing.
+    assert payload.details.model_dump(exclude_unset=True) == {
+        "opex_project_loan": opex_catalog.build_opex_project_loan()
+    }
     assert payload.taxes is None
     # Nothing resolved, yet the analyst still gets the whole sheet to fill in:
     # the row set is a property of the catalog, not of the prepared data.
@@ -344,7 +354,10 @@ def test_treats_zero_purchase_price_as_missing():
     payload = UnderwritingPayloadBuilder().build(prepared)
 
     assert payload.purchase_price is None
-    assert payload.details is None
+    # Only the project loan terms, which seed whatever else is missing.
+    assert payload.details.model_dump(exclude_unset=True) == {
+        "opex_project_loan": opex_catalog.build_opex_project_loan()
+    }
     assert payload.taxes is None
 
 
