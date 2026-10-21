@@ -93,6 +93,19 @@ class ZillowProperty(BaseModel):
         )
 
 
+class ProjectLoan(BaseModel):
+    """The stored ``uw_details.opex_project_loan`` blob.
+
+    ``monthly_amount`` is server-calculated from the other three on every
+    save/update (see ``UnderwritingCalculator.calculate_project_loan``).
+    """
+
+    loan_amount: Decimal | None = None
+    interest_rate: Decimal | None = None
+    terms_years: int | None = None
+    monthly_amount: Decimal | None = None
+
+
 class GetUnderwritingDetails(BaseModel):
     # from_attributes on the child schemas lets callers validate the ORM rows
     # directly instead of hand-mapping every column to a dict first.
@@ -103,7 +116,7 @@ class GetUnderwritingDetails(BaseModel):
     forecasted_revenue: dict[str, Any] | None = None
     cleaning_cost: dict[str, Any] | None = None
     property_taxes: dict[str, Any] | None = None
-    opex_project_loan: dict[str, Any] | None = None
+    opex_project_loan: ProjectLoan | None = None
     zillow_property: ZillowProperty | None = None
     analyst_notes: str | None = None
     construction_and_design_notes: str | None = None

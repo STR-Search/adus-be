@@ -601,3 +601,76 @@ async def test_save_leaves_the_columns_null_when_nothing_can_resolve_them():
 
     assert repository.underwriting_data["bedrooms"] is None
     assert repository.underwriting_data["bathrooms"] is None
+
+
+# --- project loan -------------------------------------------------------------
+
+
+def _project_loan_payload(project_loan):
+    return SaveUnderwritingPayload.model_validate(
+        {
+            "is_automated": False,
+            "details": {
+                "purchase_details": {
+                    "purchase_price": 100000,
+                    "down_payment_pct": Decimal("0.20"),
+                    "interest_rate": Decimal("0"),
+                    "mortgage_years": 10,
+                    "closing_costs_pct": Decimal("0.03"),
+                },
+                "forecasted_revenue": {
+                    "co_hosting_fee_pct": Decimal("0"),
+                    "annual_re_appreciation_pct": Decimal("0.0425"),
+                    "scenarios": {
+                        "low": {"forecasted_revenue": 200000},
+                        "mid": {"forecasted_revenue": 220000},
+                        "high": {"forecasted_revenue": 240000},
+                    },
+                },
+                "opex_project_loan": project_loan,
+            },
+            "optimization_list": [],
+            "operating_expenses": [],
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_save_calculates_the_project_loan_and_nets_it_out_of_total_oop():
+    repository = FakeUnderwritingRepository()
+    service = SaveUnderwritingService(repository)
+
+    await service.save(
+        _project_loan_payload(
+            {
+                "loan_amount": 3000,
+                "interest_rate": Decimal("0"),
+                "terms_years": 1,
+                # the client's figure is ignored and recalculated
+                "monthly_amount": 999,
+            }
+        )
+    )
+
+    # 20000 down + 3000 closing - 3000 project loan
+    assert repository.underwriting_data["total_oop"] == Decimal("20000")
+    assert repository.underwriting_data["budget_to_pp"] == Decimal("0.2000")
+    assert repository.detail_data["opex_project_loan"] == {
+        "loan_amount": 3000.0,
+        "interest_rate": 0.0,
+        "terms_years": 1,
+        "monthly_amount": 250.0,
+    }
+
+
+@pytest.mark.asyncio
+async def test_save_rejects_a_project_loan_larger_than_the_out_of_pocket():
+    service = SaveUnderwritingService(FakeUnderwritingRepository())
+
+    with pytest.raises(ValueError, match="project loan amount"):
+        await service.save(_project_loan_payload({"loan_amount": 23001}))
+
+
+def test_project_loan_rejects_a_whole_number_interest_rate():
+    with pytest.raises(ValidationError):
+        _project_loan_payload({"loan_amount": 1000, "interest_rate": 6.5})

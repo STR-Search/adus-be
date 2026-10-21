@@ -76,6 +76,7 @@ only” means dependent values are not automatically refreshed.
 | `comp_set` | Fully replaces comp rows | Never directly triggers a calculation |
 | `deal_status` through the general update | Direct status write | Does not apply actor-based analyst/approver assignment rules |
 | `details.analyst_notes`, `cleaning_cost`, or `property_taxes` | Supplied detail columns | No calculation |
+| `details.opex_project_loan` | Detail JSON with `monthly_amount` recalculated (PMT of the terms; any client value is dropped); `loan_amount` is netted out of `total_oop` and the cash-on-cash metrics | When omitted from a request that sends `purchase_details`, the stored loan is still netted out. A `loan_amount` above down payment + closing costs + optimization total is a 400. The Project Loan opex row is not synced — the client copies `monthly_amount` into it |
 
 ## 3. Explicit, omitted, and null fields
 

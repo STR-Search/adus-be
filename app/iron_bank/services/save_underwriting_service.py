@@ -119,6 +119,7 @@ class SaveUnderwritingService:
             underwriting_data,
             detail_data,
             payload.optimization_list,
+            project_loan=self._project_loan_for_calculation(detail_data),
         )
 
         logger.debug(
@@ -199,7 +200,10 @@ class SaveUnderwritingService:
         *,
         market_id: int | None = None,
         bedrooms: int | None = None,
+        stored_project_loan: dict | None = None,
     ) -> dict | None:
+        """``stored_project_loan`` is the row's persisted blob, used when an
+        update recalculates without resending ``opex_project_loan``."""
         if payload.details is None:
             logger.debug("_build_detail_data: no details on payload, skipping")
             return None
@@ -220,6 +224,16 @@ class SaveUnderwritingService:
                     payload.details.purchase_details
                 )
             )
+
+        if payload.details.opex_project_loan is not None:
+            detail_data["opex_project_loan"] = (
+                self.calculator.calculate_project_loan(
+                    payload.details.opex_project_loan
+                )
+            )
+        project_loan = self._project_loan_for_calculation(
+            detail_data, stored_project_loan
+        )
 
         forecasted_revenue_input = payload.details.forecasted_revenue
         logger.debug(
@@ -244,6 +258,7 @@ class SaveUnderwritingService:
                     purchase_details=detail_data["purchase_details"],
                     operating_expenses=payload.operating_expenses,
                     optimization_items=payload.optimization_list,
+                    project_loan=project_loan,
                 )
             )
 
@@ -264,6 +279,7 @@ class SaveUnderwritingService:
                     tax_data=tax_data,
                     purchase_details=detail_data["purchase_details"],
                     optimization_items=payload.optimization_list,
+                    project_loan=project_loan,
                 )
             )
 
@@ -489,6 +505,8 @@ class SaveUnderwritingService:
         underwriting_data: dict[str, Any],
         detail_data: dict | None,
         optimization_items: list,
+        *,
+        project_loan: dict | None = None,
     ) -> None:
         if detail_data is None:
             return
@@ -531,6 +549,7 @@ class SaveUnderwritingService:
         total_oop = self.calculator.calculate_total_oop(
             purchase_details=purchase_details,
             optimization_items=optimization_items,
+            project_loan=project_loan,
         )
         cash_on_cash = self.calculator.calculate_cash_on_cash(
             forecasted_revenue=forecasted_revenue,
@@ -548,6 +567,17 @@ class SaveUnderwritingService:
         underwriting_data["l_cash_on_cash"] = cash_on_cash["low_pct"]
         underwriting_data["m_cash_on_cash"] = cash_on_cash["mid_pct"]
         underwriting_data["h_cash_on_cash"] = cash_on_cash["high_pct"]
+
+    @staticmethod
+    def _project_loan_for_calculation(
+        detail_data: dict | None,
+        stored_project_loan: dict | None = None,
+    ) -> dict | None:
+        """The project loan ``total_oop`` should net out: the one on this
+        payload, else the one already on the row."""
+        if detail_data and detail_data.get("opex_project_loan") is not None:
+            return detail_data["opex_project_loan"]
+        return stored_project_loan
 
     def _build_tax_data(self, payload: SaveUnderwritingPayload) -> dict | None:
         if payload.taxes is None:

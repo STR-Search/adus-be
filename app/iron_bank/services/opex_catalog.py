@@ -178,8 +178,9 @@ def build_cleaning_cost(cleaning: dict[str, Any]) -> dict[str, Any] | None:
 def build_opex_project_loan() -> dict[str, Any]:
     """Resolve the ``uw_details.opex_project_loan`` blob seeded at creation.
 
-    Only the terms are defaulted. The monthly Project Loan opex row is not
-    derived from them yet — it seeds blank like any unresolved row.
+    Only the terms are defaulted; the save path adds ``monthly_amount`` (null
+    until ``loan_amount`` is set). The monthly Project Loan opex row is the
+    FE's to fill from it — it seeds blank like any unresolved row.
     """
     return {
         "loan_amount": None,
