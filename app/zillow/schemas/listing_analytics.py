@@ -1,12 +1,25 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
-
-class HomeStatusCount(BaseModel):
-    # Raw Zillow ``home_status`` (e.g. FOR_SALE, PENDING); ``None`` = not yet known.
-    home_status: str | None
-    count: int
+from app.core.analytics.schemas import GroupRow
 
 
-class HomeStatusBreakdown(BaseModel):
+class PresetRun(BaseModel):
+    key: str
+    label: str
+    last_run: datetime | None
+    next_run: datetime | None
+    last_full_run: datetime | None
+    # next_run is in the past.
+    overdue: bool
+
+
+class StalePresetRow(GroupRow):
+    stale: int
+
+
+class StaleListings(BaseModel):
     total: int
-    statuses: list[HomeStatusCount]
+    stale_after_days: int
+    presets: list[StalePresetRow]
