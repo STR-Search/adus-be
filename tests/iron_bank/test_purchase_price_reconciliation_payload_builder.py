@@ -1,7 +1,7 @@
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.iron_bank.services.purchase_price_reconciliation_payload_builder import (
+from app.iron_bank.services.payload_builders.purchase_price_reconciliation_payload_builder import (
     PurchasePriceReconciliationPayloadBuilder,
 )
 
@@ -27,6 +27,12 @@ def make_underwriting():
                     "mid": {"forecasted_revenue": 98000},
                     "high": {"forecasted_revenue": 127000},
                 },
+            },
+            opex_project_loan={
+                "loan_amount": 50000.0,
+                "interest_rate": 0.065,
+                "terms_years": 7,
+                "monthly_amount": 742.47,
             },
         ),
         taxes=SimpleNamespace(

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from app.iron_bank.enums import OpexKeyedOn
 from app.iron_bank.schemas.prepare_uw import PreparedOpex
-from app.iron_bank.services import opex_catalog
+from app.iron_bank.services.engine import opex_catalog
 from app.markets.schemas.opex import OpexByBedroomsSchema, OpexBySizeSchema
 
 
@@ -212,6 +212,7 @@ class TestKeyedOn:
             "capex_reserve": OpexKeyedOn.BEDROOMS,
             "misc": OpexKeyedOn.NONE,
             "hoa_fees": OpexKeyedOn.BEDROOMS,
+            "project_loan": OpexKeyedOn.NONE,
         }
 
     def test_the_derived_rows_follow_their_source_columns(self):

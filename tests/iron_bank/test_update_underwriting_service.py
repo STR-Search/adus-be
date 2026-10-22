@@ -7,7 +7,7 @@ import pytest
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
 from app.iron_bank.schemas.update_underwriting import UpdateUnderwritingPayload
-from app.iron_bank.services.update_underwriting_service import UpdateUnderwritingService
+from app.iron_bank.services.operations.update_underwriting_service import UpdateUnderwritingService
 
 _DEFAULT_UNDERWRITING = object()
 
@@ -1082,3 +1082,72 @@ async def test_update_uses_the_stored_column_when_the_payload_omits_bedrooms():
     # the column wins over both the stored zillow_property and the listing
     assert cleaned_data_service.request["bedrooms"] == 5
     assert listings_service.requested_zpid is None
+
+
+# --- project loan -------------------------------------------------------------
+
+
+def _details_with_explicit_forecast(**details):
+    payload = _details_with_purchase_only()
+    payload["details"]["forecasted_revenue"] = {
+        "co_hosting_fee_pct": Decimal("0"),
+        "annual_re_appreciation_pct": Decimal("0.04"),
+        "scenarios": {
+            "low": {"forecasted_revenue": 72000},
+            "mid": {"forecasted_revenue": 98000},
+            "high": {"forecasted_revenue": 127000},
+        },
+    }
+    payload["details"].update(details)
+    return UpdateUnderwritingPayload.model_validate(payload)
+
+
+@pytest.mark.asyncio
+async def test_update_keeps_netting_out_the_stored_project_loan():
+    # uw_details is updated key-by-key, so omitting opex_project_loan leaves
+    # the stored blob in place — total_oop must still account for it.
+    repository = FakeRepoWithExisting(
+        SimpleNamespace(
+            id=42,
+            detail=SimpleNamespace(
+                opex_project_loan={
+                    "loan_amount": 3000.0,
+                    "interest_rate": 0.065,
+                    "terms_years": 7,
+                    "monthly_amount": 44.55,
+                }
+            ),
+        )
+    )
+    service = UpdateUnderwritingService(repository)
+
+    await service.update(42, _details_with_explicit_forecast())
+
+    # 48500 down + 14550 closing - 3000 stored project loan
+    assert repository.update_kwargs["underwriting_data"]["total_oop"] == Decimal(
+        "60050.00"
+    )
+    assert "opex_project_loan" not in repository.update_kwargs["detail_data"]
+
+
+@pytest.mark.asyncio
+async def test_update_prefers_the_payload_project_loan_over_the_stored_one():
+    repository = FakeRepoWithExisting(None)
+    service = UpdateUnderwritingService(repository)
+
+    await service.update(
+        42,
+        _details_with_explicit_forecast(
+            opex_project_loan={
+                "loan_amount": 10000,
+                "interest_rate": Decimal("0.065"),
+                "terms_years": 7,
+            }
+        ),
+    )
+
+    assert repository.update_kwargs["underwriting_data"]["total_oop"] == Decimal(
+        "53050.00"
+    )
+    stored = repository.update_kwargs["detail_data"]["opex_project_loan"]
+    assert stored["monthly_amount"] == 148.49

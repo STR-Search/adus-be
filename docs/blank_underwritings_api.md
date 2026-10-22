@@ -90,7 +90,7 @@ somewhere shared rather than copying it.
 
 ## 3. Payload builder — a second entry point, not a new class
 
-`app/iron_bank/services/non_automated_underwriting_payload_builder.py`
+`app/iron_bank/services/payload_builders/non_automated_underwriting_payload_builder.py`
 
 Refactor `build_from_zillow_property` so everything from `purchase_price` downward becomes
 a private `_build(...)`, then add `build_blank(...)` alongside it.
@@ -176,7 +176,7 @@ is a snapshot, and after the first edit it is deliberately stale.
 
 ## 4. Service
 
-New `app/iron_bank/services/create_blank_underwriting_service.py`:
+New `app/iron_bank/services/creation/create_blank_underwriting_service.py`:
 
 ```python
 context = await self.market_context_reader.build_market_context(
@@ -246,7 +246,7 @@ already covers every route.
 
 ## What each input combination produces
 
-Verified by running the real builder and context path. All four produce **13 opex rows in
+Verified by running the real builder and context path. All four produce **14 opex rows in
 canonical order** — only the amounts differ.
 
 | | market + bedrooms | market, no bedrooms | no market, bedrooms | neither |
@@ -254,6 +254,7 @@ canonical order** — only the amounts differ.
 | opex rows with figures | 10 real | 1 (`MISC 0`) | 10 at `0` | 4 at `0` |
 | `details.cleaning_cost` | real | **null** | zeros | zeros |
 | `details.property_taxes` | real | **null** | zeros | zeros |
+| `details.opex_project_loan` | defaults | defaults | defaults | defaults |
 | `purchase_details` | market config + live FRED | defaults + live FRED | defaults + live FRED | defaults + live FRED |
 | `taxes.land_assumptions_pct` | market's | `0.2` default | `0.2` default | `0.2` default |
 | `taxes` row | full | full | full | full |

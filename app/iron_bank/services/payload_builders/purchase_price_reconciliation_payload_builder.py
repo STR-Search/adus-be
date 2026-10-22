@@ -70,6 +70,9 @@ class PurchasePriceReconciliationPayloadBuilder:
                         for name in ("low", "mid", "high")
                     },
                 },
+                # Carried so the recalculated total_oop keeps netting out the
+                # loan; monthly_amount is recalculated from these terms.
+                "opex_project_loan": underwriting.detail.opex_project_loan,
             },
             "taxes": {
                 "land_assumptions_pct": underwriting.taxes.land_assumptions_pct,

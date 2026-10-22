@@ -1,10 +1,10 @@
 from decimal import Decimal
 
-from app.iron_bank.services import opex_catalog
-from app.iron_bank.services.base_underwriting_payload_builder import (
+from app.iron_bank.services.engine import opex_catalog
+from app.iron_bank.services.engine.prepare_uw_data_service import PrepareUwDataService
+from app.iron_bank.services.payload_builders.base_underwriting_payload_builder import (
     BaseUnderwritingPayloadBuilder,
 )
-from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 
 # Every seeded payload carries these, in this order, whatever the market
 # resolved to — read off the catalog rather than restated, so the two cannot
@@ -84,6 +84,7 @@ class TestOperatingExpenseOrder:
             "CapEx Reserve",
             "MISC",
             "HOA Fees",
+            "Project Loan",
         ]
 
     def test_labels_carry_the_resolved_amounts(self):

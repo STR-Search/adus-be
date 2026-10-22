@@ -7,8 +7,10 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingDetails,
     GetUnderwritingResult,
 )
-from app.iron_bank.services import opex_catalog
-from app.iron_bank.services.get_underwriting_service import GetUnderwritingService
+from app.iron_bank.services.engine import opex_catalog
+from app.iron_bank.services.operations.get_underwriting_service import (
+    GetUnderwritingService,
+)
 from app.markets.schemas.opex import OpexByBedroomsSchema, OpexBySizeSchema
 
 
@@ -73,6 +75,11 @@ def _underwriting():
                     "opex_property_tax_pct": Decimal("0.012"),
                     "purchase_price": Decimal("485000"),
                 },
+            },
+            opex_project_loan={
+                "loan_amount": None,
+                "interest_rate": Decimal("0.065"),
+                "terms_years": 7,
             },
             zillow_property=None,
             analyst_notes="Existing hot tub and cabin aesthetic.",

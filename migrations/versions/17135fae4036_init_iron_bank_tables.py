@@ -228,6 +228,11 @@ def upgrade() -> None:
             "cleaning_cost", postgresql.JSONB(astext_type=sa.Text()), nullable=True
         ),
         sa.Column(
+            "opex_project_loan",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
+        sa.Column(
             "zillow_property", postgresql.JSONB(astext_type=sa.Text()), nullable=True
         ),
         sa.Column("analyst_notes", sa.Text(), nullable=True),

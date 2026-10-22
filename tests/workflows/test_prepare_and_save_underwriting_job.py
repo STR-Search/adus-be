@@ -3,7 +3,9 @@ from types import SimpleNamespace
 import pytest
 
 from app.airbnb_public.services.cleaned_data_service import CleanedDataService
-from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
+from app.iron_bank.services.operations.save_underwriting_service import (
+    SaveUnderwritingService,
+)
 from app.workflows.prepare_and_save_underwriting_job import (
     PrepareAndSaveUnderwritingJob,
 )

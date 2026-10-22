@@ -1,13 +1,16 @@
 from decimal import Decimal
 
+import pytest
+
 from app.iron_bank.schemas.save_underwriting import (
     ForecastedRevenueInput,
     OperatingExpenseInput,
     OptimizationItemInput,
+    ProjectLoanInput,
     PurchaseDetailsInput,
     UnderwritingTaxInput,
 )
-from app.iron_bank.services.underwriting_calculator import UnderwritingCalculator
+from app.iron_bank.services.engine.underwriting_calculator import UnderwritingCalculator
 
 
 def test_calculates_taxes_using_sla_multiplier_pct():
@@ -186,3 +189,77 @@ def test_calculates_prr_and_budget_to_pp():
         total_oop=Decimal("250000"),
         purchase_price=Decimal("1000000"),
     ) == Decimal("0.2500")
+
+
+# --- project loan -------------------------------------------------------------
+
+
+def test_project_loan_monthly_amount_is_the_loan_payment():
+    result = UnderwritingCalculator().calculate_project_loan(
+        ProjectLoanInput(
+            loan_amount=Decimal("50000"),
+            interest_rate=Decimal("0.065"),
+            terms_years=7,
+        )
+    )
+
+    # Excel: =PMT(0.065/12, 84, -50000)
+    assert result["monthly_amount"] == Decimal("742.47")
+    assert result["loan_amount"] == Decimal("50000")
+
+
+def test_project_loan_at_zero_interest_splits_the_principal():
+    result = UnderwritingCalculator().calculate_project_loan(
+        ProjectLoanInput(
+            loan_amount=Decimal("84000"), interest_rate=Decimal("0"), terms_years=7
+        )
+    )
+
+    assert result["monthly_amount"] == Decimal("1000.00")
+
+
+def test_project_loan_without_an_amount_has_no_monthly_amount():
+    result = UnderwritingCalculator().calculate_project_loan(
+        ProjectLoanInput(interest_rate=Decimal("0.065"), terms_years=7)
+    )
+
+    assert result["monthly_amount"] is None
+
+
+def _total_oop(project_loan):
+    return UnderwritingCalculator().calculate_total_oop(
+        purchase_details={
+            "down_payment_amount": Decimal("200000"),
+            "closing_costs_amount": Decimal("30000"),
+        },
+        optimization_items=[
+            OptimizationItemInput(category="Furniture", total_price=Decimal("20000"))
+        ],
+        project_loan=project_loan,
+    )
+
+
+def test_total_oop_nets_out_the_project_loan():
+    assert _total_oop({"loan_amount": Decimal("50000")}) == Decimal("200000")
+
+
+def test_total_oop_reads_a_stored_project_loan_blob():
+    # As persisted: jsonable_encoder has turned the Decimals into floats.
+    stored = {
+        "loan_amount": 50000.0,
+        "interest_rate": 0.065,
+        "terms_years": 7,
+        "monthly_amount": 742.47,
+    }
+
+    assert _total_oop(stored) == Decimal("200000")
+
+
+def test_total_oop_ignores_a_project_loan_without_an_amount():
+    assert _total_oop({"loan_amount": None}) == Decimal("250000")
+    assert _total_oop(None) == Decimal("250000")
+
+
+def test_project_loan_cannot_exceed_the_out_of_pocket_total():
+    with pytest.raises(ValueError, match="project loan amount"):
+        _total_oop({"loan_amount": Decimal("250000.01")})

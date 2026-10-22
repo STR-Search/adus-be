@@ -537,6 +537,7 @@ class UnderwritingRepository:
                 Underwriting.deal_approved,
                 UnderwritingDetail.purchase_details,
                 UnderwritingDetail.forecasted_revenue,
+                UnderwritingDetail.opex_project_loan,
                 UnderwritingTax.tax_savings,
             )
             .outerjoin(

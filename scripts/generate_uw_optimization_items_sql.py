@@ -37,10 +37,10 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from app.core.database import AsyncSessionLocal
-from app.iron_bank.services.base_underwriting_payload_builder import (
+from app.iron_bank.services.engine.prepare_uw_data_service import PrepareUwDataService
+from app.iron_bank.services.payload_builders.base_underwriting_payload_builder import (
     BaseUnderwritingPayloadBuilder,
 )
-from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
 from app.markets.repositories.construction_repository import (
     ConstructionAmenitiesRepository,
 )

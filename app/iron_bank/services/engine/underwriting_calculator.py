@@ -6,6 +6,7 @@ from app.iron_bank.schemas.save_underwriting import (
     ForecastedRevenueInput,
     OperatingExpenseInput,
     OptimizationItemInput,
+    ProjectLoanInput,
     PurchaseDetailsInput,
     UnderwritingTaxInput,
 )
@@ -55,6 +56,41 @@ class UnderwritingCalculator:
             "closing_costs_amount": closing_costs_amount,
         }
 
+    def calculate_project_loan(self, project_loan: ProjectLoanInput) -> dict:
+        """Resolve the ``uw_details.opex_project_loan`` blob.
+
+        ``monthly_amount`` is the loan's monthly payment, and stays null until
+        all three terms are filled in.
+        """
+        data = project_loan.model_dump()
+        loan_amount = data["loan_amount"]
+        interest_rate = data["interest_rate"]
+        terms_years = data["terms_years"]
+
+        monthly_amount = None
+        if (
+            loan_amount is not None
+            and interest_rate is not None
+            and terms_years is not None
+        ):
+            monthly_amount = self._money(
+                self._pmt(
+                    rate=interest_rate / self._MONTHS_IN_YEAR,
+                    nper=terms_years * 12,
+                    pv=loan_amount,
+                )
+            )
+
+        logger.debug(
+            "calculate_project_loan",
+            loan_amount=loan_amount,
+            interest_rate=interest_rate,
+            terms_years=terms_years,
+            monthly_amount=monthly_amount,
+        )
+
+        return {**data, "monthly_amount": monthly_amount}
+
     def calculate_taxes(
         self,
         taxes: UnderwritingTaxInput,
@@ -102,6 +138,7 @@ class UnderwritingCalculator:
         purchase_details: dict,
         operating_expenses: list[OperatingExpenseInput],
         optimization_items: list[OptimizationItemInput],
+        project_loan: dict | None = None,
     ) -> dict:
         data = forecasted_revenue.model_dump()
         total_opex_monthly = sum(
@@ -118,6 +155,7 @@ class UnderwritingCalculator:
         total_oop = self.calculate_total_oop(
             purchase_details=purchase_details,
             optimization_items=optimization_items,
+            project_loan=project_loan,
         )
 
         logger.debug(
@@ -195,10 +233,12 @@ class UnderwritingCalculator:
         tax_data: dict,
         purchase_details: dict,
         optimization_items: list[OptimizationItemInput],
+        project_loan: dict | None = None,
     ) -> dict:
         total_oop = self.calculate_total_oop(
             purchase_details=purchase_details,
             optimization_items=optimization_items,
+            project_loan=project_loan,
         )
         tax_savings = tax_data["tax_savings"]
 
@@ -304,13 +344,26 @@ class UnderwritingCalculator:
         self,
         purchase_details: dict,
         optimization_items: list[OptimizationItemInput],
+        project_loan: dict | None = None,
     ) -> Decimal:
+        """Cash out of pocket: down payment + closing costs + rehab, less
+        whatever the project loan finances.
+
+        ``project_loan`` is the ``opex_project_loan`` blob, either freshly
+        calculated or as stored (where Decimals have become floats).
+        """
         optimization_total = sum(
             item.total_price or Decimal("0") for item in optimization_items
         )
         down_payment_amount = purchase_details["down_payment_amount"]
         closing_costs_amount = purchase_details["closing_costs_amount"]
-        total_oop = down_payment_amount + closing_costs_amount + optimization_total
+        project_loan_amount = (
+            ProjectLoanInput.model_validate(project_loan).loan_amount
+            if project_loan
+            else None
+        ) or Decimal("0")
+        gross_oop = down_payment_amount + closing_costs_amount + optimization_total
+        total_oop = gross_oop - project_loan_amount
 
         logger.debug(
             "calculate_total_oop",
@@ -318,9 +371,15 @@ class UnderwritingCalculator:
             closing_costs_amount=closing_costs_amount,
             optimization_total=optimization_total,
             optimization_count=len(optimization_items),
+            project_loan_amount=project_loan_amount,
             total_oop=total_oop,
         )
 
+        if project_loan_amount > gross_oop:
+            raise ValueError(
+                f"project loan amount ({project_loan_amount}) cannot exceed the "
+                f"out-of-pocket total it finances ({gross_oop})"
+            )
         if total_oop == 0:
             raise ValueError("total_oop is required to calculate forecasted revenue")
         return total_oop

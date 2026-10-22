@@ -8,7 +8,9 @@ from app.iron_bank.schemas.update_underwriting import (
     UpdateUnderwritingPayload,
     UpdateUnderwritingResult,
 )
-from app.iron_bank.services.update_underwriting_service import UpdateUnderwritingService
+from app.iron_bank.services.operations.update_underwriting_service import (
+    UpdateUnderwritingService,
+)
 
 
 class UpdateUnderwritingController:

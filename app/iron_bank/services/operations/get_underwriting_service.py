@@ -23,9 +23,11 @@ from app.iron_bank.schemas.get_underwriting import (
     ZillowProperty,
 )
 from app.iron_bank.schemas.underwriting import BOOLEAN_TAG_LABELS, UnderwritingRead
-from app.iron_bank.services import opex_catalog
-from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
-from app.iron_bank.services.reference_label_resolver import apply_reference_labels
+from app.iron_bank.services.engine import opex_catalog
+from app.iron_bank.services.engine.prepare_uw_data_service import PrepareUwDataService
+from app.iron_bank.services.operations.reference_label_resolver import (
+    apply_reference_labels,
+)
 
 
 class GetUnderwritingService:
@@ -537,6 +539,7 @@ class GetUnderwritingService:
             "forecasted_revenue": detail.forecasted_revenue,
             "cleaning_cost": detail.cleaning_cost,
             "property_taxes": detail.property_taxes,
+            "opex_project_loan": detail.opex_project_loan,
             "zillow_property": detail.zillow_property,
             "analyst_notes": detail.analyst_notes,
             "construction_and_design_notes": detail.construction_and_design_notes,

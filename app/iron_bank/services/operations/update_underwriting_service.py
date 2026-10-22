@@ -24,10 +24,14 @@ from app.iron_bank.schemas.update_underwriting import (
     UpdateUnderwritingPayload,
     UpdateUnderwritingResult,
 )
-from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
-from app.iron_bank.services.reference_label_resolver import apply_reference_labels
-from app.iron_bank.services.save_underwriting_service import SaveUnderwritingService
-from app.iron_bank.services.underwriting_calculator import UnderwritingCalculator
+from app.iron_bank.services.engine.prepare_uw_data_service import PrepareUwDataService
+from app.iron_bank.services.engine.underwriting_calculator import UnderwritingCalculator
+from app.iron_bank.services.operations.reference_label_resolver import (
+    apply_reference_labels,
+)
+from app.iron_bank.services.operations.save_underwriting_service import (
+    SaveUnderwritingService,
+)
 
 
 class UpdateUnderwritingService(SaveUnderwritingService):
@@ -87,17 +91,31 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         await self._validate_reference_data_fields(underwriting_data)
         tax_data = self._build_tax_data(payload) if "taxes" in data else None
         detail_data = None
+        stored_project_loan = None
         if "details" in data:
+            existing = (
+                await self.repository.get_by_id(underwriting_id)
+                if self._needs_stored_project_loan(payload)
+                else None
+            )
+            stored_project_loan = self._stored_project_loan(existing)
             market_id, bedrooms = await self._resolve_market_and_bedrooms_for_update(
-                underwriting_id, payload
+                underwriting_id, payload, existing=existing
             )
             detail_data = await self._build_detail_data(
-                payload, tax_data, market_id=market_id, bedrooms=bedrooms
+                payload,
+                tax_data,
+                market_id=market_id,
+                bedrooms=bedrooms,
+                stored_project_loan=stored_project_loan,
             )
         self._apply_calculated_underwriting_fields(
             underwriting_data,
             detail_data,
             payload.optimization_list,
+            project_loan=self._project_loan_for_calculation(
+                detail_data, stored_project_loan
+            ),
         )
 
         underwriting = await self.repository.update(
@@ -136,6 +154,8 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         self,
         underwriting_id: int,
         payload: UpdateUnderwritingPayload,
+        *,
+        existing=None,
     ) -> tuple[int | None, int | None]:
         """Recover the inputs the Airbnb revenue estimate needs.
 
@@ -154,7 +174,8 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         if not needs_estimate:
             return None, None
 
-        existing = await self.repository.get_by_id(underwriting_id)
+        if existing is None:
+            existing = await self.repository.get_by_id(underwriting_id)
         if existing is None:
             return payload.market_id, None
 
@@ -163,6 +184,25 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         )
         bedrooms = await self._resolve_bedrooms_for_update(payload, existing)
         return market_id, bedrooms
+
+    @staticmethod
+    def _needs_stored_project_loan(payload: UpdateUnderwritingPayload) -> bool:
+        """Whether this update recalculates total_oop without its project loan.
+
+        ``uw_details`` is updated key-by-key, so a details update that omits
+        ``opex_project_loan`` keeps the stored blob — and total_oop has to keep
+        netting it out.
+        """
+        return (
+            payload.details is not None
+            and payload.details.purchase_details is not None
+            and payload.details.opex_project_loan is None
+        )
+
+    @staticmethod
+    def _stored_project_loan(existing) -> dict | None:
+        detail = getattr(existing, "detail", None)
+        return getattr(detail, "opex_project_loan", None)
 
     async def _resolve_bedrooms_for_update(
         self,
@@ -451,6 +491,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
             calculated_underwriting_data,
             detail_data,
             payload.optimization_list,
+            project_loan=self._project_loan_for_calculation(detail_data),
         )
         underwriting_data = {
             key: value

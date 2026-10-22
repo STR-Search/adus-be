@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.iron_bank.enums import SortOrder, UnderwritingSortBy
-from app.iron_bank.services.simulate_underwritings_service import (
+from app.iron_bank.services.operations.simulate_underwritings_service import (
     SimulateUnderwritingsService,
     _SimulatedRow,
 )
@@ -73,6 +73,7 @@ def _row(
     purchase_details="default",
     forecasted_revenue="default",
     tax_savings=Decimal("5000"),
+    opex_project_loan=None,
     prr=None,
     sheet_number=None,
     created_at=None,
@@ -81,6 +82,7 @@ def _row(
     return SimpleNamespace(
         id=id,
         source=source,
+        opex_project_loan=opex_project_loan,
         prr=prr,
         sheet_number=sheet_number,
         created_at=created_at,
@@ -267,6 +269,17 @@ async def test_uses_stored_collection_totals():
     # No optimization rows: total_oop = 10000 + 3000; no opex: NOI = revenue.
     assert row.total_oop == Decimal("13000")
     assert row.m_cash_on_cash == Decimal("4.3846")  # (60000 - 3000) / 13000
+
+
+@pytest.mark.asyncio
+async def test_nets_the_stored_project_loan_out_of_total_oop():
+    financed = _row(id=1, opex_project_loan={"loan_amount": 5000.0})
+    service, _ = _service([financed], {1: _item(id=1)})
+
+    result = await _get_all_simulated(service, interest_rate=Decimal("0"))
+
+    # 20000 + 3000 + 7000 - 5000
+    assert result.data[0].total_oop == Decimal("25000")
 
 
 # --- Include-and-flag ------------------------------------------------------

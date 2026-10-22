@@ -4,9 +4,9 @@ from typing import Any
 import structlog
 
 from app.iron_bank.enums import DealStatus
-from app.iron_bank.services import opex_catalog
-from app.iron_bank.services.prepare_uw_data_service import PrepareUwDataService
-from app.iron_bank.services.purchase_price_reconciliation_payload_builder import (
+from app.iron_bank.services.engine import opex_catalog
+from app.iron_bank.services.engine.prepare_uw_data_service import PrepareUwDataService
+from app.iron_bank.services.payload_builders.purchase_price_reconciliation_payload_builder import (
     PurchasePriceReconciliationPayloadBuilder,
 )
 
@@ -74,7 +74,7 @@ class BaseUnderwritingPayloadBuilder:
         config: dict[str, Any],
         cleaning_cost: dict[str, Any] | None,
         property_taxes: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | None:
+    ) -> dict[str, Any]:
         detail: dict[str, Any] = {}
         if purchase_price is not None:
             detail["purchase_details"] = {
@@ -94,7 +94,8 @@ class BaseUnderwritingPayloadBuilder:
             detail["cleaning_cost"] = cleaning_cost
         if property_taxes is not None:
             detail["property_taxes"] = property_taxes
-        return detail or None
+        detail["opex_project_loan"] = opex_catalog.build_opex_project_loan()
+        return detail
 
     def _build_taxes(self, config: dict[str, Any]) -> dict[str, Any]:
         return {

@@ -1,14 +1,14 @@
 # `UpdateUnderwritingService` behavior and recalculation reference
 
 This document describes the complete behavior of
-[`UpdateUnderwritingService`](../app/iron_bank/services/update_underwriting_service.py):
+[`UpdateUnderwritingService`](../app/iron_bank/services/operations/update_underwriting_service.py):
 what each update path writes, which inputs trigger calculations, how child
 records are persisted, and where derived values can become stale.
 
 The service inherits most calculation orchestration from
-[`SaveUnderwritingService`](../app/iron_bank/services/save_underwriting_service.py).
+[`SaveUnderwritingService`](../app/iron_bank/services/operations/save_underwriting_service.py).
 The formulas themselves live in
-[`UnderwritingCalculator`](../app/iron_bank/services/underwriting_calculator.py),
+[`UnderwritingCalculator`](../app/iron_bank/services/engine/underwriting_calculator.py),
 and persistence behavior lives in
 [`UnderwritingRepository`](../app/iron_bank/repositories/underwriting_repository.py).
 
@@ -76,6 +76,7 @@ only” means dependent values are not automatically refreshed.
 | `comp_set` | Fully replaces comp rows | Never directly triggers a calculation |
 | `deal_status` through the general update | Direct status write | Does not apply actor-based analyst/approver assignment rules |
 | `details.analyst_notes`, `cleaning_cost`, or `property_taxes` | Supplied detail columns | No calculation |
+| `details.opex_project_loan` | Detail JSON with `monthly_amount` recalculated (PMT of the terms; any client value is dropped); `loan_amount` is netted out of `total_oop` and the cash-on-cash metrics | When omitted from a request that sends `purchase_details`, the stored loan is still netted out. A `loan_amount` above down payment + closing costs + optimization total is a 400. The Project Loan opex row is not synced — the client copies `monthly_amount` into it |
 
 ## 3. Explicit, omitted, and null fields
 
@@ -464,7 +465,7 @@ The job:
 7. Calls `reconcile_purchase_price()`.
 
 The
-[`PurchasePriceReconciliationPayloadBuilder`](../app/iron_bank/services/purchase_price_reconciliation_payload_builder.py)
+[`PurchasePriceReconciliationPayloadBuilder`](../app/iron_bank/services/payload_builders/purchase_price_reconciliation_payload_builder.py)
 requires existing:
 
 - purchase details;
@@ -605,13 +606,13 @@ authenticated actor is applied according to the analyst and approver rules.
 
 | Concern | Source |
 |---|---|
-| Update orchestration and specialized paths | [`app/iron_bank/services/update_underwriting_service.py`](../app/iron_bank/services/update_underwriting_service.py) |
-| Shared detail/tax construction and top-level derivation | [`app/iron_bank/services/save_underwriting_service.py`](../app/iron_bank/services/save_underwriting_service.py) |
-| Financial formulas and rounding | [`app/iron_bank/services/underwriting_calculator.py`](../app/iron_bank/services/underwriting_calculator.py) |
+| Update orchestration and specialized paths | [`app/iron_bank/services/operations/update_underwriting_service.py`](../app/iron_bank/services/operations/update_underwriting_service.py) |
+| Shared detail/tax construction and top-level derivation | [`app/iron_bank/services/operations/save_underwriting_service.py`](../app/iron_bank/services/operations/save_underwriting_service.py) |
+| Financial formulas and rounding | [`app/iron_bank/services/engine/underwriting_calculator.py`](../app/iron_bank/services/engine/underwriting_calculator.py) |
 | Partial upserts, collection replacement, and transaction | [`app/iron_bank/repositories/underwriting_repository.py`](../app/iron_bank/repositories/underwriting_repository.py) |
 | Update payload defaults, omission, and null behavior | [`app/iron_bank/schemas/update_underwriting.py`](../app/iron_bank/schemas/update_underwriting.py) |
 | Calculation input schemas | [`app/iron_bank/schemas/save_underwriting.py`](../app/iron_bank/schemas/save_underwriting.py) |
 | Price-change trigger | [`app/workflows/reconcile_underwriting_price_job.py`](../app/workflows/reconcile_underwriting_price_job.py) |
-| Reconciliation payload assembly | [`app/iron_bank/services/purchase_price_reconciliation_payload_builder.py`](../app/iron_bank/services/purchase_price_reconciliation_payload_builder.py) |
+| Reconciliation payload assembly | [`app/iron_bank/services/payload_builders/purchase_price_reconciliation_payload_builder.py`](../app/iron_bank/services/payload_builders/purchase_price_reconciliation_payload_builder.py) |
 | Behavioral coverage | [`tests/iron_bank/test_update_underwriting_service.py`](../tests/iron_bank/test_update_underwriting_service.py) |
 
