@@ -14,14 +14,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from app.core.query_filters import numeric_range_conditions
 from app.dependencies import get_current_user
 from app.iron_bank.controllers.get_underwriting_controller import (
     GetUnderwritingController,
 )
 from app.iron_bank.models.underwriting import Underwriting
-from app.iron_bank.repositories.underwriting_repository import (
-    _numeric_range_conditions,
-)
 from app.iron_bank.router import get_get_underwriting_controller, router
 from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingsQuery,
@@ -180,17 +178,17 @@ async def test_simulated_path_carries_the_pair():
 
 
 def test_numeric_range_is_inclusive_at_both_ends():
-    lower, upper = _numeric_range_conditions(Underwriting.bedrooms, 2, 4)
+    lower, upper = numeric_range_conditions(Underwriting.bedrooms, 2, 4)
 
     assert str(lower.compile()) == "iron_bank.underwritings.bedrooms >= :bedrooms_1"
     assert str(upper.compile()) == "iron_bank.underwritings.bedrooms <= :bedrooms_1"
 
 
 def test_numeric_range_with_one_bound_emits_one_condition():
-    (only,) = _numeric_range_conditions(Underwriting.bedrooms, None, 4)
+    (only,) = numeric_range_conditions(Underwriting.bedrooms, None, 4)
 
     assert str(only.compile()) == "iron_bank.underwritings.bedrooms <= :bedrooms_1"
 
 
 def test_numeric_range_with_no_bounds_emits_nothing():
-    assert _numeric_range_conditions(Underwriting.bedrooms, None, None) == []
+    assert numeric_range_conditions(Underwriting.bedrooms, None, None) == []

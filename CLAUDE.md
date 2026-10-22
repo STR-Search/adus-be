@@ -29,7 +29,10 @@ repositories, controllers, and router.
   (e.g. `iron_bank/repositories/underwriting_analytics_repository.py` +
   `iron_bank/services/analytics/`); `app/analytics/` holds only the controller,
   router, composed response schemas, and — solely for metrics that need a SQL
-  join across domain schemas — its own read-only repositories.
+  join across domain schemas — its own read-only repositories plus the services
+  that shape their results (`app/analytics/services/`). Shared response shapes
+  and ordering rules live in `app/core/analytics/`; shared WHERE-clause
+  builders (date/numeric ranges) in `app/core/query_filters.py`.
 - `app/middleware/` — auth. Do not reorganize.
 - `app/dependencies.py` — shared FastAPI dependencies (DB session, auth guards)
 
