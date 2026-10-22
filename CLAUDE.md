@@ -24,6 +24,12 @@ repositories, controllers, and router.
   Domains link entities to threads via their own link tables (e.g.
   `iron_bank.underwriting_threads`) and call it only through its service; it
   never imports a domain. Design: `docs/underwriting_discussions.md`.
+- `app/analytics/` — read-only composition layer for `/analytics/*`. Owns no
+  tables, models, or migrations. Each domain owns its own analytics queries
+  (e.g. `iron_bank/repositories/underwriting_analytics_repository.py` +
+  `iron_bank/services/analytics/`); `app/analytics/` holds only the controller,
+  router, composed response schemas, and — solely for metrics that need a SQL
+  join across domain schemas — its own read-only repositories.
 - `app/middleware/` — auth. Do not reorganize.
 - `app/dependencies.py` — shared FastAPI dependencies (DB session, auth guards)
 
