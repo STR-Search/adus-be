@@ -258,6 +258,7 @@ async def get_data_completeness(
 
 @router.get("/pipeline/coverage", response_model=Coverage)
 async def get_coverage(
+    market_id: int | None = Query(None, description=_LISTING_MARKET),
     preset_id: uuid.UUID | None = Query(None),
     source: list[UnderwritingSource] | None = Query(None, description=_SOURCE),
     created_from: date | None = Query(
@@ -270,6 +271,7 @@ async def get_coverage(
 ):
     return await controller.get_coverage(
         source=_sources(source),
+        market_id=market_id,
         preset_id=preset_id,
         created_from=created_from,
         created_to=created_to,

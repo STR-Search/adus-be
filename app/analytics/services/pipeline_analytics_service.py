@@ -47,12 +47,14 @@ class PipelineAnalyticsService:
         self,
         *,
         source: tuple[UnderwritingSource, ...] = DEFAULT_ANALYTICS_SOURCES,
+        market_id: int | None = None,
         preset_id: uuid.UUID | None = None,
         created_from: date | None = None,
         created_to: date | None = None,
     ) -> Coverage:
         kwargs = dict(
             source=source,
+            market_id=market_id,
             preset_id=preset_id,
             created_from=created_from,
             created_to=created_to,

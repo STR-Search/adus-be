@@ -73,6 +73,36 @@ async def test_coverage_left_joins_earliest_underwriting():
 
 
 @pytest.mark.asyncio
+async def test_coverage_filters_by_market_through_the_preset():
+    db = CapturingDb([])
+
+    await PipelineAnalyticsRepository(db).coverage(
+        source=(UnderwritingSource.ADUS,), group_by_preset=True, market_id=12
+    )
+
+    query = sql(db.queries[0])
+    assert (
+        "zillow.scheduled_listings.preset_id IN (SELECT zillow.scheduled_presets.id"
+        in query
+    )
+    assert "zillow.scheduled_presets.market_id = 12" in query
+    # The per-preset rows' join is still the only one to presets.
+    assert query.count("JOIN zillow.scheduled_presets") == 1
+
+
+@pytest.mark.asyncio
+async def test_coverage_passes_market_to_both_queries():
+    def coverage(kwargs):
+        return [] if kwargs["group_by_preset"] else [(None, None, 0, 0, None)]
+
+    repo = FakeRepository(coverage=coverage)
+
+    await PipelineAnalyticsService(repo).get_coverage(market_id=12)
+
+    assert [call[2]["market_id"] for call in repo.calls] == [12, 12]
+
+
+@pytest.mark.asyncio
 async def test_price_drops_only_negative_changes_for_given_statuses():
     db = CapturingDb([("maybe", 2)], [(0.05, 2)])
 

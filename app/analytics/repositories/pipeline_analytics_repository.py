@@ -45,6 +45,7 @@ class PipelineAnalyticsRepository:
         *,
         source: Sequence[UnderwritingSource],
         group_by_preset: bool,
+        market_id: int | None = None,
         preset_id: uuid.UUID | None = None,
         created_from: date | None = None,
         created_to: date | None = None,
@@ -54,6 +55,10 @@ class PipelineAnalyticsRepository:
         Each listing is matched to its earliest underwriting; the median is of
         days from the listing's first-seen time to that underwriting. Without
         ``group_by_preset``, one overall row with ``None`` preset columns.
+
+        ``market_id`` narrows listings to that market's presets: a listing that
+        was never underwritten has no deal market, so its preset's market is
+        the only one it has (the same rule as the listing endpoints).
         """
         first_underwriting = (
             select(
@@ -81,6 +86,16 @@ class PipelineAnalyticsRepository:
         conditions = date_range_conditions(
             ScheduledListing.created_at, created_from, created_to
         )
+        if market_id is not None:
+            # A subquery rather than a join, so it composes with the preset
+            # join the per-preset rows add.
+            conditions.append(
+                ScheduledListing.preset_id.in_(
+                    select(ScheduledPreset.id).where(
+                        ScheduledPreset.market_id == market_id
+                    )
+                )
+            )
         if preset_id is not None:
             conditions.append(ScheduledListing.preset_id == preset_id)
 
