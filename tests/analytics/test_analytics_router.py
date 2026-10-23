@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.analytics.router import get_analytics_controller, router
+from app.analytics.schemas.pipeline import Coverage, CoverageRow
 from app.core.analytics.schemas import Breakdown
 from app.iron_bank.enums import DealStatus, UnderwritingSource
 from app.iron_bank.schemas.underwriting_analytics import (
@@ -42,6 +43,18 @@ class RecordingController:
             win_rate=None,
         )
         return MarketBreakdown(overall=row, markets=[])
+
+    async def get_coverage(self, **kwargs):
+        self.calls.append(kwargs)
+        row = CoverageRow(
+            key=None,
+            label="All presets",
+            listings=0,
+            underwritten=0,
+            coverage=None,
+            median_days_to_underwrite=None,
+        )
+        return Coverage(overall=row, presets=[])
 
     async def get_intake(self, **kwargs):
         self.calls.append(kwargs)
@@ -139,3 +152,12 @@ def test_delete_reasons_endpoint_is_gone():
     response = client.get("/analytics/underwritings/delete-reasons")
 
     assert response.status_code == 404
+
+
+def test_coverage_accepts_market_id():
+    client, controller = build_client()
+
+    response = client.get("/analytics/pipeline/coverage?market_id=3")
+
+    assert response.status_code == 200
+    assert controller.calls[0]["market_id"] == 3
