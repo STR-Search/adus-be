@@ -57,7 +57,12 @@ def _items(items):
 
 
 def test_status_constants_hold_only_deal_statuses():
-    for constant in (PRESENTED_STATUSES, WON_STATUSES, DELETED_STATUSES, ANALYSIS_STATUSES):
+    for constant in (
+        PRESENTED_STATUSES,
+        WON_STATUSES,
+        DELETED_STATUSES,
+        ANALYSIS_STATUSES,
+    ):
         assert constant
         assert all(isinstance(status, DealStatus) for status in constant)
 
@@ -132,7 +137,10 @@ async def test_repository_template_progress_buckets_utc_weeks():
     )
 
     query = sql(db.queries[0])
-    assert "date_trunc('week', timezone('UTC', iron_bank.underwritings.deal_added))" in query
+    assert (
+        "date_trunc('week', timezone('UTC', iron_bank.underwritings.deal_added))"
+        in query
+    )
     assert "deal_status != 'template_generated'" in query
 
 
@@ -146,8 +154,14 @@ async def test_repository_price_band_case_has_open_ends():
     )
 
     query = sql(db.queries[0])
-    assert "WHEN (iron_bank.underwritings.purchase_price < 300000) THEN 'under_300k'" in query
-    assert "WHEN (iron_bank.underwritings.purchase_price >= 1000000) THEN 'over_1m'" in query
+    assert (
+        "WHEN (iron_bank.underwritings.purchase_price < 300000) THEN 'under_300k'"
+        in query
+    )
+    assert (
+        "WHEN (iron_bank.underwritings.purchase_price >= 1000000) THEN 'over_1m'"
+        in query
+    )
     assert "ELSE" not in query
 
 
@@ -212,7 +226,10 @@ async def test_breakdown_with_status_filter_zero_fills_only_those():
 
     result = await UnderwritingAnalyticsService(repo).get_deal_status_breakdown(filters)
 
-    assert _items(result.items) == [("present_to_clients", 0), ("client_under_contract", 3)]
+    assert _items(result.items) == [
+        ("present_to_clients", 0),
+        ("client_under_contract", 3),
+    ]
 
 
 @pytest.mark.asyncio
@@ -374,7 +391,10 @@ async def test_delete_reasons_restricts_to_deleted_statuses():
     assert filters.deal_status == DELETED_STATUSES
     assert result.overall.total == 8
     assert [m.key for m in result.markets] == ["2", "1"]
-    assert _items(result.markets[0].by_status) == [("delete_zillow", 0), ("delete_deal", 5)]
+    assert _items(result.markets[0].by_status) == [
+        ("delete_zillow", 0),
+        ("delete_deal", 5),
+    ]
 
 
 @pytest.mark.asyncio

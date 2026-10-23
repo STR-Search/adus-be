@@ -19,13 +19,14 @@ class ListingAnalyticsRepository:
     async def count_by_home_status(
         self,
         *,
+        market_id: int | None = None,
         preset_id: uuid.UUID | None = None,
         created_from: date | None = None,
         created_to: date | None = None,
     ) -> list[tuple[str | None, int]]:
         query = (
             select(ScheduledListing.home_status, func.count())
-            .where(*_listing_conditions(preset_id, created_from, created_to))
+            .where(*_listing_conditions(market_id, preset_id, created_from, created_to))
             .group_by(ScheduledListing.home_status)
         )
         result = await self.db.execute(query)
@@ -36,6 +37,7 @@ class ListingAnalyticsRepository:
         *,
         granularity: Granularity,
         group_by_preset: bool,
+        market_id: int | None = None,
         preset_id: uuid.UUID | None = None,
         created_from: date | None = None,
         created_to: date | None = None,
@@ -52,7 +54,7 @@ class ListingAnalyticsRepository:
             Date,
         ).label("period_start")
         conditions = [
-            *_listing_conditions(preset_id, created_from, created_to),
+            *_listing_conditions(market_id, preset_id, created_from, created_to),
             ScheduledListing.created_at.is_not(None),
         ]
         if group_by_preset:
@@ -108,11 +110,22 @@ class ListingAnalyticsRepository:
 
 
 def _listing_conditions(
-    preset_id: uuid.UUID | None, created_from: date | None, created_to: date | None
+    market_id: int | None,
+    preset_id: uuid.UUID | None,
+    created_from: date | None,
+    created_to: date | None,
 ) -> list:
     conditions = date_range_conditions(
         ScheduledListing.created_at, created_from, created_to
     )
+    if market_id is not None:
+        # A listing's market is its preset's market. A subquery rather than a
+        # join, so it composes with the preset join ``group_by_preset`` adds.
+        conditions.append(
+            ScheduledListing.preset_id.in_(
+                select(ScheduledPreset.id).where(ScheduledPreset.market_id == market_id)
+            )
+        )
     if preset_id is not None:
         conditions.append(ScheduledListing.preset_id == preset_id)
     return conditions

@@ -48,7 +48,10 @@ async def test_off_market_joins_listing_and_uses_pending_rule():
 
     query = sql(db.queries[0])
     assert "JOIN zillow.scheduled_listings" in query
-    assert "coalesce(zillow.scheduled_listings.home_status, '') NOT IN ('FOR_SALE', 'OTHER')" in query
+    assert (
+        "coalesce(zillow.scheduled_listings.home_status, '') NOT IN ('FOR_SALE', 'OTHER')"
+        in query
+    )
     assert "source IN ('adus', 'legacy_sheet', 'blank')" in query
 
 
@@ -100,7 +103,9 @@ async def test_coverage_overall_and_presets():
             return [(PRESET, "Alpha", 10, 4, 2.0), (uuid.uuid4(), "Beta", 20, 0, None)]
         return [(None, None, 30, 4, 2.0)]
 
-    result = await PipelineAnalyticsService(FakeRepository(coverage=coverage)).get_coverage()
+    result = await PipelineAnalyticsService(
+        FakeRepository(coverage=coverage)
+    ).get_coverage()
 
     assert (result.overall.label, result.overall.listings, result.overall.coverage) == (
         "All presets",
@@ -126,7 +131,9 @@ async def test_off_market_splits_by_home_status_and_counts_missed_and_wasted():
         count_with_status=10,
     )
 
-    result = await PipelineAnalyticsService(repo).get_off_market(UnderwritingAnalyticsFilters())
+    result = await PipelineAnalyticsService(repo).get_off_market(
+        UnderwritingAnalyticsFilters()
+    )
 
     assert [r.key for r in result.by_status] == ALL_STATUSES
     presented = next(r for r in result.by_status if r.key == "present_to_clients")
@@ -147,7 +154,9 @@ async def test_off_market_splits_by_home_status_and_counts_missed_and_wasted():
 async def test_price_drops_zero_fill_live_statuses_only():
     repo = FakeRepository(price_drops=([("maybe", 2)], 0.04, 2))
 
-    result = await PipelineAnalyticsService(repo).get_price_drops(UnderwritingAnalyticsFilters())
+    result = await PipelineAnalyticsService(repo).get_price_drops(
+        UnderwritingAnalyticsFilters()
+    )
 
     keys = [item.key for item in result.deals.items]
     assert keys == [s.value for s in LIVE_STATUSES]

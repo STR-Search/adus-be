@@ -56,7 +56,11 @@ class FakeUnderwritingAnalytics:
 
     async def get_completeness(self, filters):
         return UnderwritingCompleteness(
-            total=0, missing_market=0, missing_analyst=0, missing_price=0, missing_status=0
+            total=0,
+            missing_market=0,
+            missing_analyst=0,
+            missing_price=0,
+            missing_status=0,
         )
 
 
@@ -73,7 +77,9 @@ class FakeListingAnalytics:
 
     async def get_stale_listings(self, **kwargs):
         self.calls.append(kwargs)
-        return StaleListings(total=0, stale_after_days=kwargs["stale_after_days"], presets=[])
+        return StaleListings(
+            total=0, stale_after_days=kwargs["stale_after_days"], presets=[]
+        )
 
 
 class FakeMarketService:
@@ -92,7 +98,12 @@ async def test_passes_filters_through_to_domain_services():
 
     assert underwriting.calls == [("deal_status_breakdown", filters)]
     assert listing.calls == [
-        {"preset_id": None, "created_from": None, "created_to": date(2026, 10, 2)}
+        {
+            "market_id": None,
+            "preset_id": None,
+            "created_from": None,
+            "created_to": date(2026, 10, 2),
+        }
     ]
 
 
@@ -114,7 +125,9 @@ async def test_inverted_range_is_400_and_skips_query():
 
 @pytest.mark.asyncio
 async def test_inverted_secondary_range_is_400():
-    controller = AnalyticsController(FakeUnderwritingAnalytics(), FakeListingAnalytics())
+    controller = AnalyticsController(
+        FakeUnderwritingAnalytics(), FakeListingAnalytics()
+    )
 
     with pytest.raises(HTTPException) as exc:
         await controller.get_price_drops(
@@ -146,10 +159,14 @@ async def test_market_breakdown_gets_market_names_from_markets_domain():
         underwriting, FakeListingAnalytics(), market_service=FakeMarketService()
     )
 
-    await controller.get_market_breakdown(UnderwritingAnalyticsFilters(), MarketSort.WON)
+    await controller.get_market_breakdown(
+        UnderwritingAnalyticsFilters(), MarketSort.WON
+    )
 
     # A market with no name is left out so the service falls back to "Market <id>".
-    assert underwriting.calls == [("market_breakdown", {1: "Asheville - NC"}, MarketSort.WON)]
+    assert underwriting.calls == [
+        ("market_breakdown", {1: "Asheville - NC"}, MarketSort.WON)
+    ]
 
 
 @pytest.mark.asyncio
@@ -167,7 +184,10 @@ async def test_automation_applies_created_range_to_underwritings_and_jobs():
         date(2026, 10, 1),
         date(2026, 10, 7),
     )
-    assert job_kwargs == {"created_from": date(2026, 10, 1), "created_to": date(2026, 10, 7)}
+    assert job_kwargs == {
+        "created_from": date(2026, 10, 1),
+        "created_to": date(2026, 10, 7),
+    }
 
 
 @pytest.mark.asyncio

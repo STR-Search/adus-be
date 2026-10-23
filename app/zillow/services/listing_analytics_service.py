@@ -28,11 +28,13 @@ class ListingAnalyticsService:
     async def get_home_status_breakdown(
         self,
         *,
+        market_id: int | None = None,
         preset_id: uuid.UUID | None = None,
         created_from: date | None = None,
         created_to: date | None = None,
     ) -> Breakdown:
         rows = await self.repository.count_by_home_status(
+            market_id=market_id,
             preset_id=preset_id,
             created_from=created_from,
             created_to=created_to,
@@ -57,6 +59,7 @@ class ListingAnalyticsService:
         *,
         granularity: Granularity = Granularity.WEEK,
         group_by_preset: bool = False,
+        market_id: int | None = None,
         preset_id: uuid.UUID | None = None,
         created_from: date | None = None,
         created_to: date | None = None,
@@ -64,6 +67,7 @@ class ListingAnalyticsService:
         rows = await self.repository.intake(
             granularity=granularity,
             group_by_preset=group_by_preset,
+            market_id=market_id,
             preset_id=preset_id,
             created_from=created_from,
             created_to=created_to,

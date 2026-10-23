@@ -51,6 +51,7 @@ class AnalyticsController:
     async def get_home_status_breakdown(
         self,
         *,
+        market_id: int | None = None,
         preset_id: uuid.UUID | None = None,
         created_from: date | None = None,
         created_to: date | None = None,
@@ -59,7 +60,10 @@ class AnalyticsController:
         return await self._run(
             "home_status_breakdown",
             lambda: self.listing_analytics.get_home_status_breakdown(
-                preset_id=preset_id, created_from=created_from, created_to=created_to
+                market_id=market_id,
+                preset_id=preset_id,
+                created_from=created_from,
+                created_to=created_to,
             ),
         )
 
@@ -68,6 +72,7 @@ class AnalyticsController:
         *,
         granularity: Granularity = Granularity.WEEK,
         group_by_preset: bool = False,
+        market_id: int | None = None,
         preset_id: uuid.UUID | None = None,
         created_from: date | None = None,
         created_to: date | None = None,
@@ -78,6 +83,7 @@ class AnalyticsController:
             lambda: self.listing_analytics.get_intake(
                 granularity=granularity,
                 group_by_preset=group_by_preset,
+                market_id=market_id,
                 preset_id=preset_id,
                 created_from=created_from,
                 created_to=created_to,

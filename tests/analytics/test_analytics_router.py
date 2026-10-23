@@ -25,6 +25,10 @@ class RecordingController:
         self.calls.append(filters)
         return Breakdown(total=0, items=[])
 
+    async def get_home_status_breakdown(self, **kwargs):
+        self.calls.append(kwargs)
+        return Breakdown(total=0, items=[])
+
     async def get_delete_reasons(self, filters):
         self.calls.append(filters)
         row = DeleteReasonRow(key=None, label="All markets", total=0, by_status=[])
@@ -70,7 +74,9 @@ def test_repeatable_source_and_deal_status():
 def test_unknown_deal_status_is_422():
     client, _ = build_client()
 
-    response = client.get("/analytics/underwritings/deal-status-breakdown?deal_status=nope")
+    response = client.get(
+        "/analytics/underwritings/deal-status-breakdown?deal_status=nope"
+    )
 
     assert response.status_code == 422
 
@@ -78,9 +84,22 @@ def test_unknown_deal_status_is_422():
 def test_per_market_endpoint_ignores_market_id():
     client, controller = build_client()
 
-    response = client.get("/analytics/underwritings/delete-reasons?market_id=7&analyst_id=3")
+    response = client.get(
+        "/analytics/underwritings/delete-reasons?market_id=7&analyst_id=3"
+    )
 
     assert response.status_code == 200
     (filters,) = controller.calls
     assert filters.market_id is None
     assert filters.analyst_id == 3
+
+
+def test_listing_endpoint_accepts_market_id():
+    client, controller = build_client()
+
+    response = client.get("/analytics/listings/home-status-breakdown?market_id=12")
+
+    assert response.status_code == 200
+    assert controller.calls == [
+        {"market_id": 12, "preset_id": None, "created_from": None, "created_to": None}
+    ]

@@ -40,8 +40,18 @@ async def test_home_status_sorts_by_count_with_key_tiebreak_and_labels():
     result = await ListingAnalyticsService(repo).get_home_status_breakdown()
 
     assert result.total == 47
-    assert _items(result.items) == [("FOR_SALE", 40), ("PENDING", 3), ("SOLD", 3), (None, 1)]
-    assert [item.label for item in result.items] == ["For Sale", "Pending", "Sold", "Unknown"]
+    assert _items(result.items) == [
+        ("FOR_SALE", 40),
+        ("PENDING", 3),
+        ("SOLD", 3),
+        (None, 1),
+    ]
+    assert [item.label for item in result.items] == [
+        "For Sale",
+        "Pending",
+        "Sold",
+        "Unknown",
+    ]
 
 
 @pytest.mark.asyncio
@@ -67,6 +77,44 @@ async def test_repository_filters_by_preset_without_joining():
     assert "JOIN" not in by_preset
     assert f"zillow.scheduled_listings.preset_id = '{PRESET_A}'" in by_preset
     assert "GROUP BY zillow.scheduled_listings.home_status" in by_preset
+
+
+@pytest.mark.asyncio
+async def test_repository_filters_by_market_through_the_preset():
+    db = CapturingDb()
+
+    await ListingAnalyticsRepository(db).count_by_home_status(market_id=12)
+
+    query = sql(db.queries[0])
+    assert "JOIN" not in query
+    assert (
+        "zillow.scheduled_listings.preset_id IN (SELECT zillow.scheduled_presets.id"
+        in query
+    )
+    assert "zillow.scheduled_presets.market_id = 12" in query
+
+
+@pytest.mark.asyncio
+async def test_repository_intake_market_filter_composes_with_preset_grouping():
+    db = CapturingDb()
+
+    await ListingAnalyticsRepository(db).intake(
+        granularity=Granularity.WEEK, group_by_preset=True, market_id=12
+    )
+
+    query = sql(db.queries[0])
+    assert query.count("JOIN zillow.scheduled_presets") == 1
+    assert "zillow.scheduled_presets.market_id = 12" in query
+    assert "GROUP BY zillow.scheduled_listings.preset_id" in query
+
+
+@pytest.mark.asyncio
+async def test_intake_passes_market_through():
+    repo = FakeRepository(intake=[])
+
+    await ListingAnalyticsService(repo).get_intake(market_id=12)
+
+    assert repo.calls[0][1]["market_id"] == 12
 
 
 @pytest.mark.asyncio
@@ -122,7 +170,9 @@ async def test_intake_per_preset_series_share_periods_and_rank_by_total():
 async def test_intake_without_data_returns_empty_all_listings_series():
     repo = FakeRepository(intake=[])
 
-    (series,) = await ListingAnalyticsService(repo).get_intake(granularity=Granularity.DAY)
+    (series,) = await ListingAnalyticsService(repo).get_intake(
+        granularity=Granularity.DAY
+    )
 
     assert series.points == []
 
@@ -158,7 +208,9 @@ async def test_repository_stale_listings_use_keep_updated_and_last_seen():
 
 @pytest.mark.asyncio
 async def test_stale_listings_ranked_by_count():
-    repo = FakeRepository(count_stale_by_preset=[(PRESET_A, "Alpha", 2), (PRESET_B, "Beta", 9)])
+    repo = FakeRepository(
+        count_stale_by_preset=[(PRESET_A, "Alpha", 2), (PRESET_B, "Beta", 9)]
+    )
 
     result = await ListingAnalyticsService(repo).get_stale_listings()
 

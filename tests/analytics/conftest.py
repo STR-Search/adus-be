@@ -43,7 +43,9 @@ class _Row(tuple):
 
 def sql(query) -> str:
     return str(
-        query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+        query.compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
     )
 
 
