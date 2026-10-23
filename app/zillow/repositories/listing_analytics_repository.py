@@ -8,6 +8,7 @@ from app.core.analytics.schemas import Granularity
 from app.core.query_filters import date_range_conditions
 from app.zillow.models.scheduled_listings import ScheduledListing
 from app.zillow.models.scheduled_presets import ScheduledPreset
+from app.zillow.schemas.listing_analytics import IntakeGroupBy
 
 
 class ListingAnalyticsRepository:
@@ -36,16 +37,17 @@ class ListingAnalyticsRepository:
         self,
         *,
         granularity: Granularity,
-        group_by_preset: bool,
+        group_by: IntakeGroupBy,
         market_id: int | None = None,
         preset_id: uuid.UUID | None = None,
         created_from: date | None = None,
         created_to: date | None = None,
     ) -> list[tuple[uuid.UUID | None, str | None, date, int]]:
-        """``(preset_id, preset name, period start, new listings)`` rows.
+        """``(group key, group name, period start, new listings)`` rows.
 
-        ``created_at`` is the listing's first-seen time. Without
-        ``group_by_preset`` the preset columns are ``None``.
+        ``created_at`` is the listing's first-seen time. The group is the
+        preset (id + name), the preset's market (id, no name: the markets
+        domain owns market names), or ``(None, None)`` when not grouping.
         """
         period = cast(
             func.date_trunc(
@@ -57,7 +59,7 @@ class ListingAnalyticsRepository:
             *_listing_conditions(market_id, preset_id, created_from, created_to),
             ScheduledListing.created_at.is_not(None),
         ]
-        if group_by_preset:
+        if group_by is IntakeGroupBy.PRESET:
             query = (
                 select(
                     ScheduledListing.preset_id,
@@ -71,6 +73,18 @@ class ListingAnalyticsRepository:
             )
             result = await self.db.execute(query)
             return [tuple(row) for row in result.all()]
+
+        if group_by is IntakeGroupBy.MARKET:
+            query = (
+                select(ScheduledPreset.market_id, period, func.count())
+                .join(ScheduledPreset, ScheduledPreset.id == ScheduledListing.preset_id)
+                .where(*conditions)
+                .group_by(ScheduledPreset.market_id, period)
+            )
+            result = await self.db.execute(query)
+            return [
+                (market, None, start, count) for market, start, count in result.all()
+            ]
 
         query = select(period, func.count()).where(*conditions).group_by(period)
         result = await self.db.execute(query)
@@ -120,7 +134,7 @@ def _listing_conditions(
     )
     if market_id is not None:
         # A listing's market is its preset's market. A subquery rather than a
-        # join, so it composes with the preset join ``group_by_preset`` adds.
+        # join, so it composes with the preset join that grouping adds.
         conditions.append(
             ScheduledListing.preset_id.in_(
                 select(ScheduledPreset.id).where(ScheduledPreset.market_id == market_id)

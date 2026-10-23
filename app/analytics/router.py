@@ -21,7 +21,6 @@ from app.iron_bank.repositories.underwriting_analytics_repository import (
 )
 from app.iron_bank.schemas.underwriting_analytics import (
     DEFAULT_ANALYTICS_SOURCES,
-    DeleteReasons,
     Duplicates,
     MarketBreakdown,
     PriceBandRow,
@@ -43,6 +42,7 @@ from app.markets.services.market_service import MarketService
 from app.zillow.repositories.listing_analytics_repository import (
     ListingAnalyticsRepository,
 )
+from app.zillow.schemas.listing_analytics import IntakeGroupBy
 from app.zillow.services.listing_analytics_service import ListingAnalyticsService
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -142,12 +142,12 @@ async def get_listing_intake(
     created_from: date | None = Query(None, description=_CREATED),
     created_to: date | None = Query(None, description=_CREATED),
     granularity: Granularity = Query(Granularity.WEEK),
-    group_by: str = Query("none", pattern="^(none|preset)$"),
+    group_by: IntakeGroupBy = Query(IntakeGroupBy.NONE),
     controller: AnalyticsController = Depends(get_analytics_controller),
 ):
     return await controller.get_intake(
         granularity=granularity,
-        group_by_preset=group_by == "preset",
+        group_by=group_by,
         market_id=market_id,
         preset_id=preset_id,
         created_from=created_from,
@@ -200,14 +200,6 @@ async def get_quality_comparison(
     controller: AnalyticsController = Depends(get_analytics_controller),
 ):
     return await controller.get_quality_comparison(filters)
-
-
-@router.get("/underwritings/delete-reasons", response_model=DeleteReasons)
-async def get_delete_reasons(
-    filters: UnderwritingAnalyticsFilters = Depends(underwriting_filters_all_markets),
-    controller: AnalyticsController = Depends(get_analytics_controller),
-):
-    return await controller.get_delete_reasons(filters)
 
 
 @router.get("/underwritings/tag-mix", response_model=TagMix)

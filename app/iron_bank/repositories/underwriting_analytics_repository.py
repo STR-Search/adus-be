@@ -108,7 +108,6 @@ class UnderwritingAnalyticsRepository:
         """Deal count plus median and non-null count per quality column."""
         columns = {
             "cash_on_cash": Underwriting.m_cash_on_cash,
-            "deal_score": Underwriting.deal_score,
             "total_oop": Underwriting.total_oop,
         }
         selected = [func.count().label("deals")]

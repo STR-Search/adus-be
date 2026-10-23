@@ -7,6 +7,7 @@ from app.core.analytics.schemas import Granularity
 from app.zillow.repositories.listing_analytics_repository import (
     ListingAnalyticsRepository,
 )
+from app.zillow.schemas.listing_analytics import IntakeGroupBy
 from app.zillow.services.listing_analytics_service import ListingAnalyticsService
 from tests.analytics.conftest import CapturingDb, sql
 
@@ -99,7 +100,7 @@ async def test_repository_intake_market_filter_composes_with_preset_grouping():
     db = CapturingDb()
 
     await ListingAnalyticsRepository(db).intake(
-        granularity=Granularity.WEEK, group_by_preset=True, market_id=12
+        granularity=Granularity.WEEK, group_by=IntakeGroupBy.PRESET, market_id=12
     )
 
     query = sql(db.queries[0])
@@ -155,7 +156,9 @@ async def test_intake_per_preset_series_share_periods_and_rank_by_total():
         ]
     )
 
-    series = await ListingAnalyticsService(repo).get_intake(group_by_preset=True)
+    series = await ListingAnalyticsService(repo).get_intake(
+        group_by=IntakeGroupBy.PRESET
+    )
 
     assert [s.label for s in series] == ["Beta", "Alpha"]
     for s in series:
@@ -164,6 +167,44 @@ async def test_intake_per_preset_series_share_periods_and_rank_by_total():
             date(2026, 10, 5),
             date(2026, 10, 12),
         ]
+
+
+@pytest.mark.asyncio
+async def test_repository_intake_groups_by_the_presets_market():
+    db = CapturingDb([(3, date(2026, 10, 5), 4), (None, date(2026, 10, 5), 1)])
+
+    rows = await ListingAnalyticsRepository(db).intake(
+        granularity=Granularity.WEEK, group_by=IntakeGroupBy.MARKET
+    )
+
+    assert rows == [(3, None, date(2026, 10, 5), 4), (None, None, date(2026, 10, 5), 1)]
+    query = sql(db.queries[0])
+    assert "JOIN zillow.scheduled_presets" in query
+    assert "GROUP BY zillow.scheduled_presets.market_id" in query
+
+
+@pytest.mark.asyncio
+async def test_intake_per_market_labels_and_unassigned_last():
+    repo = FakeRepository(
+        intake=[
+            (None, None, date(2026, 10, 5), 50),
+            (3, None, date(2026, 10, 5), 4),
+            (16, None, date(2026, 10, 5), 9),
+            (99, None, date(2026, 10, 5), 1),
+        ]
+    )
+
+    series = await ListingAnalyticsService(repo).get_intake(
+        group_by=IntakeGroupBy.MARKET,
+        market_labels={3: "Asheville - NC", 16: "Fort Lauderdale - FL"},
+    )
+
+    assert [(s.key, s.label) for s in series] == [
+        ("16", "Fort Lauderdale - FL"),
+        ("3", "Asheville - NC"),
+        ("99", "Market 99"),
+        (None, "Unassigned"),
+    ]
 
 
 @pytest.mark.asyncio

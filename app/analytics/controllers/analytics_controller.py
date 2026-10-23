@@ -13,7 +13,6 @@ from app.core.logger import logger
 from app.iron_bank.enums import UnderwritingSource
 from app.iron_bank.schemas.underwriting_analytics import (
     DEFAULT_ANALYTICS_SOURCES,
-    DeleteReasons,
     Duplicates,
     MarketBreakdown,
     PriceBandRow,
@@ -26,6 +25,7 @@ from app.iron_bank.services.analytics.underwriting_analytics_service import (
     MarketSort,
     UnderwritingAnalyticsService,
 )
+from app.zillow.schemas.listing_analytics import IntakeGroupBy
 from app.zillow.services.listing_analytics_service import ListingAnalyticsService
 
 T = TypeVar("T")
@@ -71,24 +71,29 @@ class AnalyticsController:
         self,
         *,
         granularity: Granularity = Granularity.WEEK,
-        group_by_preset: bool = False,
+        group_by: IntakeGroupBy = IntakeGroupBy.NONE,
         market_id: int | None = None,
         preset_id: uuid.UUID | None = None,
         created_from: date | None = None,
         created_to: date | None = None,
     ) -> list[Series]:
         self._validate_range(created_from, created_to)
-        return await self._run(
-            "intake",
-            lambda: self.listing_analytics.get_intake(
+
+        async def run():
+            market_labels = (
+                await self._market_labels() if group_by is IntakeGroupBy.MARKET else {}
+            )
+            return await self.listing_analytics.get_intake(
                 granularity=granularity,
-                group_by_preset=group_by_preset,
+                group_by=group_by,
+                market_labels=market_labels,
                 market_id=market_id,
                 preset_id=preset_id,
                 created_from=created_from,
                 created_to=created_to,
-            ),
-        )
+            )
+
+        return await self._run("intake", run)
 
     # -- underwritings (iron_bank) -------------------------------------------
 
@@ -140,18 +145,6 @@ class AnalyticsController:
             "quality_comparison",
             lambda: self.underwriting_analytics.get_quality_comparison(filters),
         )
-
-    async def get_delete_reasons(
-        self, filters: UnderwritingAnalyticsFilters
-    ) -> DeleteReasons:
-        self._validate_filters(filters)
-
-        async def run():
-            return await self.underwriting_analytics.get_delete_reasons(
-                filters, market_labels=await self._market_labels()
-            )
-
-        return await self._run("delete_reasons", run)
 
     async def get_tag_mix(self, filters: UnderwritingAnalyticsFilters) -> TagMix:
         self._validate_filters(filters)

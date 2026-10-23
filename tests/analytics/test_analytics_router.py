@@ -12,9 +12,10 @@ from app.core.analytics.schemas import Breakdown
 from app.iron_bank.enums import DealStatus, UnderwritingSource
 from app.iron_bank.schemas.underwriting_analytics import (
     DEFAULT_ANALYTICS_SOURCES,
-    DeleteReasonRow,
-    DeleteReasons,
+    MarketBreakdown,
+    MarketRow,
 )
+from app.zillow.schemas.listing_analytics import IntakeGroupBy
 
 
 class RecordingController:
@@ -29,10 +30,22 @@ class RecordingController:
         self.calls.append(kwargs)
         return Breakdown(total=0, items=[])
 
-    async def get_delete_reasons(self, filters):
+    async def get_market_breakdown(self, filters, sort):
         self.calls.append(filters)
-        row = DeleteReasonRow(key=None, label="All markets", total=0, by_status=[])
-        return DeleteReasons(overall=row, markets=[])
+        row = MarketRow(
+            key=None,
+            label="All markets",
+            underwritten=0,
+            presented=0,
+            won=0,
+            presented_rate=None,
+            win_rate=None,
+        )
+        return MarketBreakdown(overall=row, markets=[])
+
+    async def get_intake(self, **kwargs):
+        self.calls.append(kwargs)
+        return []
 
 
 def build_client() -> tuple[TestClient, RecordingController]:
@@ -85,7 +98,7 @@ def test_per_market_endpoint_ignores_market_id():
     client, controller = build_client()
 
     response = client.get(
-        "/analytics/underwritings/delete-reasons?market_id=7&analyst_id=3"
+        "/analytics/underwritings/market-breakdown?market_id=7&analyst_id=3"
     )
 
     assert response.status_code == 200
@@ -103,3 +116,26 @@ def test_listing_endpoint_accepts_market_id():
     assert controller.calls == [
         {"market_id": 12, "preset_id": None, "created_from": None, "created_to": None}
     ]
+
+
+def test_intake_group_by_market():
+    client, controller = build_client()
+
+    response = client.get("/analytics/listings/intake?group_by=market")
+
+    assert response.status_code == 200
+    assert controller.calls[0]["group_by"] is IntakeGroupBy.MARKET
+
+
+def test_intake_unknown_group_by_is_422():
+    client, _ = build_client()
+
+    assert client.get("/analytics/listings/intake?group_by=state").status_code == 422
+
+
+def test_delete_reasons_endpoint_is_gone():
+    client, _ = build_client()
+
+    response = client.get("/analytics/underwritings/delete-reasons")
+
+    assert response.status_code == 404

@@ -12,7 +12,7 @@ from app.iron_bank.schemas.underwriting_analytics import (
     UnderwritingCompleteness,
 )
 from app.iron_bank.services.analytics.underwriting_analytics_service import MarketSort
-from app.zillow.schemas.listing_analytics import StaleListings
+from app.zillow.schemas.listing_analytics import IntakeGroupBy, StaleListings
 from tests.analytics.conftest import market
 
 EMPTY = Breakdown(total=0, items=[])
@@ -23,7 +23,6 @@ def _row(label):
         key=None,
         label=label,
         underwritten=0,
-        by_status=[],
         presented=0,
         won=0,
         presented_rate=None,
@@ -71,6 +70,10 @@ class FakeListingAnalytics:
     async def get_home_status_breakdown(self, **kwargs):
         self.calls.append(kwargs)
         return EMPTY
+
+    async def get_intake(self, **kwargs):
+        self.calls.append(kwargs)
+        return []
 
     async def get_preset_runs(self):
         return []
@@ -201,3 +204,19 @@ async def test_data_completeness_composes_both_domains():
 
     assert result.stale_listings.stale_after_days == 30
     assert listing.calls == [{"stale_after_days": 30}]
+
+
+@pytest.mark.asyncio
+async def test_intake_by_market_gets_market_names_from_markets_domain():
+    listing = FakeListingAnalytics()
+    controller = AnalyticsController(
+        FakeUnderwritingAnalytics(), listing, market_service=FakeMarketService()
+    )
+
+    await controller.get_intake(group_by=IntakeGroupBy.MARKET)
+    await controller.get_intake(group_by=IntakeGroupBy.PRESET)
+
+    by_market, by_preset = listing.calls
+    assert by_market["market_labels"] == {1: "Asheville - NC"}
+    # No market lookup when the series aren't markets.
+    assert by_preset["market_labels"] == {}

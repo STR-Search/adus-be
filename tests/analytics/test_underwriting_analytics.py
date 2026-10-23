@@ -248,7 +248,7 @@ async def test_breakdown_empty_still_lists_every_status():
 
 
 @pytest.mark.asyncio
-async def test_template_progress_fills_gaps_with_null_share():
+async def test_template_progress_fills_gaps_with_null_seen():
     repo = FakeRepository(
         template_progress=[(date(2026, 9, 28), 4, 1), (date(2026, 10, 12), 2, 2)]
     )
@@ -257,7 +257,7 @@ async def test_template_progress_fills_gaps_with_null_share():
         UnderwritingAnalyticsFilters(), Granularity.WEEK
     )
 
-    assert [(p.period_start, p.created, p.past_template, p.share) for p in points] == [
+    assert [(p.period_start, p.created, p.past_template, p.seen) for p in points] == [
         (date(2026, 9, 28), 4, 1, 0.25),
         (date(2026, 10, 5), 0, 0, None),
         (date(2026, 10, 12), 2, 2, 1.0),
@@ -295,7 +295,7 @@ async def test_market_breakdown_rates_labels_and_order():
     assert (asheville.presented, asheville.won) == (4, 1)
     assert asheville.presented_rate == 0.5
     assert asheville.win_rate == 0.25
-    assert [item.key for item in asheville.by_status] == ALL_STATUSES
+    assert "by_status" not in asheville.model_dump()
     assert result.markets[1].win_rate is None
 
 
@@ -356,8 +356,6 @@ async def test_quality_comparison_reports_groups_and_sample_sizes():
         deals=5,
         cash_on_cash_median=Decimal("0.09"),
         cash_on_cash_count=5,
-        deal_score_median=None,
-        deal_score_count=0,
         total_oop_median=300000.0,
         total_oop_count=4,
     )._mapping
@@ -372,29 +370,9 @@ async def test_quality_comparison_reports_groups_and_sample_sizes():
     assert presented.statuses == ["present_to_clients", "client_under_contract"]
     assert deleted.statuses == ["delete_zillow", "delete_deal"]
     assert presented.median_cash_on_cash.value == 0.09
-    assert presented.median_deal_score.value is None
-    assert presented.median_deal_score.sample_size == 0
+    assert presented.median_total_oop.sample_size == 4
+    assert "median_deal_score" not in presented.model_dump()
     assert [call[1][1] for call in repo.calls] == [PRESENTED_STATUSES, DELETED_STATUSES]
-
-
-@pytest.mark.asyncio
-async def test_delete_reasons_restricts_to_deleted_statuses():
-    repo = FakeRepository(
-        count_by_market_and_status=[(1, "delete_zillow", 3), (2, "delete_deal", 5)]
-    )
-
-    result = await UnderwritingAnalyticsService(repo).get_delete_reasons(
-        UnderwritingAnalyticsFilters(), market_labels={1: "A", 2: "B"}
-    )
-
-    (_, (filters,), _) = repo.calls[0]
-    assert filters.deal_status == DELETED_STATUSES
-    assert result.overall.total == 8
-    assert [m.key for m in result.markets] == ["2", "1"]
-    assert _items(result.markets[0].by_status) == [
-        ("delete_zillow", 0),
-        ("delete_deal", 5),
-    ]
 
 
 @pytest.mark.asyncio

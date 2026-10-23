@@ -38,13 +38,13 @@ class TemplateProgressPoint(BaseModel):
     period_start: date
     created: int
     past_template: int
+    # Share of the period's deals seen past the template:
     # past_template / created; None when created == 0.
-    share: float | None
+    seen: float | None
 
 
 class MarketRow(GroupRow):
     underwritten: int
-    by_status: list[BreakdownItem]
     # deal_status in PRESENTED_STATUSES (a deal under contract was presented first).
     presented: int
     # deal_status in WON_STATUSES.
@@ -73,23 +73,11 @@ class QualityGroup(BaseModel):
     statuses: list[str]
     deals: int
     median_cash_on_cash: MedianValue
-    median_deal_score: MedianValue
     median_total_oop: MedianValue
 
 
 class QualityComparison(BaseModel):
     groups: list[QualityGroup]
-
-
-class DeleteReasonRow(GroupRow):
-    total: int
-    # delete_zillow ("bad listing") and delete_deal ("bad numbers").
-    by_status: list[BreakdownItem]
-
-
-class DeleteReasons(BaseModel):
-    overall: DeleteReasonRow
-    markets: list[DeleteReasonRow]
 
 
 class TagMix(BaseModel):

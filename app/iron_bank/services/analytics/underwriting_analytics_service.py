@@ -26,8 +26,6 @@ from app.iron_bank.repositories.underwriting_analytics_repository import (
 )
 from app.iron_bank.schemas.underwriting import MULTI_SELECT_TAG_FIELDS
 from app.iron_bank.schemas.underwriting_analytics import (
-    DeleteReasonRow,
-    DeleteReasons,
     Duplicates,
     JobTypeHealth,
     MarketBreakdown,
@@ -156,7 +154,7 @@ class UnderwritingAnalyticsService:
                     period_start=period,
                     created=created,
                     past_template=past,
-                    share=ratio(past, created),
+                    seen=ratio(past, created),
                 )
             )
         return points
@@ -182,7 +180,6 @@ class UnderwritingAnalyticsService:
                 key=key,
                 label=label,
                 underwritten=underwritten,
-                by_status=status_items(counts, filters.deal_status),
                 presented=presented,
                 won=won,
                 presented_rate=ratio(presented, underwritten),
@@ -239,40 +236,10 @@ class UnderwritingAnalyticsService:
                     statuses=[status.value for status in statuses],
                     deals=values["deals"],
                     median_cash_on_cash=_median(values, "cash_on_cash"),
-                    median_deal_score=_median(values, "deal_score"),
                     median_total_oop=_median(values, "total_oop"),
                 )
             )
         return QualityComparison(groups=groups)
-
-    async def get_delete_reasons(
-        self, filters: UnderwritingAnalyticsFilters, *, market_labels: Mapping[int, str]
-    ) -> DeleteReasons:
-        filters = filters.model_copy(update={"deal_status": DELETED_STATUSES})
-        by_market, overall = _pivot(
-            await self.repository.count_by_market_and_status(filters)
-        )
-
-        def row(
-            key: str | None, label: str, counts: Mapping[str | None, int]
-        ) -> DeleteReasonRow:
-            return DeleteReasonRow(
-                key=key,
-                label=label,
-                total=sum(counts.values()),
-                by_status=status_items(counts, DELETED_STATUSES),
-            )
-
-        return DeleteReasons(
-            overall=row(None, "All markets", overall),
-            markets=order_ranked(
-                (
-                    row(*_market_key_label(market_id, market_labels), counts)
-                    for market_id, counts in by_market.items()
-                ),
-                by="total",
-            ),
-        )
 
     async def get_tag_mix(self, filters: UnderwritingAnalyticsFilters) -> TagMix:
         if filters.deal_status is None:

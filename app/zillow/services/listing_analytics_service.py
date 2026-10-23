@@ -1,5 +1,6 @@
 import uuid
 from collections import defaultdict
+from collections.abc import Mapping
 from datetime import date
 
 from app.core.analytics.ordering import fill_series, order_open, order_ranked
@@ -15,6 +16,7 @@ from app.zillow.repositories.listing_analytics_repository import (
     ListingAnalyticsRepository,
 )
 from app.zillow.schemas.listing_analytics import (
+    IntakeGroupBy,
     PresetRun,
     StaleListings,
     StalePresetRow,
@@ -58,27 +60,41 @@ class ListingAnalyticsService:
         self,
         *,
         granularity: Granularity = Granularity.WEEK,
-        group_by_preset: bool = False,
+        group_by: IntakeGroupBy = IntakeGroupBy.NONE,
+        market_labels: Mapping[int, str] | None = None,
         market_id: int | None = None,
         preset_id: uuid.UUID | None = None,
         created_from: date | None = None,
         created_to: date | None = None,
     ) -> list[Series]:
+        """New listings per period: one series, or one per preset or market.
+
+        ``market_labels`` (market id -> name) comes from the caller, since the
+        markets domain owns market names; a market missing from it falls back
+        to "Market <id>". Listings whose preset has no market are "Unassigned".
+        """
         rows = await self.repository.intake(
             granularity=granularity,
-            group_by_preset=group_by_preset,
+            group_by=group_by,
             market_id=market_id,
             preset_id=preset_id,
             created_from=created_from,
             created_to=created_to,
         )
-        counts: dict[uuid.UUID | None, dict[date, int]] = defaultdict(dict)
-        names: dict[uuid.UUID | None, str] = {None: "All listings"}
+        market_labels = market_labels or {}
+        counts: dict[object, dict[date, int]] = defaultdict(dict)
+        names: dict[object, str] = {
+            None: "Unassigned" if group_by is IntakeGroupBy.MARKET else "All listings"
+        }
         for group, name, start, count in rows:
             counts[group][start] = count
-            if group is not None:
+            if group is None:
+                continue
+            if group_by is IntakeGroupBy.MARKET:
+                names[group] = market_labels.get(group) or f"Market {group}"
+            else:
                 names[group] = name
-        if not group_by_preset:
+        if group_by is IntakeGroupBy.NONE:
             counts.setdefault(None, {})
 
         # Every series spans the same periods, so charts line up: the requested
@@ -99,8 +115,16 @@ class ListingAnalyticsService:
             )
             for group, points in counts.items()
         ]
-        # Ordering Rule 3 between series, by total count.
-        series.sort(key=lambda item: (-item[0], item[1].label, item[1].key or ""))
+        # Ordering Rule 3 between series, by total count; "Unassigned" last.
+        grouped = group_by is not IntakeGroupBy.NONE
+        series.sort(
+            key=lambda item: (
+                grouped and item[1].key is None,
+                -item[0],
+                item[1].label,
+                item[1].key or "",
+            )
+        )
         return [s for _, s in series]
 
     async def get_preset_runs(self) -> list[PresetRun]:
