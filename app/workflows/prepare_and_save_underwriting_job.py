@@ -2,6 +2,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.airbnb_public.repositories.cleaned_data_repository import CleanedDataRepository
 from app.airbnb_public.services.cleaned_data_service import CleanedDataService
+from app.core.process_log.enums import TransitionSource
+from app.core.process_log.repository import ProcessLogRepository
+from app.core.process_log.service import ProcessLogService
 from app.external_api.services.external_api_service import ExternalApiService
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
 from app.iron_bank.services.operations.save_underwriting_service import (
@@ -70,6 +73,8 @@ class PrepareAndSaveUnderwritingJob:
                 opex_service=OpexByBedroomsService(
                     OpexByBedroomsRepository(db), MarketRepository(db)
                 ),
+                process_log=ProcessLogService(ProcessLogRepository(db)),
+                log_source=TransitionSource.JOB,
             ),
             underwriting_repository=underwriting_repository,
             listings_service=ScheduledListingsService(ScheduledListingsRepository(db)),

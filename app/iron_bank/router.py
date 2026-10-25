@@ -15,6 +15,8 @@ from app.core.discussions.schemas import (
 )
 from app.core.discussions.service import DiscussionService
 from app.core.enums import PageSize
+from app.core.process_log.repository import ProcessLogRepository
+from app.core.process_log.service import ProcessLogService
 from app.core.reference_data.repository import ReferenceDataRepository
 from app.core.reference_data.service import ReferenceDataService
 from app.dependencies import get_current_user, get_user_lookup
@@ -123,6 +125,11 @@ def _opex_by_bedrooms_service(db: AsyncSession):
     return OpexByBedroomsService(OpexByBedroomsRepository(db), MarketRepository(db))
 
 
+def _process_log_service(db: AsyncSession) -> ProcessLogService:
+    """Logs deal-status changes on the same session as the status write."""
+    return ProcessLogService(ProcessLogRepository(db))
+
+
 def get_deal_status_controller() -> DealStatusController:
     return DealStatusController(DealStatusService())
 
@@ -169,6 +176,7 @@ def get_save_underwriting_controller(
             cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
             reference_data_service=ReferenceDataService(ReferenceDataRepository(db)),
             opex_service=_opex_by_bedrooms_service(db),
+            process_log=_process_log_service(db),
         )
     )
 
@@ -211,6 +219,7 @@ def get_create_underwriting_from_url_controller(
                 market_service=market_service,
                 cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
                 opex_service=_opex_by_bedrooms_service(db),
+                process_log=_process_log_service(db),
             ),
             underwriting_reader=repository,
             market_context_reader=PrepareUwDataJob.from_session(db),
@@ -252,6 +261,7 @@ def get_create_blank_underwriting_controller(
                 ),
                 cleaned_data_service=CleanedDataService(CleanedDataRepository(db)),
                 opex_service=_opex_by_bedrooms_service(db),
+                process_log=_process_log_service(db),
             ),
             market_context_reader=PrepareUwDataJob.from_session(db),
         )
@@ -262,7 +272,9 @@ def get_duplicate_underwriting_controller(
     db: AsyncSession = Depends(get_db),
 ) -> DuplicateUnderwritingController:
     return DuplicateUnderwritingController(
-        DuplicateUnderwritingService(UnderwritingRepository(db))
+        DuplicateUnderwritingService(
+            UnderwritingRepository(db), process_log=_process_log_service(db)
+        )
     )
 
 
@@ -317,6 +329,7 @@ def get_update_underwriting_controller(
                 enabled=config.N8N_WEBHOOK_ANALYST_COMPLETED_ENABLED,
             ),
             opex_service=_opex_by_bedrooms_service(db),
+            process_log=_process_log_service(db),
         )
     )
 

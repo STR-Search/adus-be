@@ -5,6 +5,8 @@ import structlog
 from fastapi.encoders import jsonable_encoder
 
 from app.airbnb_public.schemas.cleaned_data import RevenuePotentialPercentiles
+from app.core.process_log.enums import TransitionSource
+from app.core.process_log.service import ProcessLogService
 from app.iron_bank.repositories.underwriting_repository import (
     NOT_PENDING_HOME_STATUSES,
     UnderwritingRepository,
@@ -18,6 +20,7 @@ from app.iron_bank.schemas.underwriting import (
     MULTI_SELECT_TAG_FIELDS,
     SINGLE_SELECT_TAG_FIELDS,
 )
+from app.iron_bank.services.deal_status_history import record_created
 from app.iron_bank.services.engine.underwriting_calculator import UnderwritingCalculator
 from app.markets.schemas.market import MarketKeysMasterSchema
 from app.zillow.models.scheduled_listings import ScheduledListing
@@ -82,8 +85,17 @@ class SaveUnderwritingService:
         cleaned_data_service: CleanedDataRevenueReader | None = None,
         reference_data_service: ReferenceDataValidator | None = None,
         opex_service: OpexByBedroomsReader | None = None,
+        process_log: ProcessLogService | None = None,
+        log_source: TransitionSource = TransitionSource.API,
     ):
         self.repository = repository
+        # Optional like the other collaborators: without it, status changes
+        # are not logged. Every production construction wires it, on the same
+        # session as ``repository`` so the log row commits with the change.
+        self.process_log = process_log
+        # How creates through this instance are attributed (``job`` for the
+        # batch prepare-and-save workflow).
+        self.log_source = log_source
         self.calculator = calculator or UnderwritingCalculator()
         self.market_service = market_service
         self.listings_service = listings_service
@@ -142,7 +154,17 @@ class SaveUnderwritingService:
                 for item in payload.operating_expenses
             ],
             comp_set=[item.model_dump(exclude_unset=True) for item in payload.comp_set],
+            # Held open so the process-log head row commits with the insert.
+            commit=self.process_log is None,
         )
+        if self.process_log is not None:
+            await record_created(
+                self.process_log,
+                self.repository,
+                underwriting,
+                source=self.log_source,
+            )
+            await self.repository.commit()
         logger.debug(
             "save.repository.create: complete",
             underwriting_id=underwriting.id,
