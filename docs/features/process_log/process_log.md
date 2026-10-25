@@ -320,10 +320,18 @@ transaction, and on create it needs the new `underwriting.id`, which only
 exists after a flush.
 
 Add a keyword-only `commit: bool = True` to both methods. With `commit=False`
-they `flush()` instead of `commit()` and don't refresh. The existing
-`try/except → rollback` stays. Default behaviour is unchanged for every other
-caller. The services that log pass `commit=False`, record the transition, then
-`await db.commit()` and `refresh`.
+they `flush()` instead of `commit()`, then refresh as before. The session uses
+`expire_on_commit=False`, so the returned object stays usable after the
+caller's commit. The existing `try/except → rollback` stays. Default behaviour
+is unchanged for every other caller. The services that log pass
+`commit=False`, record the transition, then call `repository.commit()`, which
+commits and rolls back on failure.
+
+For the lock, `get_by_id` gains `for_update: bool = False`, following
+`DiscussionRepository.get_comment(..., for_update=True)`. It emits
+`FOR UPDATE OF underwritings`, so only the underwriting row is locked, not the
+tables in the select list's aggregate subqueries. It also sets
+`populate_existing` so a copy already in the session is re-read.
 
 The alternative of passing a `before_commit` callback into the repository was
 rejected: it hides the transaction boundary inside the repository.
@@ -331,7 +339,7 @@ rejected: it hides the transaction boundary inside the repository.
 ### 4.4 W1: `update_deal_status`
 
 ```python
-existing = await self.repository.get_by_id_for_update(underwriting_id)  # NEW: SELECT … FOR UPDATE
+existing = await self.repository.get_by_id(underwriting_id, for_update=True)  # NEW: SELECT … FOR UPDATE
 previous_status = existing.deal_status
 
 underwriting_data = {...}                 # unchanged (analyst/approver/deal_approved)
@@ -349,7 +357,7 @@ if previous_status != deal_status:        # repeated PATCH: no log row
         actor_user_id=actor_user_id,
         snapshot=build_underwriting_snapshot(underwriting),
     )
-await self.db.commit()
+await self.repository.commit()
 # webhooks after commit (unchanged)
 ```
 
@@ -509,7 +517,7 @@ WHERE u.deal_status IS DISTINCT FROM t.to_status;
 ## 8. Rollout
 
 1. Migration + `app/core/process_log/` module + tests. No behaviour change.
-2. Repository `commit=` flag and `get_by_id_for_update`.
+2. Repository `commit=` flag, `commit()`, and `get_by_id(..., for_update=True)`.
 3. Wire W1, W3, W4. Deploy to dev and run the drift check on new deals.
 4. Run the backfill on dev, then the drift check (expect zero), then prod.
 5. Update CLAUDE.md.

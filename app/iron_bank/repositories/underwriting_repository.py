@@ -232,8 +232,17 @@ class UnderwritingRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_by_id(self, underwriting_id: int) -> Underwriting | None:
-        result = await self.db.execute(
+    async def get_by_id(
+        self, underwriting_id: int, *, for_update: bool = False
+    ) -> Underwriting | None:
+        """Load an underwriting and its children.
+
+        ``for_update`` locks the underwriting row (``FOR UPDATE``) until the
+        transaction ends, and re-reads it even if the session already holds a
+        copy, so the caller sees the committed state it locked. Children are
+        loaded by separate queries and are not locked.
+        """
+        stmt = (
             select(Underwriting)
             .where(Underwriting.id == underwriting_id)
             .options(
@@ -244,6 +253,11 @@ class UnderwritingRepository:
                 selectinload(Underwriting.comp_set),
             )
         )
+        if for_update:
+            stmt = stmt.with_for_update(of=Underwriting).execution_options(
+                populate_existing=True
+            )
+        result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
     async def exists(self, underwriting_id: int) -> bool:
@@ -728,7 +742,15 @@ class UnderwritingRepository:
         optimization_items: list[dict[str, Any]] | None = None,
         operating_expenses: list[dict[str, Any]] | None = None,
         comp_set: list[dict[str, Any]] | None = None,
+        *,
+        commit: bool = True,
     ) -> Underwriting:
+        """Insert an underwriting and its children.
+
+        ``commit=False`` flushes instead of committing, so the caller can add
+        more writes (e.g. a process-log row) to the same transaction and then
+        call ``commit()``. On any error the session is rolled back either way.
+        """
         try:
             underwriting = Underwriting(**underwriting_data)
             self.db.add(underwriting)
@@ -781,7 +803,7 @@ class UnderwritingRepository:
                     )
                 )
 
-            await self.db.commit()
+            await self._finish_write(commit)
             await self.db.refresh(underwriting)
             return underwriting
         except Exception:
@@ -797,7 +819,15 @@ class UnderwritingRepository:
         optimization_items: list[dict[str, Any]] | None = None,
         operating_expenses: list[dict[str, Any]] | None = None,
         comp_set: list[dict[str, Any]] | None = None,
+        *,
+        commit: bool = True,
     ) -> Underwriting | None:
+        """Apply changes to an underwriting and its children.
+
+        ``commit=False`` flushes instead of committing; see ``create``. A lock
+        taken earlier with ``get_by_id(..., for_update=True)`` in the same
+        transaction is kept until the caller commits.
+        """
         try:
             underwriting = await self.get_by_id(underwriting_id)
             if underwriting is None:
@@ -830,12 +860,26 @@ class UnderwritingRepository:
                     incoming=comp_set,
                 )
 
-            await self.db.commit()
+            await self._finish_write(commit)
             await self.db.refresh(underwriting)
             return underwriting
         except Exception:
             await self.db.rollback()
             raise
+
+    async def commit(self) -> None:
+        """Commit writes left pending by ``create``/``update(commit=False)``."""
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+    async def _finish_write(self, commit: bool) -> None:
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
 
     async def bulk_sync_property_pending(self) -> int:
         """Reconcile ``property_pending`` across all underwritings in one pass.
