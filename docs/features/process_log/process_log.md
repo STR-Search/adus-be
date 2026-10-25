@@ -168,22 +168,27 @@ UNIQUE (subject_type, subject_id, payload_hash)   -- dedupe; reuse the row on co
 Dedupe is per subject, not global. Two underwritings with identical payloads
 still get separate rows, so each snapshot belongs to exactly one subject.
 
-**v1 underwriting payload** (`schema_version = 1`), built in iron_bank:
+**v1 underwriting payload** (`schema_version = 1`), built in iron_bank: the
+**full deal**, in the same `GetUnderwritingResult` JSON shape as the n8n
+webhook body. That means every `UnderwritingRead` column (financials such as
+`total_oop`, `purchase_price`, cash-on-cash, revenue; ids; tag slugs) plus the
+child tables `details`, `taxes`, `optimization_list`, `operating_expenses` and
+`comp_set`. Two snapshots of one deal can be diffed to see what changed
+between status changes.
 
-```json
-{
-  "market_id": 12, "zpid": "123456", "series_id": "…", "version": 0,
-  "analyst_id": 4, "approver_id": 7, "owner_id": null,
-  "purchase_price": "425000.00", "deal_score": 71,
-  "m_cash_on_cash": "0.0841", "total_oop": "98000.00",
-  "property_pending": false, "is_automated": true, "source": "adus"
-}
-```
+Fields **resolved from other tables** at send time are left out: `analyst`,
+`approver` and `owner` (names and emails; the ids stay), `realtor_details`,
+the live-hydrated `zillow_property` for automated deals, every `*_label`
+field (the slugs stay), and the read-path-only `simulated`, `discussion` and
+`display_id`. This keeps a snapshot changing only when the deal changes (a
+renamed realtor must not look like a deal change), avoids extra lookups inside
+the locked transaction, and keeps names and emails out of an append-only
+table. A stored `zillow_property` on `uw_details` (non-automated deals) is
+part of the deal and is included.
 
-These are the dimensions the dashboard groups or filters by. With them in the
-snapshot, grouped metrics still work for deleted deals and show values as they
-were at the time of the change. Decimals are serialized as strings so the hash
-is stable.
+`model_dump(mode="json")` renders Decimals as strings, so the hash is stable.
+With the full deal in the snapshot, grouped metrics still work for deleted
+deals and show values as they were at the time of the change.
 
 ### 2.3 Enums (`app/core/process_log/enums.py`)
 
@@ -410,9 +415,18 @@ detected at flush still raises inside `create`, so the retry logic is unchanged.
 
 `app/iron_bank/services/deal_status_history.py` (new):
 
-- `build_underwriting_snapshot(u: Underwriting) -> SnapshotInput`: the payload
-  in §2.2, `schema_version=1`.
-- Constants `UNDERWRITING_SNAPSHOT_VERSION = 1`.
+- `underwriting_document(u)`: the parent row and child tables in
+  `GetUnderwritingResult` shape. **Shared with the n8n webhook**:
+  `_trigger_n8n_webhook` starts from it and adds the resolved parts, so the
+  snapshot and the webhook body can't drift apart.
+- `build_underwriting_snapshot(u) -> SnapshotInput`: the payload in §2.2,
+  `schema_version=1`.
+- `record_created(...)`: writes the head row for a new underwriting (W3, W4).
+  It loads the children first with `repository.load_children()`
+  (`refresh(attribute_names=[…])`), because `create` adds them as separate
+  rows and lazy loading isn't possible under asyncio. W1 needs no extra load:
+  `get_by_id` eager-loads the children and `refresh` reloads them.
+- Constant `UNDERWRITING_SNAPSHOT_VERSION = 1`.
 
 It lives in iron_bank because only iron_bank knows the underwriting's shape.
 Changing the payload shape means bumping the version. Old rows are never
@@ -420,11 +434,27 @@ rewritten.
 
 ### 4.7 Wiring
 
-`router.py` dependency factories for `UpdateUnderwritingService`,
-`SaveUnderwritingService` and `DuplicateUnderwritingService` construct
-`ProcessLogService(ProcessLogRepository(db))` with the **same `db` session**
-they already pass to `UnderwritingRepository(db)`. Workflow jobs that build
-these services do the same.
+`process_log` is an **optional** constructor argument on
+`SaveUnderwritingService` (inherited by `UpdateUnderwritingService`) and
+`DuplicateUnderwritingService`, following the existing optional collaborators
+(`reference_data_service`, the webhook services). Without it nothing is logged,
+which keeps the ~70 existing unit-test constructions unchanged.
+`SaveUnderwritingService` also takes `log_source` (default `api`).
+
+Every production construction passes it, with the **same `db` session** as
+`UnderwritingRepository(db)`:
+
+- `router.py`, through `_process_log_service(db)`: save, create-from-URL,
+  create-blank, update and duplicate factories.
+- `PrepareAndSaveUnderwritingJob.from_session`, with `log_source=job`.
+
+`tests/iron_bank/test_deal_status_logging.py` asserts this wiring, including
+that the log and the repository share one session, so a new factory that
+forgets it fails a test. `ReconcileUnderwritingPriceJob` builds an
+`UpdateUnderwritingService` without it on purpose: it never changes status.
+
+Creates have no actor yet (`actor_user_id=NULL`): `save()` isn't passed the
+current user. Duplicates record the user who duplicated.
 
 ---
 

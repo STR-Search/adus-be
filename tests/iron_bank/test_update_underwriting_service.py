@@ -20,13 +20,19 @@ class FakeUnderwritingRepository:
             else underwriting
         )
         self.update_kwargs = None
+        self.locked = False
+        self.commits = 0
 
-    async def get_by_id(self, underwriting_id: int):
+    async def get_by_id(self, underwriting_id: int, *, for_update: bool = False):
+        self.locked = self.locked or for_update
         return self.underwriting
 
     async def update(self, underwriting_id: int, **kwargs):
         self.update_kwargs = {"underwriting_id": underwriting_id, **kwargs}
         return self.underwriting
+
+    async def commit(self):
+        self.commits += 1
 
 
 @pytest.mark.asyncio
@@ -204,7 +210,10 @@ async def test_update_deal_status_preserves_existing_analyst():
         "underwriting_data": {
             "deal_status": DealStatus.ANALYST_COMPLETED,
         },
+        # Held open; the service commits once after logging.
+        "commit": False,
     }
+    assert repository.commits == 1
 
 
 @pytest.mark.asyncio
@@ -312,7 +321,7 @@ class FakeRepoWithExisting:
         self.existing = existing
         self.update_kwargs = None
 
-    async def get_by_id(self, underwriting_id: int):
+    async def get_by_id(self, underwriting_id: int, *, for_update: bool = False):
         return self.existing
 
     async def update(self, underwriting_id: int, **kwargs):

@@ -867,6 +867,23 @@ class UnderwritingRepository:
             await self.db.rollback()
             raise
 
+    async def load_children(self, underwriting: Underwriting) -> None:
+        """Load the child relationships onto an underwriting in this session.
+
+        ``create`` adds children as separate rows, so the returned object has
+        none loaded, and lazy loading is not possible under asyncio.
+        """
+        await self.db.refresh(
+            underwriting,
+            attribute_names=[
+                "detail",
+                "taxes",
+                "optimization_items",
+                "operating_expenses",
+                "comp_set",
+            ],
+        )
+
     async def commit(self) -> None:
         """Commit writes left pending by ``create``/``update(commit=False)``."""
         try:
