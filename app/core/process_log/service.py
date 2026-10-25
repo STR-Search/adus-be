@@ -6,14 +6,14 @@ atomically with the status change it records.
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any
 
 from app.core.logger import logger
 from app.core.process_log.enums import Flow, SubjectType, TransitionSource
 from app.core.process_log.repository import ProcessLogRepository
-from app.core.process_log.schemas import SnapshotInput, TransitionRead
+from app.core.process_log.schemas import HeadSeed, SnapshotInput, TransitionRead
 
 DRIFT_REPAIR_NOTE = "drift repair"
 
@@ -120,6 +120,59 @@ class ProcessLogService:
             occurred_at=occurred_at,
         )
         return transition.id
+
+    async def seed_heads(self, seeds: Sequence[HeadSeed]) -> int:
+        """Bulk-insert first rows for subjects with no chain yet (backfills).
+
+        Subjects whose flow already has a head are skipped, so a rerun is a
+        no-op. Snapshots are deduped as in ``record_transition``; a snapshot
+        written for a subject that turned out to have a head is left unused.
+        Returns the number of heads inserted.
+        """
+        if not seeds:
+            return 0
+        snapshot_rows = []
+        keys: list[tuple[str, int, str] | None] = []
+        for seed in seeds:
+            if seed.snapshot is None:
+                keys.append(None)
+                continue
+            payload = dict(seed.snapshot.payload)
+            key = (
+                SubjectType(seed.subject_type).value,
+                seed.subject_id,
+                payload_hash(payload),
+            )
+            keys.append(key)
+            snapshot_rows.append(
+                {
+                    "subject_type": key[0],
+                    "subject_id": key[1],
+                    "schema_version": seed.snapshot.schema_version,
+                    "payload": payload,
+                    "payload_hash": key[2],
+                }
+            )
+        snapshot_ids = await self.repository.upsert_snapshots(snapshot_rows)
+
+        head_rows = []
+        for seed, key in zip(seeds, keys, strict=True):
+            row = {
+                "subject_type": SubjectType(seed.subject_type).value,
+                "subject_id": seed.subject_id,
+                "flow": Flow(seed.flow).value,
+                "previous_transition_id": None,
+                "from_status": None,
+                "to_status": seed.to_status,
+                "source": TransitionSource(seed.source).value,
+                "actor_user_id": seed.actor_user_id,
+                "note": seed.note,
+                "metadata": None,
+                "snapshot_id": snapshot_ids[key] if key is not None else None,
+                "occurred_at": seed.occurred_at,
+            }
+            head_rows.append(row)
+        return await self.repository.insert_heads(head_rows)
 
     async def get_history(
         self, subject_type: SubjectType, subject_id: int, flow: Flow

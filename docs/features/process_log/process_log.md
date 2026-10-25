@@ -474,11 +474,22 @@ For each underwriting with `deal_status IS NOT NULL` and no head row:
 | `actor_user_id` | `approver_id` if status is `present_to_clients` / `client_under_contract`, else NULL |
 | `occurred_at` | `deal_approved` for those two statuses when set; else `updated_at`; else `created_at` |
 | `note` | `"seeded from current status"` |
-| `snapshot` | built from the current row |
+| `snapshot` | the full deal as it is now (§2.2), with children |
 
-It runs in batches of 1,000 with `INSERT … SELECT … WHERE NOT EXISTS` against
-the head index, so a rerun is a no-op. It has a `--dry-run` flag that prints
-counts per status.
+The full snapshot needs the children, so seeding can't be a single
+`INSERT … SELECT`. The script loads deals with no head in batches (default
+500, `--batch-size`) with their children, builds each snapshot in Python, and
+calls `ProcessLogService.seed_heads()`. That bulk-upserts the batch's
+snapshots, then inserts the heads with `ON CONFLICT … WHERE
+previous_transition_id IS NULL DO NOTHING`. A deal that gained a head from the
+live write path in the meantime is skipped, and a rerun inserts nothing. It
+commits per batch.
+
+Flags: `--dry-run` prints counts per status and writes nothing;
+`--check-only` runs only the drift check (§7). Every run ends with the drift
+check and prints the target (DEV/PROD) first.
+
+Dev, 2026-10-26 dry run: 5,743 deals to seed, none with a NULL status.
 
 These rows say "was in status X as of T". They do not mean "entered X at T".
 Analytics must treat `source='backfill'` heads as a coverage boundary (see the

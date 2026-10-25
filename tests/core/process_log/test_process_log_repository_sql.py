@@ -154,3 +154,67 @@ async def test_upsert_snapshot_reads_existing_on_conflict():
     lookup = sql(session.statements[1])
     assert lookup.startswith("SELECT process_log.snapshots.id FROM process_log.snapshots")
     assert "process_log.snapshots.payload_hash = " in lookup
+
+
+class _Rows:
+    def __init__(self, rows=()):
+        self._rows = list(rows)
+
+    def all(self):
+        return self._rows
+
+
+class RowsSession(CapturingSession):
+    def __init__(self, results):
+        super().__init__()
+        self._results = list(results)
+
+    async def execute(self, statement, params=None):
+        self.statements.append(statement)
+        return self._results.pop(0)
+
+
+@pytest.mark.asyncio
+async def test_insert_heads_skips_subjects_with_a_head():
+    session = RowsSession([_Rows([(1,), (2,)])])
+    inserted = await ProcessLogRepository(session).insert_heads(
+        [insert_kwargs(subject_id=1), insert_kwargs(subject_id=2)]
+    )
+    assert inserted == 2
+    stmt = sql(session.statements[0])
+    assert (
+        "ON CONFLICT (subject_type, subject_id, flow) "
+        "WHERE previous_transition_id IS NULL DO NOTHING"
+    ) in stmt
+    # A missing occurred_at becomes now() for that row.
+    assert "now()" in stmt
+
+
+@pytest.mark.asyncio
+async def test_upsert_snapshots_reads_back_existing_ones():
+    rows = [
+        {"subject_type": "underwriting", "subject_id": s, "schema_version": 1,
+         "payload": {"s": s}, "payload_hash": f"h{s}"}
+        for s in (1, 2)
+    ]
+    session = RowsSession(
+        [
+            _Rows([(10, "underwriting", 1, "h1")]),  # 2 already existed
+            _Rows([(20, "underwriting", 2, "h2")]),
+        ]
+    )
+    ids = await ProcessLogRepository(session).upsert_snapshots(rows)
+    assert ids == {("underwriting", 1, "h1"): 10, ("underwriting", 2, "h2"): 20}
+    assert "ON CONFLICT ON CONSTRAINT uq_snapshots_subject_hash DO NOTHING" in sql(
+        session.statements[0]
+    )
+    assert len(session.statements) == 2
+
+
+@pytest.mark.asyncio
+async def test_bulk_methods_skip_empty_input():
+    session = RowsSession([])
+    repo = ProcessLogRepository(session)
+    assert await repo.insert_heads([]) == 0
+    assert await repo.upsert_snapshots([]) == {}
+    assert session.statements == []

@@ -7,7 +7,7 @@ because a transition must land atomically with the status change it records.
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -96,6 +96,73 @@ class ProcessLogRepository:
                 ) from error
             raise
         return transition
+
+    async def upsert_snapshots(
+        self, rows: list[dict[str, Any]]
+    ) -> dict[tuple[str, int, str], int]:
+        """Bulk ``upsert_snapshot``: id per ``(subject_type, subject_id, hash)``.
+
+        Each row has ``subject_type``, ``subject_id``, ``schema_version``,
+        ``payload`` and ``payload_hash``.
+        """
+        if not rows:
+            return {}
+        result = await self.db.execute(
+            pg_insert(Snapshot)
+            .values(rows)
+            .on_conflict_do_nothing(constraint="uq_snapshots_subject_hash")
+            .returning(
+                Snapshot.id,
+                Snapshot.subject_type,
+                Snapshot.subject_id,
+                Snapshot.payload_hash,
+            )
+        )
+        ids = {(t, s, h): i for i, t, s, h in result.all()}
+        missing = {
+            (r["subject_type"], r["subject_id"], r["payload_hash"]) for r in rows
+        } - ids.keys()
+        if missing:
+            existing = await self.db.execute(
+                select(
+                    Snapshot.id,
+                    Snapshot.subject_type,
+                    Snapshot.subject_id,
+                    Snapshot.payload_hash,
+                ).where(
+                    tuple_(
+                        Snapshot.subject_type, Snapshot.subject_id, Snapshot.payload_hash
+                    ).in_(list(missing))
+                )
+            )
+            ids.update({(t, s, h): i for i, t, s, h in existing.all()})
+        return ids
+
+    async def insert_heads(self, rows: list[dict[str, Any]]) -> int:
+        """Insert first rows, skipping subjects whose flow already has one.
+
+        Rows use column names (``metadata``, not ``metadata_``). An
+        ``occurred_at`` of None means now(): every row of a multi-row INSERT
+        has the same columns, so the server default can't apply per row.
+        Returns the number inserted.
+        """
+        if not rows:
+            return 0
+        table = Transition.__table__
+        rows = [
+            {**row, "occurred_at": row.get("occurred_at") or func.now()}
+            for row in rows
+        ]
+        result = await self.db.execute(
+            pg_insert(table)
+            .values(rows)
+            .on_conflict_do_nothing(
+                index_elements=[table.c.subject_type, table.c.subject_id, table.c.flow],
+                index_where=table.c.previous_transition_id.is_(None),
+            )
+            .returning(table.c.id)
+        )
+        return len(result.all())
 
     async def upsert_snapshot(
         self,

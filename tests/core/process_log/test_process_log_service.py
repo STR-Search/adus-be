@@ -343,3 +343,70 @@ async def test_get_history_returns_chain_in_order(service, repo):
     ]
     assert history[0].metadata == {"k": 1}
     assert history[1].previous_transition_id == history[0].id
+
+
+# ── Seeding (backfill) ───────────────────────────────────────────────────────
+
+
+class SeedingRepository(FakeProcessLogRepository):
+    def __init__(self):
+        super().__init__()
+        self.snapshot_batches = []
+        self.head_batches = []
+
+    async def upsert_snapshots(self, rows):
+        self.snapshot_batches.append(rows)
+        return {
+            (r["subject_type"], r["subject_id"], r["payload_hash"]): 100 + i
+            for i, r in enumerate(rows)
+        }
+
+    async def insert_heads(self, rows):
+        self.head_batches.append(rows)
+        return len(rows)
+
+
+def seed(subject_id, snapshot=None, **kwargs):
+    from app.core.process_log.schemas import HeadSeed
+
+    return HeadSeed(
+        subject_type="underwriting",
+        subject_id=subject_id,
+        flow="deal_status",
+        to_status=kwargs.pop("to_status", "maybe"),
+        source="backfill",
+        snapshot=snapshot,
+        **kwargs,
+    )
+
+
+@pytest.mark.asyncio
+async def test_seed_heads_links_each_head_to_its_snapshot():
+    repo = SeedingRepository()
+    at = datetime(2025, 3, 14, tzinfo=UTC)
+    inserted = await ProcessLogService(repo).seed_heads(
+        [
+            seed(1, SnapshotInput(1, {"a": 1}), occurred_at=at, actor_user_id=7),
+            seed(2),
+        ]
+    )
+
+    assert inserted == 2
+    (snapshots,) = repo.snapshot_batches
+    assert [s["subject_id"] for s in snapshots] == [1]
+    assert snapshots[0]["payload_hash"] == payload_hash({"a": 1})
+    first, second = repo.head_batches[0]
+    assert first["snapshot_id"] == 100
+    assert first["occurred_at"] == at
+    assert first["actor_user_id"] == 7
+    assert (first["previous_transition_id"], first["from_status"]) == (None, None)
+    assert first["metadata"] is None  # column name, not the ORM attribute
+    assert second["snapshot_id"] is None
+    assert second["occurred_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_seed_heads_with_nothing_does_nothing():
+    repo = SeedingRepository()
+    assert await ProcessLogService(repo).seed_heads([]) == 0
+    assert repo.snapshot_batches == repo.head_batches == []

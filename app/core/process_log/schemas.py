@@ -18,6 +18,21 @@ class SnapshotInput:
     payload: Mapping[str, Any]
 
 
+@dataclass(frozen=True, slots=True)
+class HeadSeed:
+    """A first row to seed for a subject that has no chain yet (backfills)."""
+
+    subject_type: str
+    subject_id: int
+    flow: str
+    to_status: str
+    source: str
+    actor_user_id: int | None = None
+    note: str | None = None
+    occurred_at: datetime | None = None
+    snapshot: SnapshotInput | None = None
+
+
 class TransitionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 

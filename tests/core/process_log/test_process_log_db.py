@@ -291,3 +291,60 @@ async def test_middle_row_cannot_be_deleted_alone(sessionmaker, subjects):
         with pytest.raises(IntegrityError, match="fk_transitions_previous"):
             await session.execute(delete(Transition).where(Transition.id == head.id))
         await session.rollback()
+
+
+# ── Seeding (backfill) ───────────────────────────────────────────────────────
+
+
+def head_seed(subject_id, **kwargs):
+    from app.core.process_log.schemas import HeadSeed
+
+    return HeadSeed(
+        subject_type=UW,
+        subject_id=subject_id,
+        flow=DEAL,
+        to_status=kwargs.pop("to_status", "maybe"),
+        source="backfill",
+        snapshot=kwargs.pop("snapshot", SnapshotInput(1, {"s": subject_id})),
+        **kwargs,
+    )
+
+
+async def seed(sessionmaker, seeds) -> int:
+    async with sessionmaker() as session:
+        inserted = await ProcessLogService(ProcessLogRepository(session)).seed_heads(
+            seeds
+        )
+        await session.commit()
+    return inserted
+
+
+@pytest.mark.asyncio
+async def test_seed_heads_is_idempotent_and_skips_existing_chains(
+    sessionmaker, subjects
+):
+    fresh, live = subjects(), subjects()
+    at = datetime(2025, 3, 14, tzinfo=UTC)
+    # `live` already has history from the normal write path.
+    await record(sessionmaker, live, None, "analyst_started")
+
+    seeds = [head_seed(fresh, occurred_at=at, actor_user_id=USER_A), head_seed(live)]
+    assert await seed(sessionmaker, seeds) == 1
+    assert await seed(sessionmaker, seeds) == 0  # rerun
+
+    (row,) = await chain(sessionmaker, fresh)
+    assert (row.from_status, row.to_status, row.source) == (None, "maybe", "backfill")
+    assert row.occurred_at == at
+    assert row.actor_user_id == USER_A
+    assert row.snapshot_id is not None
+    # The live chain is untouched.
+    assert [r.to_status for r in await chain(sessionmaker, live)] == ["analyst_started"]
+
+
+@pytest.mark.asyncio
+async def test_seed_heads_defaults_occurred_at_to_now(sessionmaker, subjects):
+    sid = subjects()
+    assert await seed(sessionmaker, [head_seed(sid, snapshot=None)]) == 1
+    (row,) = await chain(sessionmaker, sid)
+    assert row.occurred_at.tzinfo is not None
+    assert row.snapshot_id is None
