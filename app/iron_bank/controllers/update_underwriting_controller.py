@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 
 from app.core.logger import logger
+from app.core.process_log.exceptions import ConcurrentTransitionError
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.deal_status import UpdateDealStatusResult
 from app.iron_bank.schemas.property_pending import UpdatePropertyPendingResult
@@ -51,6 +52,9 @@ class UpdateUnderwritingController:
             )
         except LookupError as e:
             raise HTTPException(status_code=404, detail=str(e))
+        except ConcurrentTransitionError as e:
+            # Only reachable if another writer skipped the row lock.
+            raise HTTPException(status_code=409, detail=str(e))
         except Exception as e:
             logger.error(
                 "iron_bank.update_deal_status.error",

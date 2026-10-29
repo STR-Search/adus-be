@@ -3,26 +3,27 @@ from datetime import datetime, timezone
 from fastapi.encoders import jsonable_encoder
 
 from app.core.logger import logger
+from app.core.process_log.enums import Flow, SubjectType, TransitionSource
+from app.core.process_log.service import ProcessLogService
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
 from app.iron_bank.schemas.deal_status import UpdateDealStatusResult
 from app.iron_bank.schemas.get_underwriting import (
-    GetUnderwritingCompSet,
     GetUnderwritingDetails,
-    GetUnderwritingOperatingExpense,
-    GetUnderwritingOptimizationItem,
     GetUnderwritingResult,
-    GetUnderwritingTaxes,
     UnderwritingRealtorDetail,
     UserRef,
     ZillowProperty,
 )
 from app.iron_bank.schemas.property_pending import UpdatePropertyPendingResult
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
-from app.iron_bank.schemas.underwriting import UnderwritingRead
 from app.iron_bank.schemas.update_underwriting import (
     UpdateUnderwritingPayload,
     UpdateUnderwritingResult,
+)
+from app.iron_bank.services.deal_status_history import (
+    build_underwriting_snapshot,
+    underwriting_document,
 )
 from app.iron_bank.services.engine.prepare_uw_data_service import PrepareUwDataService
 from app.iron_bank.services.engine.underwriting_calculator import UnderwritingCalculator
@@ -58,6 +59,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         present_to_clients_webhook_service=None,
         analyst_completed_webhook_service=None,
         opex_service=None,
+        process_log: ProcessLogService | None = None,
     ):
         super().__init__(
             repository=repository,
@@ -67,6 +69,7 @@ class UpdateUnderwritingService(SaveUnderwritingService):
             cleaned_data_service=cleaned_data_service,
             reference_data_service=reference_data_service,
             opex_service=opex_service,
+            process_log=process_log,
         )
         # Only used to hydrate zillow_property for the webhook payload, the way
         # GetUnderwritingService does on the full read.
@@ -252,7 +255,9 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         deal_status: DealStatus,
         actor_user_id: int,
     ) -> UpdateDealStatusResult:
-        existing = await self.repository.get_by_id(underwriting_id)
+        # Locked until commit, so a concurrent change to this deal waits and
+        # then reads this one's result as its previous status.
+        existing = await self.repository.get_by_id(underwriting_id, for_update=True)
         if existing is None:
             raise LookupError(f"Underwriting {underwriting_id} not found")
 
@@ -270,15 +275,30 @@ class UpdateUnderwritingService(SaveUnderwritingService):
             underwriting_data["approver_id"] = actor_user_id
             underwriting_data["deal_approved"] = datetime.now(timezone.utc)
 
-        # Before repository.update so its commit covers both writes atomically.
+        # Before repository.update so one commit covers every write atomically.
         await self._sync_listing_removal(existing, deal_status)
 
         underwriting = await self.repository.update(
             underwriting_id=underwriting_id,
             underwriting_data=underwriting_data,
+            commit=False,
         )
         if underwriting is None:
             raise LookupError(f"Underwriting {underwriting_id} not found")
+
+        # A repeated PATCH (double-click, client retry) is not a transition.
+        if self.process_log is not None and previous_status != deal_status:
+            await self.process_log.record_transition(
+                subject_type=SubjectType.UNDERWRITING,
+                subject_id=underwriting.id,
+                flow=Flow.DEAL_STATUS,
+                expected_from_status=previous_status,
+                to_status=deal_status.value,
+                source=TransitionSource.API,
+                actor_user_id=actor_user_id,
+                snapshot=build_underwriting_snapshot(underwriting),
+            )
+        await self.repository.commit()
 
         # Only now is the row committed — safe to announce it externally. The
         # previous-status check stops a repeated PATCH (double-click, client
@@ -328,12 +348,9 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         # touches the DB and several schemas, and a failure there must not 500
         # a status change that has already committed.
         try:
-            # Build parent row fields (UnderwritingRead contract).
-            result_data = {
-                field: value
-                for field in UnderwritingRead.model_fields
-                if (value := getattr(underwriting, field, None)) is not None
-            }
+            # Parent row + child tables, the same structure the process-log
+            # snapshot stores; the resolved parts are added below.
+            result_data = underwriting_document(underwriting)
 
             # Resolve analyst, approver, and owner.
             if self.user_repository is not None:
@@ -366,49 +383,13 @@ class UpdateUnderwritingService(SaveUnderwritingService):
                         UnderwritingRealtorDetail.model_validate(r) for r in realtors
                     ]
 
-            # Add details child table.
-            detail = getattr(underwriting, "detail", None)
-            details = GetUnderwritingDetails.model_validate(detail) if detail else None
-
             # Automated underwritings persist nothing on uw_details.zillow_property,
             # so hydrate it live the way the full read does. Non-automated rows
-            # already carry the stored value picked up from `detail` above.
+            # already carry the stored value picked up from `detail`.
             zillow_property = await self._hydrate_zillow_property(underwriting)
             if zillow_property is not None:
-                if details is None:
-                    details = GetUnderwritingDetails()
+                details = result_data.setdefault("details", GetUnderwritingDetails())
                 details.zillow_property = zillow_property
-
-            if details is not None:
-                result_data["details"] = details
-
-            # Add taxes child table.
-            taxes = getattr(underwriting, "taxes", None)
-            if taxes:
-                result_data["taxes"] = GetUnderwritingTaxes.model_validate(taxes)
-
-            # Add optimization items.
-            optimization_items = getattr(underwriting, "optimization_items", None)
-            if optimization_items:
-                result_data["optimization_list"] = [
-                    GetUnderwritingOptimizationItem.model_validate(item)
-                    for item in optimization_items
-                ]
-
-            # Add operating expenses.
-            operating_expenses = getattr(underwriting, "operating_expenses", None)
-            if operating_expenses:
-                result_data["operating_expenses"] = [
-                    GetUnderwritingOperatingExpense.model_validate(item)
-                    for item in operating_expenses
-                ]
-
-            # Add comp set.
-            comp_set = getattr(underwriting, "comp_set", None)
-            if comp_set:
-                result_data["comp_set"] = [
-                    GetUnderwritingCompSet.model_validate(item) for item in comp_set
-                ]
 
             row = GetUnderwritingResult.model_validate(result_data)
 

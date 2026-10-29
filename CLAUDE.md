@@ -24,14 +24,28 @@ repositories, controllers, and router.
   Domains link entities to threads via their own link tables (e.g.
   `iron_bank.underwriting_threads`) and call it only through its service; it
   never imports a domain. Design: `docs/underwriting_discussions.md`.
+- `app/core/process_log/` — append-only status history (`process_log` schema).
+  Domains record transitions of a named flow (e.g. underwriting `deal_status`)
+  through `ProcessLogService` only, in the same transaction as the status
+  change; subjects are referenced logically (no FK). It never imports a domain.
+  Design: `docs/features/process_log/process_log.md`.
+- `app/analytics/` — read-only composition layer for `/analytics/*`. Owns no
+  tables, models, or migrations. Each domain owns its own analytics queries
+  (e.g. `iron_bank/repositories/underwriting_analytics_repository.py` +
+  `iron_bank/services/analytics/`); `app/analytics/` holds only the controller,
+  router, composed response schemas, and — solely for metrics that need a SQL
+  join across domain schemas — its own read-only repositories plus the services
+  that shape their results (`app/analytics/services/`). Shared response shapes
+  and ordering rules live in `app/core/analytics/`; shared WHERE-clause
+  builders (date/numeric ranges) in `app/core/query_filters.py`.
 - `app/middleware/` — auth. Do not reorganize.
 - `app/dependencies.py` — shared FastAPI dependencies (DB session, auth guards)
 
 ## Database Rules
-- Managed schemas: `markets`, `iron_bank`, `users`, `reference`, and `discussions`
+- Managed schemas: `markets`, `iron_bank`, `users`, `reference`, `discussions`, and `process_log`
 - `public` schema is owned by another org — never touch it
 - Alembic version table lives in `markets` schema
-- Five Alembic branches: `markets`, `iron_bank`, `users`, `reference`, and `discussions`
+- Six Alembic branches: `markets`, `iron_bank`, `users`, `reference`, `discussions`, and `process_log`
 
 ## Auth
 - Global guard: `dependencies=[Depends(get_current_user)]` in `app/__init__.py`

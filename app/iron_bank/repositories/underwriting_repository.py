@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.query_filters import date_range_conditions, numeric_range_conditions
 from app.iron_bank.enums import DealStatus, SortOrder, UnderwritingSortBy
 from app.iron_bank.models import (
     Underwriting,
@@ -57,49 +58,6 @@ _listing_details = table(
 )
 
 
-def _date_range_conditions(column, minimum: date | None, maximum: date | None) -> list:
-    """Half-open day-range conditions for a ``timestamptz`` column.
-
-    The bounds arrive as calendar dates but the columns store instants, so a
-    naive ``column <= maximum`` would compare against midnight and silently
-    drop everything later that day — making min == max return nothing. The
-    upper bound is therefore exclusive-of-the-next-day (``< max + 1 day``),
-    which makes ``max`` fully inclusive and ``min == max`` mean "that one day".
-
-    Bounds are anchored to UTC explicitly rather than left as bare dates for
-    Postgres to cast, so results don't shift with the session's TimeZone.
-    """
-    conditions = []
-    if minimum is not None:
-        conditions.append(
-            column >= datetime.combine(minimum, time.min, tzinfo=timezone.utc)
-        )
-    if maximum is not None:
-        conditions.append(
-            column
-            < datetime.combine(
-                maximum + timedelta(days=1), time.min, tzinfo=timezone.utc
-            )
-        )
-    return conditions
-
-
-def _numeric_range_conditions(column, minimum, maximum) -> list:
-    """Inclusive ``minimum <= column <= maximum`` conditions, either end open.
-
-    The plain-number sibling of ``_date_range_conditions``: no day-boundary
-    adjustment is needed because the column holds the same kind of value the
-    bounds do, so ``min == max`` compares equal directly. NULL never matches a
-    bounded filter, which is the same answer the old ``==`` gave.
-    """
-    conditions = []
-    if minimum is not None:
-        conditions.append(column >= minimum)
-    if maximum is not None:
-        conditions.append(column <= maximum)
-    return conditions
-
-
 def _listing_detail_conditions(
     min_year_built: int | None, max_year_built: int | None
 ) -> list:
@@ -115,7 +73,7 @@ def _listing_detail_conditions(
     without a zpid (blank, legacy sheet, early URL deals) never match a bounded
     filter, which is the same NULL behaviour as the other numeric ranges.
     """
-    bounds = _numeric_range_conditions(
+    bounds = numeric_range_conditions(
         _listing_details.c.year_built, min_year_built, max_year_built
     )
     if not bounds:
@@ -274,8 +232,17 @@ class UnderwritingRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_by_id(self, underwriting_id: int) -> Underwriting | None:
-        result = await self.db.execute(
+    async def get_by_id(
+        self, underwriting_id: int, *, for_update: bool = False
+    ) -> Underwriting | None:
+        """Load an underwriting and its children.
+
+        ``for_update`` locks the underwriting row (``FOR UPDATE``) until the
+        transaction ends, and re-reads it even if the session already holds a
+        copy, so the caller sees the committed state it locked. Children are
+        loaded by separate queries and are not locked.
+        """
+        stmt = (
             select(Underwriting)
             .where(Underwriting.id == underwriting_id)
             .options(
@@ -286,13 +253,22 @@ class UnderwritingRepository:
                 selectinload(Underwriting.comp_set),
             )
         )
+        if for_update:
+            stmt = stmt.with_for_update(of=Underwriting).execution_options(
+                populate_existing=True
+            )
+        result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
     async def exists(self, underwriting_id: int) -> bool:
         """Existence check without loading the (wide) row or its children."""
         return bool(
             await self.db.scalar(
-                select(select(Underwriting.id).where(Underwriting.id == underwriting_id).exists())
+                select(
+                    select(Underwriting.id)
+                    .where(Underwriting.id == underwriting_id)
+                    .exists()
+                )
             )
         )
 
@@ -347,7 +323,7 @@ class UnderwritingRepository:
         query = select(Underwriting)
         if zpid is not None:
             query = query.where(Underwriting.zpid == zpid)
-        for condition in _numeric_range_conditions(
+        for condition in numeric_range_conditions(
             Underwriting.bedrooms, min_bedrooms, max_bedrooms
         ):
             query = query.where(condition)
@@ -411,10 +387,10 @@ class UnderwritingRepository:
         if max_prr is not None:
             query = query.where(Underwriting.prr <= max_prr)
         for condition in (
-            *_date_range_conditions(
+            *date_range_conditions(
                 Underwriting.created_at, min_created_at, max_created_at
             ),
-            *_date_range_conditions(
+            *date_range_conditions(
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
             *_property_pending_condition(property_pending),
@@ -557,7 +533,7 @@ class UnderwritingRepository:
         )
         if zpid is not None:
             query = query.where(Underwriting.zpid == zpid)
-        for condition in _numeric_range_conditions(
+        for condition in numeric_range_conditions(
             Underwriting.bedrooms, min_bedrooms, max_bedrooms
         ):
             query = query.where(condition)
@@ -615,10 +591,10 @@ class UnderwritingRepository:
         # override can move, so they filter in SQL here too, shrinking the
         # full-set fetch the calculator runs over.
         for condition in (
-            *_date_range_conditions(
+            *date_range_conditions(
                 Underwriting.created_at, min_created_at, max_created_at
             ),
-            *_date_range_conditions(
+            *date_range_conditions(
                 Underwriting.deal_approved, min_deal_approved, max_deal_approved
             ),
             *_property_pending_condition(property_pending),
@@ -766,7 +742,15 @@ class UnderwritingRepository:
         optimization_items: list[dict[str, Any]] | None = None,
         operating_expenses: list[dict[str, Any]] | None = None,
         comp_set: list[dict[str, Any]] | None = None,
+        *,
+        commit: bool = True,
     ) -> Underwriting:
+        """Insert an underwriting and its children.
+
+        ``commit=False`` flushes instead of committing, so the caller can add
+        more writes (e.g. a process-log row) to the same transaction and then
+        call ``commit()``. On any error the session is rolled back either way.
+        """
         try:
             underwriting = Underwriting(**underwriting_data)
             self.db.add(underwriting)
@@ -819,7 +803,7 @@ class UnderwritingRepository:
                     )
                 )
 
-            await self.db.commit()
+            await self._finish_write(commit)
             await self.db.refresh(underwriting)
             return underwriting
         except Exception:
@@ -835,7 +819,15 @@ class UnderwritingRepository:
         optimization_items: list[dict[str, Any]] | None = None,
         operating_expenses: list[dict[str, Any]] | None = None,
         comp_set: list[dict[str, Any]] | None = None,
+        *,
+        commit: bool = True,
     ) -> Underwriting | None:
+        """Apply changes to an underwriting and its children.
+
+        ``commit=False`` flushes instead of committing; see ``create``. A lock
+        taken earlier with ``get_by_id(..., for_update=True)`` in the same
+        transaction is kept until the caller commits.
+        """
         try:
             underwriting = await self.get_by_id(underwriting_id)
             if underwriting is None:
@@ -868,12 +860,43 @@ class UnderwritingRepository:
                     incoming=comp_set,
                 )
 
-            await self.db.commit()
+            await self._finish_write(commit)
             await self.db.refresh(underwriting)
             return underwriting
         except Exception:
             await self.db.rollback()
             raise
+
+    async def load_children(self, underwriting: Underwriting) -> None:
+        """Load the child relationships onto an underwriting in this session.
+
+        ``create`` adds children as separate rows, so the returned object has
+        none loaded, and lazy loading is not possible under asyncio.
+        """
+        await self.db.refresh(
+            underwriting,
+            attribute_names=[
+                "detail",
+                "taxes",
+                "optimization_items",
+                "operating_expenses",
+                "comp_set",
+            ],
+        )
+
+    async def commit(self) -> None:
+        """Commit writes left pending by ``create``/``update(commit=False)``."""
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+    async def _finish_write(self, commit: bool) -> None:
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
 
     async def bulk_sync_property_pending(self) -> int:
         """Reconcile ``property_pending`` across all underwritings in one pass.
@@ -901,9 +924,7 @@ class UnderwritingRepository:
                       AND uw.property_pending IS DISTINCT FROM (
                           COALESCE(sl.home_status, '') NOT IN :not_pending_statuses
                       )
-                    """).bindparams(
-                    bindparam("not_pending_statuses", expanding=True)
-                ),
+                    """).bindparams(bindparam("not_pending_statuses", expanding=True)),
                 {"not_pending_statuses": list(NOT_PENDING_HOME_STATUSES)},
             )
             await self.db.commit()

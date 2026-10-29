@@ -4,6 +4,8 @@ import structlog
 from sqlalchemy import JSON, null
 from sqlalchemy.exc import IntegrityError
 
+from app.core.process_log.enums import TransitionSource
+from app.core.process_log.service import ProcessLogService
 from app.iron_bank.enums import DealStatus, UnderwritingSource
 from app.iron_bank.models import (
     Underwriting,
@@ -15,6 +17,7 @@ from app.iron_bank.models import (
 )
 from app.iron_bank.repositories.underwriting_repository import UnderwritingRepository
 from app.iron_bank.schemas.duplicate_underwriting import DuplicateUnderwritingResult
+from app.iron_bank.services.deal_status_history import record_created
 
 logger = structlog.get_logger(__name__)
 
@@ -132,8 +135,15 @@ class DuplicateUnderwritingService:
 
     _MAX_VERSION_ATTEMPTS = 3
 
-    def __init__(self, repository: UnderwritingRepository):
+    def __init__(
+        self,
+        repository: UnderwritingRepository,
+        process_log: ProcessLogService | None = None,
+    ):
         self.repository = repository
+        # Optional: without it the copy's starting status is not logged.
+        # Production wires it on the same session as ``repository``.
+        self.process_log = process_log
 
     async def duplicate(
         self,
@@ -209,6 +219,9 @@ class DuplicateUnderwritingService:
                     optimization_items=optimization_items,
                     operating_expenses=operating_expenses,
                     comp_set=comp_set,
+                    # A version conflict still raises here (at flush), so the
+                    # retry is unchanged; the commit waits for the log row.
+                    commit=self.process_log is None,
                 )
             except IntegrityError as error:
                 # Another duplicate of the same series claimed this version
@@ -227,6 +240,19 @@ class DuplicateUnderwritingService:
                     attempt=attempt,
                 )
                 continue
+
+            # After the retry loop, not inside it: a failed create rolls the
+            # session back, so only the attempt that succeeded is logged.
+            if self.process_log is not None:
+                await record_created(
+                    self.process_log,
+                    self.repository,
+                    created,
+                    source=TransitionSource.API,
+                    actor_user_id=current_user_id,
+                    metadata={"copied_from_id": source_id},
+                )
+                await self.repository.commit()
 
             logger.info(
                 "iron_bank.duplicate_underwriting.created",

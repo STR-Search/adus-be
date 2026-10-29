@@ -10,6 +10,7 @@ from app.core.logger import logger
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.analytics.router import router as analytics_router
 from app.core.config import get_config
 from app.core.database import engine
 from app.core.discussions.router import router as discussions_router
@@ -91,5 +92,6 @@ def create_app() -> FastAPI:
     application.include_router(users_router)
     application.include_router(reference_data_router)
     application.include_router(discussions_router)
+    application.include_router(analytics_router)
 
     return application
