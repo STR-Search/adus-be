@@ -1,8 +1,8 @@
 # Process Log: Design (v1)
 
-Status: **Proposed** · Scope: schema + write path only. The analytics that read
-it (dashboard metrics 8, 13, 14, 27 in `docs/Analytics_Dashboard_Proposal.md`)
-are a follow-up and are only referenced here to justify column choices.
+Status: **Shipped to prod** · Scope: schema + write path. The
+analytics that read it (dashboard metrics in `docs/Analytics_Dashboard_Proposal.md`)
+are summarized in §8a.
 
 Today `iron_bank.underwritings.deal_status` holds only the current status, so we
 cannot tell when a deal changed status, who changed it, or what it was before.
@@ -566,6 +566,41 @@ WHERE u.deal_status IS DISTINCT FROM t.to_status;
 
 Steps 1–3 should ship as early as possible: history only accumulates from the
 day the write path is live.
+
+Prod: migration, deploy and backfill done. Observed history starts on the
+prod backfill date.
+
+---
+
+## 8a. Analytics that read the log
+
+Built after rollout. The queries join `process_log.transitions` to
+`iron_bank.underwritings` (and `users.users` for names), so they live in the
+cross-domain layer: `app/analytics/repositories/status_history_analytics_repository.py`
+and `app/analytics/services/status_history_analytics_service.py`, with the
+responses in `app/analytics/schemas/status_history.py`.
+
+Rules shared by all of them:
+
+- **Backfill rows are a boundary, not events.** Anything that times or
+  attributes a change filters `source <> 'backfill'`.
+- **The global filters still apply.** `market_id`, `source` and
+  `added_from`/`added_to` narrow the underwritings exactly as every other
+  underwriting endpoint does (`underwriting_filter_conditions`). An endpoint that
+  measures events adds its own date pair named after what it reads (D6 in the
+  analytics API spec), e.g. `occurred_from`/`occurred_to`.
+- **Latest row = highest id per subject.** Within a chain, id order is chain order.
+
+| Endpoint | Metric | How |
+|---|---|---|
+| `GET /analytics/status-history/backlog-age` | 8 | For deals in live statuses (filter with `deal_status`): days since the latest log row, when that row matches the current status; otherwise since `updated_at`. Buckets under 3, 3–7, 7–14, over 14 days, plus the median, per status and overall. `observed` counts deals timed from a real logged change; the rest are estimates (backfill date or `updated_at`). |
+| `GET /analytics/status-history/time-to-present` | 14 | Days from `deal_added` to the first presentation, where presentation = the earlier of the first logged change to `present_to_clients` and `deal_approved`. Median and 75th percentile. `observed` (from the log) vs `estimated` (from `deal_approved`, presented before the log existed). `presented_from`/`presented_to` filter on that presentation date. |
+| `GET /analytics/status-history/team-output` | 27 | Per person who made the change: distinct deals moved to `analyst_started` and `analyst_completed`. Per approver: distinct deals moved to `present_to_clients`, per week (or day). Logged changes only, filtered by `occurred_from`/`occurred_to`. `analyst_id` is not accepted: work is attributed to who changed the status, not to the deal's `analyst_id`, which is often missing. |
+| `GET /analytics/status-history/analyst-approval` | 28 | Each deal's first logged move to `analyst_completed` (in `completed_from`/`completed_to`), credited to who made it. Approved = a later row (higher id) to `present_to_clients` or `client_under_contract`; rejected = never approved and now `delete_deal`/`delete_zillow`; otherwise pending. `approval_rate` = approved ÷ (approved + rejected), per analyst and overall. No `analyst_id` filter. |
+| `GET /analytics/status-history/approval-wait` | 29 | Each deal's first logged `present_to_clients` (in `presented_from`/`presented_to`) paired with the last logged `analyst_completed` before it. Median and 75th percentile in days, overall and per approver (who presented). Deals with no logged completion before the presentation are left out. |
+
+Metric 13 (true funnel) can follow the same pattern: "ever reached stage X" =
+any logged row with `to_status` in that stage.
 
 ---
 
