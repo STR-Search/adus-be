@@ -1,13 +1,13 @@
 from collections.abc import Sequence
 from datetime import date
 
-from sqlalchemy import case, distinct, func, select
+from sqlalchemy import DateTime, and_, case, cast, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from app.core.analytics.schemas import Granularity
 from app.core.process_log.enums import Flow, SubjectType, TransitionSource
-from app.core.process_log.models import Transition
+from app.core.process_log.models import Snapshot, Transition
 from app.core.query_filters import date_range_conditions
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.models import Underwriting
@@ -124,11 +124,20 @@ class StatusHistoryAnalyticsRepository:
     ) -> dict:
         """Days from ``deal_added`` to the deal's first known presentation.
 
-        The presentation time is the earlier of the first logged change to
-        present_to_clients and ``deal_approved``: the log for deals presented
-        since it shipped, ``deal_approved`` for deals presented before. Deals
-        whose presentation predates ``deal_added`` (bad legacy dates) are left
-        out. Returns ``median_days``, ``p75_days``, ``measured``, ``observed``.
+        Which source holds the first presentation is decided by history, not
+        by comparing timestamps:
+
+        1. ``deal_approved`` in the deal's backfill snapshot: the deal was
+           already presented before the log existed (estimated). Every move to
+           present_to_clients overwrites ``deal_approved``, so this is the only
+           place a re-presented deal's earlier date survives.
+        2. Otherwise the first logged change to present_to_clients (observed).
+        3. Otherwise the current ``deal_approved``, for a deal presented
+           outside the log (estimated).
+
+        Deals whose presentation predates ``deal_added`` (bad legacy dates) are
+        left out. Returns ``median_days``, ``p75_days``, ``measured``,
+        ``observed``.
         """
         first_logged = (
             select(
@@ -143,9 +152,29 @@ class StatusHistoryAnalyticsRepository:
             .group_by(Transition.subject_id)
             .subquery()
         )
-        # LEAST ignores NULLs, so either source alone is enough.
-        presented_at = func.least(
-            first_logged.c.presented_at, Underwriting.deal_approved
+        backfilled = (
+            select(
+                Transition.subject_id,
+                cast(
+                    Snapshot.payload["deal_approved"].astext, DateTime(timezone=True)
+                ).label("presented_at"),
+            )
+            .join(Snapshot, Snapshot.id == Transition.snapshot_id)
+            .where(
+                *deal_status_rows(),
+                Transition.source == TransitionSource.BACKFILL.value,
+                Transition.previous_transition_id.is_(None),
+            )
+            .subquery()
+        )
+        was_observed = and_(
+            backfilled.c.presented_at.is_(None),
+            first_logged.c.presented_at.is_not(None),
+        )
+        presented_at = case(
+            (backfilled.c.presented_at.is_not(None), backfilled.c.presented_at),
+            (was_observed, first_logged.c.presented_at),
+            else_=Underwriting.deal_approved,
         )
         days = _days(presented_at - Underwriting.deal_added)
         query = (
@@ -153,12 +182,11 @@ class StatusHistoryAnalyticsRepository:
                 func.percentile_cont(0.5).within_group(days).label("median_days"),
                 func.percentile_cont(0.75).within_group(days).label("p75_days"),
                 func.count().label("measured"),
-                func.count()
-                .filter(first_logged.c.presented_at == presented_at)
-                .label("observed"),
+                func.count().filter(was_observed).label("observed"),
             )
             .select_from(Underwriting)
             .outerjoin(first_logged, first_logged.c.subject_id == Underwriting.id)
+            .outerjoin(backfilled, backfilled.c.subject_id == Underwriting.id)
             .where(
                 *underwriting_filter_conditions(filters),
                 presented_at.is_not(None),
