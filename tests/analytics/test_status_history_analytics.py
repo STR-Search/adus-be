@@ -70,7 +70,7 @@ async def test_backlog_age_overall_row_is_ungrouped():
 
 
 @pytest.mark.asyncio
-async def test_time_to_present_takes_earlier_of_log_and_deal_approved():
+async def test_time_to_present_picks_the_source_by_history():
     db = CapturingDb([row(median_days=1, p75_days=2, measured=3, observed=1)])
 
     await StatusHistoryAnalyticsRepository(db).time_to_present(
@@ -80,13 +80,31 @@ async def test_time_to_present_takes_earlier_of_log_and_deal_approved():
     )
 
     query = sql(db.queries[0])
-    presented_at = "least(anon_1.presented_at, iron_bank.underwritings.deal_approved)"
+    # The backfill snapshot's deal_approved: presented before the log existed.
+    assert (
+        "CAST(process_log.snapshots.payload ->> 'deal_approved' "
+        "AS TIMESTAMP WITH TIME ZONE)"
+    ) in query
+    assert "process_log.transitions.source = 'backfill'" in query
+    assert "process_log.transitions.previous_transition_id IS NULL" in query
+    # Then the first logged presentation, then the current deal_approved;
+    # no timestamp comparison between the two.
+    backfill, logged = "anon_1.presented_at", "anon_2.presented_at"
+    presented_at = (
+        f"CASE WHEN ({backfill} IS NOT NULL) THEN {backfill} "
+        f"WHEN ({backfill} IS NULL AND {logged} IS NOT NULL) THEN {logged} "
+        "ELSE iron_bank.underwritings.deal_approved END"
+    )
+    assert "least(" not in query
     assert f"{presented_at} >= iron_bank.underwritings.deal_added" in query
     assert f"{presented_at} >= '2026-10-01 00:00:00+00:00'" in query
     assert f"{presented_at} < '2026-11-01 00:00:00+00:00'" in query
+    assert (
+        f"count(*) FILTER (WHERE {backfill} IS NULL AND {logged} IS NOT NULL) "
+        "AS observed"
+    ) in query
     assert "to_status = 'present_to_clients'" in query
     assert "source != 'backfill'" in query
-    assert "percentile_cont(0.75)" in query
     assert "iron_bank.underwritings.market_id = 3" in query
 
 
