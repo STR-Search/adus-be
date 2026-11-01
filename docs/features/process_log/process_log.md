@@ -596,12 +596,11 @@ Rules shared by all of them:
 | `GET /analytics/status-history/backlog-age` | 8 | For deals in live statuses (filter with `deal_status`): days since the latest log row, when that row matches the current status; otherwise since `updated_at`. Buckets under 3, 3–7, 7–14, over 14 days, plus the median, per status and overall. `observed` counts deals timed from a real logged change; the rest are estimates (backfill date or `updated_at`). |
 | `GET /analytics/status-history/time-to-present` | 14 | Days from `deal_added` to the first presentation, where presentation = the earlier of the first logged change to `present_to_clients` and `deal_approved`. Median and 75th percentile. `observed` (from the log) vs `estimated` (from `deal_approved`, presented before the log existed). `presented_from`/`presented_to` filter on that presentation date. |
 | `GET /analytics/status-history/team-output` | 27 | Per person who made the change: distinct deals moved to `analyst_started` and `analyst_completed`. Per approver: distinct deals moved to `present_to_clients`, per week (or day). Logged changes only, filtered by `occurred_from`/`occurred_to`. `analyst_id` is not accepted: work is attributed to who changed the status, not to the deal's `analyst_id`, which is often missing. |
+| `GET /analytics/status-history/analyst-approval` | 28 | Each deal's first logged move to `analyst_completed` (in `completed_from`/`completed_to`), credited to who made it. Approved = a later row (higher id) to `present_to_clients` or `client_under_contract`; rejected = never approved and now `delete_deal`/`delete_zillow`; otherwise pending. `approval_rate` = approved ÷ (approved + rejected), per analyst and overall. No `analyst_id` filter. |
+| `GET /analytics/status-history/approval-wait` | 29 | Each deal's first logged `present_to_clients` (in `presented_from`/`presented_to`) paired with the last logged `analyst_completed` before it. Median and 75th percentile in days, overall and per approver (who presented). Deals with no logged completion before the presentation are left out. |
 
-Planned next, same layer: 28 (approval rate per analyst: completed deals later
-presented vs deleted, pending excluded) and 29 (approval wait: last
-`analyst_completed` before the first `present_to_clients`, median and 75th
-percentile). Metric 13 (true funnel) can follow the same pattern: "ever reached
-stage X" = any logged row with `to_status` in that stage.
+Metric 13 (true funnel) can follow the same pattern: "ever reached stage X" =
+any logged row with `to_status` in that stage.
 
 ---
 

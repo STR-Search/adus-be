@@ -1,11 +1,16 @@
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import date
 
 from app.analytics.repositories.status_history_analytics_repository import (
     StatusHistoryAnalyticsRepository,
 )
 from app.analytics.schemas.status_history import (
+    AnalystApproval,
+    AnalystApprovalRow,
     AnalystOutputRow,
+    ApprovalWait,
+    ApprovalWaitRow,
     BacklogAge,
     BacklogRow,
     TeamOutput,
@@ -13,10 +18,12 @@ from app.analytics.schemas.status_history import (
 )
 from app.analytics.services.pipeline_analytics_service import LIVE_STATUSES
 from app.core.analytics.ordering import fill_series, order_fixed, order_ranked
-from app.core.analytics.schemas import Granularity, MedianValue, Series
+from app.core.analytics.schemas import Granularity, MedianValue, Series, ratio
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.underwriting_analytics import UnderwritingAnalyticsFilters
 from app.iron_bank.services.analytics.underwriting_analytics_service import (
+    DELETED_STATUSES,
+    PRESENTED_STATUSES,
     status_items,
 )
 
@@ -114,20 +121,9 @@ class StatusHistoryAnalyticsService:
         presented_rows = await self.repository.moved_to_by_actor_and_period(
             filters, DealStatus.PRESENT_TO_CLIENTS, granularity, **dates
         )
-        names = await self.repository.user_names(
-            sorted(
-                {
-                    actor
-                    for actor, *_ in analyst_rows + presented_rows
-                    if actor is not None
-                }
-            )
+        label = await self._user_labeler(
+            actor for actor, *_ in analyst_rows + presented_rows
         )
-
-        def label(actor: int | None) -> str:
-            if actor is None:
-                return UNKNOWN_USER_LABEL
-            return names.get(actor, f"User {actor}")
 
         by_analyst: dict[int | None, dict[str, int]] = defaultdict(dict)
         for actor, status, count in analyst_rows:
@@ -172,6 +168,119 @@ class StatusHistoryAnalyticsService:
             )
         )
         return TeamOutput(analysts=analysts, presented_by_approver=series)
+
+    async def get_analyst_approval(
+        self,
+        filters: UnderwritingAnalyticsFilters,
+        *,
+        completed_from: date | None = None,
+        completed_to: date | None = None,
+    ) -> AnalystApproval:
+        rows = await self.repository.approval_outcomes(
+            filters,
+            approved=PRESENTED_STATUSES,
+            rejected=DELETED_STATUSES,
+            completed_from=completed_from,
+            completed_to=completed_to,
+        )
+        label = await self._user_labeler(actor for actor, _, _ in rows)
+        by_analyst: dict[int | None, dict[str, int]] = defaultdict(dict)
+        for actor, outcome, count in rows:
+            by_analyst[actor][outcome] = count
+        totals: dict[str, int] = defaultdict(int)
+        for outcome_counts in by_analyst.values():
+            for outcome, count in outcome_counts.items():
+                totals[outcome] += count
+        return AnalystApproval(
+            overall=self._approval_row(None, "All analysts", totals),
+            analysts=order_ranked(
+                (
+                    self._approval_row(
+                        None if actor is None else str(actor), label(actor), counts
+                    )
+                    for actor, counts in by_analyst.items()
+                ),
+                by="completed",
+            ),
+        )
+
+    async def get_approval_wait(
+        self,
+        filters: UnderwritingAnalyticsFilters,
+        *,
+        presented_from: date | None = None,
+        presented_to: date | None = None,
+    ) -> ApprovalWait:
+        dates = dict(presented_from=presented_from, presented_to=presented_to)
+        (overall,) = await self.repository.approval_wait(
+            filters, group_by_approver=False, **dates
+        )
+        per_approver = await self.repository.approval_wait(
+            filters, group_by_approver=True, **dates
+        )
+        label = await self._user_labeler(row["approver"] for row in per_approver)
+
+        def row(key: str | None, name: str, values: dict) -> ApprovalWaitRow:
+            return ApprovalWaitRow(
+                key=key,
+                label=name,
+                median_days=MedianValue(
+                    value=_float(values["median_days"]),
+                    sample_size=values["deals"],
+                ),
+                p75_days=_float(values["p75_days"]),
+            )
+
+        rows = [
+            row(
+                None if r["approver"] is None else str(r["approver"]),
+                label(r["approver"]),
+                r,
+            )
+            for r in per_approver
+        ]
+        # Ranked like a table: most deals first, unknown last.
+        rows.sort(
+            key=lambda r: (
+                r.key is None,
+                -r.median_days.sample_size,
+                r.label,
+                r.key or "",
+            )
+        )
+        return ApprovalWait(
+            overall=row(None, "All approvers", overall), by_approver=rows
+        )
+
+    async def _user_labeler(self, actors) -> Callable[[int | None], str]:
+        """A ``user id -> display label`` function for the given actors."""
+        names = await self.repository.user_names(
+            sorted({actor for actor in actors if actor is not None})
+        )
+
+        def label(actor: int | None) -> str:
+            if actor is None:
+                return UNKNOWN_USER_LABEL
+            return names.get(actor, f"User {actor}")
+
+        return label
+
+    @staticmethod
+    def _approval_row(
+        key: str | None, label: str, counts: dict[str, int]
+    ) -> AnalystApprovalRow:
+        approved = counts.get("approved", 0)
+        rejected = counts.get("rejected", 0)
+        pending = counts.get("pending", 0)
+        return AnalystApprovalRow(
+            key=key,
+            label=label,
+            completed=approved + rejected + pending,
+            approved=approved,
+            rejected=rejected,
+            pending=pending,
+            approval_rate=ratio(approved, approved + rejected),
+        )
 
     @staticmethod
     def _backlog_row(key: str | None, label: str, row: dict | None) -> BacklogRow:

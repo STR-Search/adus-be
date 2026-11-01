@@ -3,6 +3,7 @@ from datetime import date
 
 from sqlalchemy import case, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.core.analytics.schemas import Granularity
 from app.core.process_log.enums import Flow, SubjectType, TransitionSource
@@ -213,6 +214,142 @@ class StatusHistoryAnalyticsRepository:
         )
         result = await self.db.execute(query)
         return [(actor, start, count) for actor, start, count in result.all()]
+
+    async def approval_outcomes(
+        self,
+        filters: UnderwritingAnalyticsFilters,
+        *,
+        approved: Sequence[DealStatus],
+        rejected: Sequence[DealStatus],
+        completed_from: date | None = None,
+        completed_to: date | None = None,
+    ) -> list[tuple[int | None, str, int]]:
+        """``(analyst, outcome, deals)`` for deals moved to analyst_completed.
+
+        Each deal counts once, under whoever made its first logged completion
+        in the range. ``outcome`` is ``approved`` when a later change moved it
+        to an ``approved`` status, else ``rejected`` when it now sits in a
+        ``rejected`` status, else ``pending``.
+        """
+        completed = (
+            select(
+                Transition.id,
+                Transition.subject_id,
+                Transition.actor_user_id,
+            )
+            .where(
+                *deal_status_rows(),
+                observed(),
+                Transition.to_status == DealStatus.ANALYST_COMPLETED.value,
+                *date_range_conditions(
+                    Transition.occurred_at, completed_from, completed_to
+                ),
+            )
+            .distinct(Transition.subject_id)
+            .order_by(Transition.subject_id, Transition.id)
+            .subquery()
+        )
+        later = aliased(Transition)
+        was_approved = (
+            select(later.id)
+            .where(
+                later.subject_type == SubjectType.UNDERWRITING.value,
+                later.flow == Flow.DEAL_STATUS.value,
+                later.subject_id == completed.c.subject_id,
+                # Chain order is id order, so "later" is a higher id.
+                later.id > completed.c.id,
+                later.to_status.in_([s.value for s in approved]),
+            )
+            .exists()
+        )
+        outcome = case(
+            (was_approved, "approved"),
+            (status_in(rejected), "rejected"),
+            else_="pending",
+        ).label("outcome")
+        query = (
+            select(completed.c.actor_user_id, outcome, func.count())
+            .join(Underwriting, Underwriting.id == completed.c.subject_id)
+            .where(*underwriting_filter_conditions(filters))
+            .group_by(completed.c.actor_user_id, outcome)
+        )
+        result = await self.db.execute(query)
+        return [(actor, kind, count) for actor, kind, count in result.all()]
+
+    async def approval_wait(
+        self,
+        filters: UnderwritingAnalyticsFilters,
+        *,
+        group_by_approver: bool,
+        presented_from: date | None = None,
+        presented_to: date | None = None,
+    ) -> list[dict]:
+        """Days from the last analyst_completed to the first present_to_clients.
+
+        Both changes must be logged ones, so only deals presented since the
+        history started count. Rows have ``approver`` (None overall),
+        ``median_days``, ``p75_days`` and ``deals``.
+        """
+        presented = (
+            select(
+                Transition.id,
+                Transition.subject_id,
+                Transition.actor_user_id,
+                Transition.occurred_at,
+            )
+            .where(
+                *deal_status_rows(),
+                observed(),
+                Transition.to_status == DealStatus.PRESENT_TO_CLIENTS.value,
+            )
+            .distinct(Transition.subject_id)
+            .order_by(Transition.subject_id, Transition.id)
+            .subquery()
+        )
+        completion = aliased(Transition)
+        completed_at = (
+            select(func.max(completion.occurred_at))
+            .where(
+                completion.subject_type == SubjectType.UNDERWRITING.value,
+                completion.flow == Flow.DEAL_STATUS.value,
+                completion.subject_id == presented.c.subject_id,
+                completion.source != TransitionSource.BACKFILL.value,
+                completion.to_status == DealStatus.ANALYST_COMPLETED.value,
+                completion.id < presented.c.id,
+            )
+            .scalar_subquery()
+        )
+        days = _days(presented.c.occurred_at - completed_at)
+        measures = [
+            func.percentile_cont(0.5).within_group(days).label("median_days"),
+            func.percentile_cont(0.75).within_group(days).label("p75_days"),
+            func.count(days).label("deals"),
+        ]
+        columns = (
+            [presented.c.actor_user_id.label("approver"), *measures]
+            if group_by_approver
+            else measures
+        )
+        query = (
+            select(*columns)
+            .select_from(presented)
+            .join(Underwriting, Underwriting.id == presented.c.subject_id)
+            .where(
+                *underwriting_filter_conditions(filters),
+                completed_at.is_not(None),
+                *date_range_conditions(
+                    presented.c.occurred_at, presented_from, presented_to
+                ),
+            )
+        )
+        if group_by_approver:
+            query = query.group_by(presented.c.actor_user_id)
+        result = await self.db.execute(query)
+        rows = [dict(row._mapping) for row in result.all()]
+        if not group_by_approver:
+            for row in rows:
+                row["approver"] = None
+        return rows
 
     async def user_names(self, user_ids: Sequence[int]) -> dict[int, str]:
         """Display names for ``user_ids``; users without a name are left out."""

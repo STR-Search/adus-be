@@ -49,7 +49,7 @@ The system stores only each deal's current status, not when it changed. So any f
 
 # **Proposed metrics**
 
-29 metrics in seven groups. 21 are ready now, 3 are built on the new status history (8, 14, 27), 2 more use it and fill in as it grows (28, 29), 1 still works with caveats (13), and 2 need data we don't have yet.
+29 metrics in seven groups. 21 are ready now, 5 are built on the new status history (8, 14, 27, 28, 29), 1 still works with caveats (13), and 2 need data we don't have yet.
 
 ## **A. New listings coming in (Zillow)**
 
@@ -90,7 +90,7 @@ The system stores only each deal's current status, not when it changed. So any f
 | 15 | Win rate | Under contract ÷ (presented \+ under contract), overall and per market | Ready now |
 | 16 | Total clients vs. presented deals | Needs a client data source | Needs new data |
 | 17 | Clients by status category | Needs a client data source | Needs new data |
-| 29 | Approval wait: time from analyst completed to presented to clients (median and slowest 25%) | From the status history: the last "analyst completed" before the first "present to clients". Counts only deals that went through both after the history started | Ready, history builds from launch |
+| 29 | Approval wait: time from analyst completed to presented to clients (median and slowest 25%) | From the status history: the last "analyst completed" before the first "present to clients". Counts only deals that went through both after the history started | Built (status history) |
 
 ## **E. Markets and deal quality**
 
@@ -116,7 +116,7 @@ The system stores only each deal's current status, not when it changed. So any f
 | \# | Metric | How it is calculated | Feasibility |
 | :---- | :---- | :---- | :---- |
 | 27 | Deals per analyst by stage, and deals presented per approver per week | From the status history: deals each person moved to "analyst started" and "analyst completed", and deals each person moved to "present to clients" per week. Credits whoever made the change, so a missing analyst on the deal doesn't matter. Counts only from when the history started | Built (status history) |
-| 28 | Approval rate per analyst | Of each analyst's completed deals: approved (later presented or under contract) ÷ (approved + deleted); deals still pending are left out. From the status history, from when it started | Ready, history builds from launch |
+| 28 | Approval rate per analyst | Of each analyst's completed deals: approved (later presented or under contract) ÷ (approved + deleted); deals still pending are left out. From the status history, from when it started | Built (status history) |
 
 # **Gaps to close first**
 

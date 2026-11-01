@@ -41,6 +41,40 @@ class AnalystOutputRow(GroupRow):
     completed: int
 
 
+class AnalystApprovalRow(GroupRow):
+    # Distinct deals this analyst moved to analyst_completed.
+    completed: int
+    # Later moved to present_to_clients or client_under_contract.
+    approved: int
+    # Never approved and now delete_deal or delete_zillow.
+    rejected: int
+    # Neither yet; left out of approval_rate.
+    pending: int
+    # approved / (approved + rejected).
+    approval_rate: float | None
+
+
+class AnalystApproval(BaseModel):
+    # Metric 28. key None, label "All analysts".
+    overall: AnalystApprovalRow
+    analysts: list[AnalystApprovalRow]
+
+
+class ApprovalWaitRow(GroupRow):
+    # Days from the last analyst_completed to the first present_to_clients;
+    # sample_size = deals measured.
+    median_days: MedianValue
+    # The slowest 25% wait at least this long.
+    p75_days: float | None
+
+
+class ApprovalWait(BaseModel):
+    # Metric 29. key None, label "All approvers".
+    overall: ApprovalWaitRow
+    # Grouped by who presented the deal.
+    by_approver: list[ApprovalWaitRow]
+
+
 class TeamOutput(BaseModel):
     # Metric 27. Only logged status changes count, so history starts at launch.
     analysts: list[AnalystOutputRow]

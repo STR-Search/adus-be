@@ -7,7 +7,13 @@ from fastapi import HTTPException
 
 from app.analytics.schemas.composed import Automation, DataCompleteness
 from app.analytics.schemas.pipeline import Coverage, OffMarket, PriceDrops
-from app.analytics.schemas.status_history import BacklogAge, TeamOutput, TimeToPresent
+from app.analytics.schemas.status_history import (
+    AnalystApproval,
+    ApprovalWait,
+    BacklogAge,
+    TeamOutput,
+    TimeToPresent,
+)
 from app.analytics.services.pipeline_analytics_service import PipelineAnalyticsService
 from app.analytics.services.status_history_analytics_service import (
     StatusHistoryAnalyticsService,
@@ -303,6 +309,38 @@ class AnalyticsController:
                 granularity=granularity,
                 occurred_from=occurred_from,
                 occurred_to=occurred_to,
+            ),
+        )
+
+    async def get_analyst_approval(
+        self,
+        filters: UnderwritingAnalyticsFilters,
+        *,
+        completed_from: date | None = None,
+        completed_to: date | None = None,
+    ) -> AnalystApproval:
+        self._validate_filters(filters)
+        self._validate_range(completed_from, completed_to)
+        return await self._run(
+            "analyst_approval",
+            lambda: self.status_history_analytics.get_analyst_approval(
+                filters, completed_from=completed_from, completed_to=completed_to
+            ),
+        )
+
+    async def get_approval_wait(
+        self,
+        filters: UnderwritingAnalyticsFilters,
+        *,
+        presented_from: date | None = None,
+        presented_to: date | None = None,
+    ) -> ApprovalWait:
+        self._validate_filters(filters)
+        self._validate_range(presented_from, presented_to)
+        return await self._run(
+            "approval_wait",
+            lambda: self.status_history_analytics.get_approval_wait(
+                filters, presented_from=presented_from, presented_to=presented_to
             ),
         )
 

@@ -13,7 +13,13 @@ from app.analytics.repositories.status_history_analytics_repository import (
 )
 from app.analytics.schemas.composed import Automation, DataCompleteness
 from app.analytics.schemas.pipeline import Coverage, OffMarket, PriceDrops
-from app.analytics.schemas.status_history import BacklogAge, TeamOutput, TimeToPresent
+from app.analytics.schemas.status_history import (
+    AnalystApproval,
+    ApprovalWait,
+    BacklogAge,
+    TeamOutput,
+    TimeToPresent,
+)
 from app.analytics.services.pipeline_analytics_service import PipelineAnalyticsService
 from app.analytics.services.status_history_analytics_service import (
     StatusHistoryAnalyticsService,
@@ -377,4 +383,36 @@ async def get_team_output(
         granularity=granularity,
         occurred_from=occurred_from,
         occurred_to=occurred_to,
+    )
+
+
+@router.get("/status-history/analyst-approval", response_model=AnalystApproval)
+async def get_analyst_approval(
+    filters: UnderwritingAnalyticsFilters = Depends(underwriting_filters_all_analysts),
+    completed_from: date | None = Query(
+        None, description="Inclusive, on when the analyst completed the deal (UTC)"
+    ),
+    completed_to: date | None = Query(
+        None, description="Inclusive, on when the analyst completed the deal (UTC)"
+    ),
+    controller: AnalyticsController = Depends(get_analytics_controller),
+):
+    return await controller.get_analyst_approval(
+        filters, completed_from=completed_from, completed_to=completed_to
+    )
+
+
+@router.get("/status-history/approval-wait", response_model=ApprovalWait)
+async def get_approval_wait(
+    filters: UnderwritingAnalyticsFilters = Depends(underwriting_filters_all_analysts),
+    presented_from: date | None = Query(
+        None, description="Inclusive, on the deal's first presentation (UTC)"
+    ),
+    presented_to: date | None = Query(
+        None, description="Inclusive, on the deal's first presentation (UTC)"
+    ),
+    controller: AnalyticsController = Depends(get_analytics_controller),
+):
+    return await controller.get_approval_wait(
+        filters, presented_from=presented_from, presented_to=presented_to
     )

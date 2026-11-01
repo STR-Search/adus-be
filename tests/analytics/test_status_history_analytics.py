@@ -270,3 +270,112 @@ async def test_team_output_ranks_people_and_fills_weeks():
     cy = result.presented_by_approver[1]
     assert [p.count for p in cy.points] == [1, 0, 2]
     assert ("user_names", ([7, 8, 9, 10],), {}) in repo.calls
+
+
+# Metrics 28 and 29 -----------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_approval_outcomes_use_first_completion_and_later_rows():
+    db = CapturingDb([])
+
+    await StatusHistoryAnalyticsRepository(db).approval_outcomes(
+        UnderwritingAnalyticsFilters(market_id=3),
+        approved=(DealStatus.PRESENT_TO_CLIENTS, DealStatus.CLIENT_UNDER_CONTRACT),
+        rejected=(DealStatus.DELETE_DEAL,),
+        completed_from=date(2026, 10, 1),
+    )
+
+    query = sql(db.queries[0])
+    # First logged completion per deal, in the completion range.
+    assert "DISTINCT ON (process_log.transitions.subject_id)" in query
+    assert "to_status = 'analyst_completed'" in query
+    assert "source != 'backfill'" in query
+    assert "occurred_at >= '2026-10-01 00:00:00+00:00'" in query
+    # Approved = a later row (higher id) to a presented status.
+    assert "EXISTS (SELECT transitions_1.id" in query
+    assert "transitions_1.id > anon_1.id" in query
+    assert (
+        "transitions_1.to_status IN ('present_to_clients', 'client_under_contract')"
+        in query
+    )
+    assert "WHEN (iron_bank.underwritings.deal_status IN ('delete_deal'))" in query
+    assert "iron_bank.underwritings.market_id = 3" in query
+
+
+@pytest.mark.asyncio
+async def test_approval_wait_pairs_last_completion_before_first_presentation():
+    db = CapturingDb([row(median_days=1.5, p75_days=3.0, deals=4)])
+
+    (overall,) = await StatusHistoryAnalyticsRepository(db).approval_wait(
+        UnderwritingAnalyticsFilters(),
+        group_by_approver=False,
+        presented_to=date(2026, 10, 31),
+    )
+
+    query = sql(db.queries[0])
+    assert "to_status = 'present_to_clients'" in query
+    assert "max(transitions_1.occurred_at)" in query
+    assert "transitions_1.to_status = 'analyst_completed'" in query
+    assert "transitions_1.id < anon_1.id" in query
+    assert "transitions_1.source != 'backfill'" in query
+    assert "anon_1.occurred_at < '2026-11-01 00:00:00+00:00'" in query
+    assert "GROUP BY" not in query
+    assert overall["approver"] is None
+
+
+@pytest.mark.asyncio
+async def test_analyst_approval_rates_exclude_pending():
+    repo = FakeRepository(
+        approval_outcomes=[
+            (7, "approved", 3),
+            (7, "rejected", 1),
+            (7, "pending", 4),
+            (8, "pending", 2),
+        ],
+        user_names={7: "Ana"},
+    )
+
+    result = await StatusHistoryAnalyticsService(repo).get_analyst_approval(
+        UnderwritingAnalyticsFilters()
+    )
+
+    ana, unnamed = result.analysts
+    assert (ana.label, ana.completed, ana.approved, ana.rejected, ana.pending) == (
+        "Ana",
+        8,
+        3,
+        1,
+        4,
+    )
+    assert ana.approval_rate == 0.75
+    # Nothing decided yet: no rate rather than 0%.
+    assert (unnamed.label, unnamed.approval_rate) == ("User 8", None)
+    assert (result.overall.completed, result.overall.approval_rate) == (10, 0.75)
+
+
+@pytest.mark.asyncio
+async def test_approval_wait_overall_and_ranked_approvers():
+    def wait(kwargs):
+        if kwargs["group_by_approver"]:
+            return [
+                {"approver": 9, "median_days": 2.0, "p75_days": 4.0, "deals": 1},
+                {"approver": 14, "median_days": 0.5, "p75_days": 1.0, "deals": 6},
+                {"approver": None, "median_days": 9.0, "p75_days": 9.0, "deals": 8},
+            ]
+        return [{"approver": None, "median_days": 0.8, "p75_days": 2.5, "deals": 15}]
+
+    repo = FakeRepository(approval_wait=wait, user_names={14: "Taylor", 9: "Cy"})
+    result = await StatusHistoryAnalyticsService(repo).get_approval_wait(
+        UnderwritingAnalyticsFilters(), presented_from=date(2026, 10, 1)
+    )
+
+    assert result.overall.label == "All approvers"
+    assert result.overall.median_days.value == 0.8
+    assert result.overall.median_days.sample_size == 15
+    assert [(r.key, r.label) for r in result.by_approver] == [
+        ("14", "Taylor"),
+        ("9", "Cy"),
+        (None, "Unknown"),
+    ]
+    assert result.by_approver[0].p75_days == 1.0
