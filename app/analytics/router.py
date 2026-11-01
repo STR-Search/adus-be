@@ -8,9 +8,16 @@ from app.analytics.controllers.analytics_controller import AnalyticsController
 from app.analytics.repositories.pipeline_analytics_repository import (
     PipelineAnalyticsRepository,
 )
+from app.analytics.repositories.status_history_analytics_repository import (
+    StatusHistoryAnalyticsRepository,
+)
 from app.analytics.schemas.composed import Automation, DataCompleteness
 from app.analytics.schemas.pipeline import Coverage, OffMarket, PriceDrops
+from app.analytics.schemas.status_history import BacklogAge, TeamOutput, TimeToPresent
 from app.analytics.services.pipeline_analytics_service import PipelineAnalyticsService
+from app.analytics.services.status_history_analytics_service import (
+    StatusHistoryAnalyticsService,
+)
 from app.core.analytics.schemas import Breakdown, Granularity, Series
 from app.core.database import get_db
 from app.core.reference_data.repository import ReferenceDataRepository
@@ -68,6 +75,9 @@ def get_analytics_controller(db: AsyncSession = Depends(get_db)) -> AnalyticsCon
             ConstructionAmenitiesRepository(db),
             RealtorRepository(db),
         ),
+        status_history_analytics=StatusHistoryAnalyticsService(
+            StatusHistoryAnalyticsRepository(db)
+        ),
     )
 
 
@@ -110,6 +120,26 @@ def underwriting_filters_all_markets(
     return underwriting_filters(
         market_id=None,
         analyst_id=analyst_id,
+        source=source,
+        added_from=added_from,
+        added_to=added_to,
+    )
+
+
+def underwriting_filters_all_analysts(
+    market_id: int | None = Query(None),
+    source: list[UnderwritingSource] | None = Query(None, description=_SOURCE),
+    added_from: date | None = Query(None, description=_ADDED),
+    added_to: date | None = Query(None, description=_ADDED),
+) -> UnderwritingAnalyticsFilters:
+    """Common filters minus ``analyst_id``, for the per-person endpoints.
+
+    They attribute work to whoever made the status change, which an
+    ``analyst_id`` filter on the deal would contradict.
+    """
+    return underwriting_filters(
+        market_id=market_id,
+        analyst_id=None,
         source=source,
         added_from=added_from,
         added_to=added_to,
@@ -299,4 +329,52 @@ async def get_price_drops(
 ):
     return await controller.get_price_drops(
         filters, changed_from=changed_from, changed_to=changed_to
+    )
+
+
+# -- status history: process_log x iron_bank ---------------------------------
+
+
+@router.get("/status-history/backlog-age", response_model=BacklogAge)
+async def get_backlog_age(
+    filters: UnderwritingAnalyticsFilters = Depends(underwriting_filters_by_status),
+    controller: AnalyticsController = Depends(get_analytics_controller),
+):
+    """Defaults to every live (non-terminal) status."""
+    return await controller.get_backlog_age(filters)
+
+
+@router.get("/status-history/time-to-present", response_model=TimeToPresent)
+async def get_time_to_present(
+    filters: UnderwritingAnalyticsFilters = Depends(underwriting_filters),
+    presented_from: date | None = Query(
+        None, description="Inclusive, on the deal's first presentation (UTC)"
+    ),
+    presented_to: date | None = Query(
+        None, description="Inclusive, on the deal's first presentation (UTC)"
+    ),
+    controller: AnalyticsController = Depends(get_analytics_controller),
+):
+    return await controller.get_time_to_present(
+        filters, presented_from=presented_from, presented_to=presented_to
+    )
+
+
+@router.get("/status-history/team-output", response_model=TeamOutput)
+async def get_team_output(
+    filters: UnderwritingAnalyticsFilters = Depends(underwriting_filters_all_analysts),
+    granularity: Granularity = Query(Granularity.WEEK),
+    occurred_from: date | None = Query(
+        None, description="Inclusive, on when the status change happened (UTC)"
+    ),
+    occurred_to: date | None = Query(
+        None, description="Inclusive, on when the status change happened (UTC)"
+    ),
+    controller: AnalyticsController = Depends(get_analytics_controller),
+):
+    return await controller.get_team_output(
+        filters,
+        granularity=granularity,
+        occurred_from=occurred_from,
+        occurred_to=occurred_to,
     )
