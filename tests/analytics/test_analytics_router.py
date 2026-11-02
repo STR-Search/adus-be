@@ -60,7 +60,6 @@ class RecordingController:
             listings=0,
             underwritten=0,
             coverage=None,
-            median_days_to_underwrite=None,
         )
         return Coverage(overall=row, presets=[])
 

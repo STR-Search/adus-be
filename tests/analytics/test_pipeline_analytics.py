@@ -57,19 +57,18 @@ async def test_off_market_joins_listing_and_uses_pending_rule():
 
 @pytest.mark.asyncio
 async def test_coverage_left_joins_earliest_underwriting():
-    db = CapturingDb([(10, 4, 1.5)])
+    db = CapturingDb([(10, 4)])
 
     rows = await PipelineAnalyticsRepository(db).coverage(
         source=(UnderwritingSource.ADUS,), group_by_preset=False, preset_id=PRESET
     )
 
-    assert rows == [(None, None, 10, 4, 1.5)]
+    assert rows == [(None, None, 10, 4)]
     query = sql(db.queries[0])
     assert "LEFT OUTER JOIN (SELECT iron_bank.underwritings.zpid" in query
-    assert "min(iron_bank.underwritings.deal_added)" in query
     assert "source IN ('adus')" in query
     assert f"zillow.scheduled_listings.preset_id = '{PRESET}'" in query
-    assert "percentile_cont(0.5) WITHIN GROUP" in query
+    assert "percentile_cont" not in query
 
 
 @pytest.mark.asyncio
@@ -93,7 +92,7 @@ async def test_coverage_filters_by_market_through_the_preset():
 @pytest.mark.asyncio
 async def test_coverage_passes_market_to_both_queries():
     def coverage(kwargs):
-        return [] if kwargs["group_by_preset"] else [(None, None, 0, 0, None)]
+        return [] if kwargs["group_by_preset"] else [(None, None, 0, 0)]
 
     repo = FakeRepository(coverage=coverage)
 
@@ -130,8 +129,8 @@ def test_live_statuses_exclude_terminal():
 async def test_coverage_overall_and_presets():
     def coverage(kwargs):
         if kwargs["group_by_preset"]:
-            return [(PRESET, "Alpha", 10, 4, 2.0), (uuid.uuid4(), "Beta", 20, 0, None)]
-        return [(None, None, 30, 4, 2.0)]
+            return [(PRESET, "Alpha", 10, 4), (uuid.uuid4(), "Beta", 20, 0)]
+        return [(None, None, 30, 4)]
 
     result = await PipelineAnalyticsService(
         FakeRepository(coverage=coverage)
@@ -144,7 +143,7 @@ async def test_coverage_overall_and_presets():
     )
     assert [p.label for p in result.presets] == ["Beta", "Alpha"]
     assert result.presets[0].coverage == 0
-    assert result.presets[0].median_days_to_underwrite is None
+    assert "median_days_to_underwrite" not in result.overall.model_dump()
 
 
 @pytest.mark.asyncio

@@ -56,7 +56,7 @@ The system stores only each deal's current status, not when it changed. So any f
 | \# | Metric | How it is calculated | Feasibility |
 | :---- | :---- | :---- | :---- |
 | 1 | New listings per day and per week, by market or Presets | Listing first-seen date | Ready now |
-| 2  | Underwriting coverage | New listings with an underwriting ÷ all new listings, plus median days from listing to underwriting | Ready now |
+| 2  | Underwriting coverage | New listings with an underwriting ÷ all new listings | Ready now |
 | 3 | Automated vs. manual underwritings | Count by the automated flag | Ready now |
 | 4 | Automation health | Batch jobs succeeded, failed and queued; last run per saved search | Ready now |
 
