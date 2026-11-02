@@ -62,16 +62,13 @@ class PipelineAnalyticsService:
         (overall,) = await self.repository.coverage(group_by_preset=False, **kwargs)
         presets = await self.repository.coverage(group_by_preset=True, **kwargs)
 
-        def row(key, label, listings, underwritten, median_days) -> CoverageRow:
+        def row(key, label, listings, underwritten) -> CoverageRow:
             return CoverageRow(
                 key=key,
                 label=label,
                 listings=listings,
                 underwritten=underwritten,
                 coverage=ratio(underwritten, listings),
-                median_days_to_underwrite=None
-                if median_days is None
-                else float(median_days),
             )
 
         return Coverage(

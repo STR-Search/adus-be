@@ -20,8 +20,6 @@ from app.zillow.models.scheduled_listing_details import ScheduledListingDetail
 from app.zillow.models.scheduled_listings import ScheduledListing
 from app.zillow.models.scheduled_presets import ScheduledPreset
 
-_SECONDS_PER_DAY = 86_400
-
 
 def off_market_condition():
     """The listing is off the market: the same rule ``property_pending`` uses.
@@ -50,21 +48,20 @@ class PipelineAnalyticsRepository:
         created_from: date | None = None,
         created_to: date | None = None,
     ) -> list[tuple]:
-        """``(preset_id, name, listings, underwritten, median_days)`` rows.
+        """``(preset_id, name, listings, underwritten)`` rows.
 
-        Each listing is matched to its earliest underwriting; the median is of
-        days from the listing's first-seen time to that underwriting. Without
-        ``group_by_preset``, one overall row with ``None`` preset columns.
+        A listing counts as underwritten when it has at least one underwriting
+        from ``source``. Without ``group_by_preset``, one overall row with
+        ``None`` preset columns.
 
         ``market_id`` narrows listings to that market's presets: a listing that
         was never underwritten has no deal market, so its preset's market is
         the only one it has (the same rule as the listing endpoints).
         """
-        first_underwriting = (
-            select(
-                Underwriting.zpid.label("zpid"),
-                func.min(Underwriting.deal_added).label("first_added"),
-            )
+        # One row per zpid, so a listing with several underwritings is
+        # counted once.
+        underwritten_zpids = (
+            select(Underwriting.zpid.label("zpid"))
             .where(
                 Underwriting.zpid.is_not(None),
                 Underwriting.source.in_([s.value for s in source]),
@@ -72,16 +69,9 @@ class PipelineAnalyticsRepository:
             .group_by(Underwriting.zpid)
             .subquery()
         )
-        days = (
-            func.extract(
-                "epoch", first_underwriting.c.first_added - ScheduledListing.created_at
-            )
-            / _SECONDS_PER_DAY
-        )
         measures = (
             func.count().label("listings"),
-            func.count(first_underwriting.c.zpid).label("underwritten"),
-            func.percentile_cont(0.5).within_group(days).label("median_days"),
+            func.count(underwritten_zpids.c.zpid).label("underwritten"),
         )
         conditions = date_range_conditions(
             ScheduledListing.created_at, created_from, created_to
@@ -104,8 +94,8 @@ class PipelineAnalyticsRepository:
                 select(ScheduledListing.preset_id, ScheduledPreset.name, *measures)
                 .join(ScheduledPreset, ScheduledPreset.id == ScheduledListing.preset_id)
                 .outerjoin(
-                    first_underwriting,
-                    first_underwriting.c.zpid == ScheduledListing.zpid,
+                    underwritten_zpids,
+                    underwritten_zpids.c.zpid == ScheduledListing.zpid,
                 )
                 .where(*conditions)
                 .group_by(ScheduledListing.preset_id, ScheduledPreset.name)
@@ -115,8 +105,8 @@ class PipelineAnalyticsRepository:
                 select(*measures)
                 .select_from(ScheduledListing)
                 .outerjoin(
-                    first_underwriting,
-                    first_underwriting.c.zpid == ScheduledListing.zpid,
+                    underwritten_zpids,
+                    underwritten_zpids.c.zpid == ScheduledListing.zpid,
                 )
                 .where(*conditions)
             )

@@ -8,8 +8,6 @@ class CoverageRow(GroupRow):
     underwritten: int
     # underwritten / listings.
     coverage: float | None
-    # Days from the listing's first-seen time to its earliest underwriting.
-    median_days_to_underwrite: float | None
 
 
 class Coverage(BaseModel):
