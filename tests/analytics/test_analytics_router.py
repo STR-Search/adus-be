@@ -9,7 +9,15 @@ from fastapi.testclient import TestClient
 
 from app.analytics.router import get_analytics_controller, router
 from app.analytics.schemas.pipeline import Coverage, CoverageRow
-from app.core.analytics.schemas import Breakdown
+from app.analytics.schemas.status_history import (
+    AnalystApproval,
+    AnalystApprovalRow,
+    ApprovalWait,
+    ApprovalWaitRow,
+    TeamOutput,
+    TimeToPresent,
+)
+from app.core.analytics.schemas import Breakdown, Granularity, MedianValue
 from app.iron_bank.enums import DealStatus, UnderwritingSource
 from app.iron_bank.schemas.underwriting_analytics import (
     DEFAULT_ANALYTICS_SOURCES,
@@ -52,13 +60,48 @@ class RecordingController:
             listings=0,
             underwritten=0,
             coverage=None,
-            median_days_to_underwrite=None,
         )
         return Coverage(overall=row, presets=[])
 
     async def get_intake(self, **kwargs):
         self.calls.append(kwargs)
         return []
+
+    async def get_time_to_present(self, filters, **kwargs):
+        self.calls.append((filters, kwargs))
+        return TimeToPresent(
+            median_days=MedianValue(value=None, sample_size=0),
+            p75_days=None,
+            observed=0,
+            estimated=0,
+        )
+
+    async def get_team_output(self, filters, **kwargs):
+        self.calls.append((filters, kwargs))
+        return TeamOutput(analysts=[], presented_by_approver=[])
+
+    async def get_analyst_approval(self, filters, **kwargs):
+        self.calls.append((filters, kwargs))
+        row = AnalystApprovalRow(
+            key=None,
+            label="All analysts",
+            completed=0,
+            approved=0,
+            rejected=0,
+            pending=0,
+            approval_rate=None,
+        )
+        return AnalystApproval(overall=row, analysts=[])
+
+    async def get_approval_wait(self, filters, **kwargs):
+        self.calls.append((filters, kwargs))
+        row = ApprovalWaitRow(
+            key=None,
+            label="All approvers",
+            median_days=MedianValue(value=None, sample_size=0),
+            p75_days=None,
+        )
+        return ApprovalWait(overall=row, by_approver=[])
 
 
 def build_client() -> tuple[TestClient, RecordingController]:
@@ -161,3 +204,62 @@ def test_coverage_accepts_market_id():
 
     assert response.status_code == 200
     assert controller.calls[0]["market_id"] == 3
+
+
+def test_time_to_present_takes_global_filters_and_presented_range():
+    client, controller = build_client()
+
+    response = client.get(
+        "/analytics/status-history/time-to-present"
+        "?market_id=4&added_from=2026-09-01&presented_from=2026-10-01"
+    )
+
+    assert response.status_code == 200
+    ((filters, kwargs),) = controller.calls
+    assert filters.market_id == 4
+    assert str(filters.added_from) == "2026-09-01"
+    assert str(kwargs["presented_from"]) == "2026-10-01"
+    assert kwargs["presented_to"] is None
+
+
+def test_team_output_ignores_analyst_id_and_takes_occurred_range():
+    client, controller = build_client()
+
+    response = client.get(
+        "/analytics/status-history/team-output"
+        "?market_id=4&analyst_id=3&occurred_to=2026-10-31&granularity=day"
+    )
+
+    assert response.status_code == 200
+    ((filters, kwargs),) = controller.calls
+    assert filters.market_id == 4
+    assert filters.analyst_id is None
+    assert str(kwargs["occurred_to"]) == "2026-10-31"
+    assert kwargs["granularity"] is Granularity.DAY
+
+
+def test_analyst_approval_takes_completed_range_and_ignores_analyst_id():
+    client, controller = build_client()
+
+    response = client.get(
+        "/analytics/status-history/analyst-approval"
+        "?market_id=4&analyst_id=3&completed_from=2026-10-01"
+    )
+
+    assert response.status_code == 200
+    ((filters, kwargs),) = controller.calls
+    assert (filters.market_id, filters.analyst_id) == (4, None)
+    assert str(kwargs["completed_from"]) == "2026-10-01"
+
+
+def test_approval_wait_takes_presented_range():
+    client, controller = build_client()
+
+    response = client.get(
+        "/analytics/status-history/approval-wait?presented_to=2026-10-31"
+    )
+
+    assert response.status_code == 200
+    ((filters, kwargs),) = controller.calls
+    assert filters.analyst_id is None
+    assert str(kwargs["presented_to"]) == "2026-10-31"

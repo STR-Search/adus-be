@@ -670,12 +670,10 @@ Three independent answers composed by `AnalyticsController` into one schema in
   `created_at`, `source` (applies to the underwritings counted). No
   `market_id` — the denominator is all listings, which have no underwriting
   market (D1).
-- **Query:** listings in range, left-joined to their earliest underwriting
-  (`MIN(deal_added)` per `zpid`):
+- **Query:** listings in range, left-joined to the distinct `zpid`s that have
+  an underwriting:
   - `listings`: `COUNT(*)`
   - `underwritten`: listings with at least one underwriting
-  - `median_days_to_underwrite`: `percentile_cont(0.5)` of
-    `MIN(deal_added) - listing.created_at`, in days
 - **Response:** an overall row plus one `GroupRow` per preset with those fields
   and `coverage` (`underwritten / listings`).
 - **Order:** Rule 3 by `listings`.

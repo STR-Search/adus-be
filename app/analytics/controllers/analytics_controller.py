@@ -7,7 +7,17 @@ from fastapi import HTTPException
 
 from app.analytics.schemas.composed import Automation, DataCompleteness
 from app.analytics.schemas.pipeline import Coverage, OffMarket, PriceDrops
+from app.analytics.schemas.status_history import (
+    AnalystApproval,
+    ApprovalWait,
+    BacklogAge,
+    TeamOutput,
+    TimeToPresent,
+)
 from app.analytics.services.pipeline_analytics_service import PipelineAnalyticsService
+from app.analytics.services.status_history_analytics_service import (
+    StatusHistoryAnalyticsService,
+)
 from app.core.analytics.schemas import Breakdown, Granularity, Series
 from app.core.logger import logger
 from app.iron_bank.enums import UnderwritingSource
@@ -38,10 +48,12 @@ class AnalyticsController:
         listing_analytics: ListingAnalyticsService,
         pipeline_analytics: PipelineAnalyticsService | None = None,
         market_service=None,
+        status_history_analytics: StatusHistoryAnalyticsService | None = None,
     ):
         self.underwriting_analytics = underwriting_analytics
         self.listing_analytics = listing_analytics
         self.pipeline_analytics = pipeline_analytics
+        self.status_history_analytics = status_history_analytics
         # Anything with ``get_all_summary()`` (the markets domain's MarketService);
         # only used for market names, which iron_bank must not look up itself.
         self.market_service = market_service
@@ -250,6 +262,85 @@ class AnalyticsController:
             "price_drops",
             lambda: self.pipeline_analytics.get_price_drops(
                 filters, changed_from=changed_from, changed_to=changed_to
+            ),
+        )
+
+    # -- status history: process_log x iron_bank -----------------------------
+
+    async def get_backlog_age(
+        self, filters: UnderwritingAnalyticsFilters
+    ) -> BacklogAge:
+        self._validate_filters(filters)
+        return await self._run(
+            "backlog_age",
+            lambda: self.status_history_analytics.get_backlog_age(filters),
+        )
+
+    async def get_time_to_present(
+        self,
+        filters: UnderwritingAnalyticsFilters,
+        *,
+        presented_from: date | None = None,
+        presented_to: date | None = None,
+    ) -> TimeToPresent:
+        self._validate_filters(filters)
+        self._validate_range(presented_from, presented_to)
+        return await self._run(
+            "time_to_present",
+            lambda: self.status_history_analytics.get_time_to_present(
+                filters, presented_from=presented_from, presented_to=presented_to
+            ),
+        )
+
+    async def get_team_output(
+        self,
+        filters: UnderwritingAnalyticsFilters,
+        *,
+        granularity: Granularity = Granularity.WEEK,
+        occurred_from: date | None = None,
+        occurred_to: date | None = None,
+    ) -> TeamOutput:
+        self._validate_filters(filters)
+        self._validate_range(occurred_from, occurred_to)
+        return await self._run(
+            "team_output",
+            lambda: self.status_history_analytics.get_team_output(
+                filters,
+                granularity=granularity,
+                occurred_from=occurred_from,
+                occurred_to=occurred_to,
+            ),
+        )
+
+    async def get_analyst_approval(
+        self,
+        filters: UnderwritingAnalyticsFilters,
+        *,
+        completed_from: date | None = None,
+        completed_to: date | None = None,
+    ) -> AnalystApproval:
+        self._validate_filters(filters)
+        self._validate_range(completed_from, completed_to)
+        return await self._run(
+            "analyst_approval",
+            lambda: self.status_history_analytics.get_analyst_approval(
+                filters, completed_from=completed_from, completed_to=completed_to
+            ),
+        )
+
+    async def get_approval_wait(
+        self,
+        filters: UnderwritingAnalyticsFilters,
+        *,
+        presented_from: date | None = None,
+        presented_to: date | None = None,
+    ) -> ApprovalWait:
+        self._validate_filters(filters)
+        self._validate_range(presented_from, presented_to)
+        return await self._run(
+            "approval_wait",
+            lambda: self.status_history_analytics.get_approval_wait(
+                filters, presented_from=presented_from, presented_to=presented_to
             ),
         )
 
