@@ -81,6 +81,7 @@ class GetUnderwritingController:
         waterfront: bool | None = None,
         remote: bool | None = None,
         can_support_cohost: bool | None = None,
+        off_market: bool | None = None,
         execution_type: list[str] | None = None,
         regulatory_clarity: list[str] | None = None,
         offer_competitiveness: list[str] | None = None,
@@ -115,6 +116,7 @@ class GetUnderwritingController:
                 ("waterfront", waterfront),
                 ("remote", remote),
                 ("can_support_cohost", can_support_cohost),
+                ("off_market", off_market),
             )
             if value is not None
         }

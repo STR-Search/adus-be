@@ -50,6 +50,7 @@ def _underwriting():
         waterfront=False,
         remote=False,
         can_support_cohost=True,
+        off_market=False,
         detail=SimpleNamespace(
             purchase_details={"purchase_price": 485000},
             y1_coc_incl_tax_savings={

@@ -158,6 +158,7 @@ class Underwriting(Base):
     waterfront = Column(Boolean, default=False)
     remote = Column(Boolean, default=False)
     can_support_cohost = Column(Boolean, default=False)
+    off_market = Column(Boolean, default=False)
 
     # Multi-select tags store a list of reference slugs (text[]); single-select
     # tags store one slug (varchar). See REFERENCE_TAG_FIELDS split in

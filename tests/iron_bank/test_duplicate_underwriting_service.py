@@ -37,7 +37,7 @@ _EXPECTED_UNDERWRITING_COLUMNS = frozenset(
         "l_cash_on_cash", "listing_url", "loom_vid", "low_cash_on_cash",
         "low_gross_revenue", "luxury", "m_cash_on_cash", "market_id",
         "market_type", "mid_gross_revenue", "new_construction", "note",
-        "offer_competitiveness", "owner_id", "pool_type",
+        "off_market", "offer_competitiveness", "owner_id", "pool_type",
         "primary_guest_avatar", "property_address", "property_pending", "prr",
         "purchase_price", "regulatory_clarity", "remote", "renovation_level",
         "seasonality", "series_id", "sheet_number", "sleep_count_high",

@@ -143,6 +143,7 @@ def _item(id=1, **fields):
         waterfront=False,
         remote=False,
         can_support_cohost=False,
+        off_market=False,
     )
     defaults.update(fields)
     return SimpleNamespace(**defaults)
