@@ -15,6 +15,7 @@ from app.iron_bank.schemas.get_underwriting import (
     UserRef,
     ZillowProperty,
 )
+from app.iron_bank.schemas.off_market import UpdateOffMarketResult
 from app.iron_bank.schemas.property_pending import UpdatePropertyPendingResult
 from app.iron_bank.schemas.save_underwriting import SaveUnderwritingPayload
 from app.iron_bank.schemas.update_underwriting import (
@@ -331,6 +332,24 @@ class UpdateUnderwritingService(SaveUnderwritingService):
         return UpdatePropertyPendingResult(
             underwriting_id=underwriting.id,
             property_pending=underwriting.property_pending,
+        )
+
+    async def update_off_market(
+        self,
+        *,
+        underwriting_id: int,
+        off_market: bool,
+    ) -> UpdateOffMarketResult:
+        underwriting = await self.repository.update(
+            underwriting_id=underwriting_id,
+            underwriting_data={"off_market": off_market},
+        )
+        if underwriting is None:
+            raise LookupError(f"Underwriting {underwriting_id} not found")
+
+        return UpdateOffMarketResult(
+            underwriting_id=underwriting.id,
+            off_market=underwriting.off_market,
         )
 
     async def _trigger_n8n_webhook(self, underwriting, webhook_service) -> None:

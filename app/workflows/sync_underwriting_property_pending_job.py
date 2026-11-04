@@ -15,6 +15,9 @@ class SyncUnderwritingPropertyPendingJob:
     The value is a pure function of the joined listing's ``home_status``, so the
     whole set is reconciled in a single ``UPDATE ... FROM`` rather than row by
     row — no per-row recomputation is needed (unlike price reconciliation).
+
+    Underwritings tagged ``off_market`` are left alone; see
+    ``UnderwritingRepository.bulk_sync_property_pending``.
     """
 
     def __init__(self, *, underwriting_repository):
