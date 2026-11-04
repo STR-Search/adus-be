@@ -4,6 +4,7 @@ from app.core.logger import logger
 from app.core.process_log.exceptions import ConcurrentTransitionError
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.deal_status import UpdateDealStatusResult
+from app.iron_bank.schemas.off_market import UpdateOffMarketResult
 from app.iron_bank.schemas.property_pending import UpdatePropertyPendingResult
 from app.iron_bank.schemas.update_underwriting import (
     UpdateUnderwritingPayload,
@@ -87,3 +88,25 @@ class UpdateUnderwritingController:
             raise HTTPException(
                 status_code=500, detail="Failed to update property pending"
             )
+
+    async def update_off_market(
+        self,
+        *,
+        underwriting_id: int,
+        off_market: bool,
+    ) -> UpdateOffMarketResult:
+        try:
+            return await self.service.update_off_market(
+                underwriting_id=underwriting_id,
+                off_market=off_market,
+            )
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            logger.error(
+                "iron_bank.update_off_market.error",
+                underwriting_id=underwriting_id,
+                off_market=off_market,
+                error=str(e),
+            )
+            raise HTTPException(status_code=500, detail="Failed to update off market")

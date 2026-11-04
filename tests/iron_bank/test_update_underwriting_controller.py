@@ -6,6 +6,7 @@ from app.iron_bank.controllers.update_underwriting_controller import (
 )
 from app.iron_bank.enums import DealStatus
 from app.iron_bank.schemas.deal_status import UpdateDealStatusResult
+from app.iron_bank.schemas.off_market import UpdateOffMarketResult
 from app.iron_bank.schemas.property_pending import UpdatePropertyPendingResult
 
 
@@ -94,6 +95,45 @@ async def test_update_property_pending_returns_404_when_underwriting_is_missing(
         await controller.update_property_pending(
             underwriting_id=42,
             property_pending=True,
+        )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Underwriting 42 not found"
+
+
+class FakeOffMarketService:
+    async def update_off_market(self, *, underwriting_id: int, off_market: bool):
+        return UpdateOffMarketResult(
+            underwriting_id=underwriting_id,
+            off_market=off_market,
+        )
+
+
+class MissingOffMarketService:
+    async def update_off_market(self, *, underwriting_id: int, off_market: bool):
+        raise LookupError(f"Underwriting {underwriting_id} not found")
+
+
+@pytest.mark.asyncio
+async def test_update_off_market_returns_updated_flag():
+    controller = UpdateUnderwritingController(FakeOffMarketService())
+
+    result = await controller.update_off_market(
+        underwriting_id=42,
+        off_market=True,
+    )
+
+    assert result.model_dump() == {"underwriting_id": 42, "off_market": True}
+
+
+@pytest.mark.asyncio
+async def test_update_off_market_returns_404_when_underwriting_is_missing():
+    controller = UpdateUnderwritingController(MissingOffMarketService())
+
+    with pytest.raises(HTTPException) as exc_info:
+        await controller.update_off_market(
+            underwriting_id=42,
+            off_market=True,
         )
 
     assert exc_info.value.status_code == 404

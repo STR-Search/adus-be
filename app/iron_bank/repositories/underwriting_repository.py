@@ -911,6 +911,10 @@ class UnderwritingRepository:
         writes only rows whose flag actually changes, so ``rowcount`` reports the
         number updated. Raw SQL (rather than the ORM) keeps this repository from
         importing the ``zillow`` domain's model.
+
+        Underwritings tagged ``off_market`` are skipped: their listing status is
+        not authoritative, so the analyst-set flag must survive the sync.
+        ``IS NOT TRUE`` (not ``= false``) keeps rows with a NULL tag in scope.
         """
         try:
             result = await self.db.execute(
@@ -921,6 +925,7 @@ class UnderwritingRepository:
                     )
                     FROM zillow.scheduled_listings AS sl
                     WHERE uw.zpid = sl.zpid
+                      AND uw.off_market IS NOT TRUE
                       AND uw.property_pending IS DISTINCT FROM (
                           COALESCE(sl.home_status, '') NOT IN :not_pending_statuses
                       )

@@ -313,6 +313,40 @@ async def test_update_property_pending_raises_when_underwriting_does_not_exist()
         )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("off_market", [True, False])
+async def test_update_off_market_writes_only_the_flag(off_market):
+    repository = FakeUnderwritingRepository(
+        underwriting=SimpleNamespace(id=42, off_market=off_market)
+    )
+    service = UpdateUnderwritingService(repository)
+
+    result = await service.update_off_market(
+        underwriting_id=42,
+        off_market=off_market,
+    )
+
+    assert repository.update_kwargs == {
+        "underwriting_id": 42,
+        "underwriting_data": {"off_market": off_market},
+    }
+    assert result.model_dump() == {
+        "underwriting_id": 42,
+        "off_market": off_market,
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_off_market_raises_when_underwriting_does_not_exist():
+    service = UpdateUnderwritingService(FakeUnderwritingRepository(underwriting=None))
+
+    with pytest.raises(LookupError, match="Underwriting 42 not found"):
+        await service.update_off_market(
+            underwriting_id=42,
+            off_market=True,
+        )
+
+
 # --- recalc-on-update: forecasted_revenue estimated when a market is assigned -
 
 

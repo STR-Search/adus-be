@@ -75,6 +75,10 @@ from app.iron_bank.schemas.get_underwriting import (
     GetUnderwritingsResult,
 )
 from app.iron_bank.schemas.prepare_uw import BedroomContext, PrepareUwDataResult
+from app.iron_bank.schemas.off_market import (
+    UpdateOffMarketPayload,
+    UpdateOffMarketResult,
+)
 from app.iron_bank.schemas.property_pending import (
     UpdatePropertyPendingPayload,
     UpdatePropertyPendingResult,
@@ -659,6 +663,24 @@ async def update_underwriting_property_pending(
     return await controller.update_property_pending(
         underwriting_id=underwriting_id,
         property_pending=payload.property_pending,
+    )
+
+
+@router.patch(
+    "/underwritings/{underwriting_id}/off-market",
+    response_model=UpdateOffMarketResult,
+    tags=["iron_bank"],
+)
+async def update_underwriting_off_market(
+    underwriting_id: int,
+    payload: UpdateOffMarketPayload,
+    controller: UpdateUnderwritingController = Depends(
+        get_update_underwriting_controller
+    ),
+):
+    return await controller.update_off_market(
+        underwriting_id=underwriting_id,
+        off_market=payload.off_market,
     )
 
 
