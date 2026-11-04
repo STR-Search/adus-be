@@ -339,6 +339,7 @@ class GetUnderwritingsQuery(BaseModel):
     waterfront: bool | None = None
     remote: bool | None = None
     can_support_cohost: bool | None = None
+    off_market: bool | None = None
     # Single-select deal tags. Values are reference-data *keys* (the slug stored
     # on the column), not labels — the frontend already gets them from
     # ``GET /reference-data``. Accepts repeated or comma-separated params, so a

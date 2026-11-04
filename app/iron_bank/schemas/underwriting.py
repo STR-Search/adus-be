@@ -62,6 +62,7 @@ BOOLEAN_TAG_LABELS: dict[str, str] = {
     "waterfront": "Waterfront",
     "remote": "Remote",
     "can_support_cohost": "Can Support Cohost",
+    "off_market": "Off Market",
 }
 BOOLEAN_TAG_FIELDS: tuple[str, ...] = tuple(BOOLEAN_TAG_LABELS)
 
@@ -144,6 +145,7 @@ class UnderwritingBase(BaseModel):
     waterfront: bool = False
     remote: bool = False
     can_support_cohost: bool = False
+    off_market: bool = False
     market_type: list[str] | None = None
     execution_type: str | None = None
     seasonality: list[str] | None = None

@@ -81,6 +81,7 @@ def upgrade() -> None:
         sa.Column("waterfront", sa.Boolean(), nullable=True),
         sa.Column("remote", sa.Boolean(), nullable=True),
         sa.Column("can_support_cohost", sa.Boolean(), nullable=True),
+        sa.Column("off_market", sa.Boolean(), nullable=True),
         # Multi-select deal tags store a list of reference slugs (text[]); the rest
         # are single-select varchar. GIN indexes for the arrays are created below.
         sa.Column("market_type", postgresql.ARRAY(sa.Text()), nullable=True),

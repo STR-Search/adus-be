@@ -62,6 +62,7 @@ class UpdateUnderwritingPayload(BaseModel):
     waterfront: bool = False
     remote: bool = False
     can_support_cohost: bool = False
+    off_market: bool = False
     market_type: list[str] | None = None
     execution_type: str | None = None
     seasonality: list[str] | None = None

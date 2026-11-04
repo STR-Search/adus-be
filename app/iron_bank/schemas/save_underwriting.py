@@ -172,6 +172,7 @@ class SaveUnderwritingPayload(UnderwritingBase):
                 "waterfront": False,
                 "remote": False,
                 "can_support_cohost": True,
+                "off_market": False,
                 "renovation_level": 2,
                 "deal_complexity": 3,
                 "market_type": ["mountain", "lake"],
